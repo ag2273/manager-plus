@@ -231,4 +231,6 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   openDocuments: ["manager", "accountant"],
   statement: ["manager", "accountant"],
   aging: ["manager", "accountant"],
+  setItemSerials: ["manager", "accountant", "storekeeper"],
+  findSerial: ROLES,
 };

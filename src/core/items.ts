@@ -24,6 +24,9 @@ export type Item = {
   taxCodeId: number;
   egsCode: string;
   pack: PackUnit | null;
+  /** Every unit carries its own serial number on every document. */
+  serialised: boolean;
+  warrantyMonths: number;
   active: boolean;
 };
 
@@ -50,6 +53,8 @@ export type ScannedUnit = {
   quantity: Quantity;
   salePrice: Piastres;
   taxCodeId: number;
+  /** A serialised item is added at the till by scanning each unit's serial, not its barcode. */
+  serialised: boolean;
 };
 
 const ONE_BASE_UNIT = 1000;
@@ -99,6 +104,8 @@ type ItemRow = {
   tax_code_id: number;
   egs_code: string;
   active: number;
+  serialised: number;
+  warranty_months: number;
   base_name: string;
   base_barcode: string | null;
   base_price: number;
@@ -109,7 +116,7 @@ type ItemRow = {
 };
 
 const SELECT_ITEMS = `
-  SELECT i.id, i.name_ar, i.name_en, i.code, i.tax_code_id, i.egs_code, i.active,
+  SELECT i.id, i.name_ar, i.name_en, i.code, i.tax_code_id, i.egs_code, i.active, i.serialised, i.warranty_months,
          b.name AS base_name, b.barcode AS base_barcode, b.sale_price AS base_price,
          p.name AS pack_name, p.size AS pack_size, p.barcode AS pack_barcode, p.sale_price AS pack_price
     FROM items i
@@ -131,6 +138,8 @@ function toItem(r: ItemRow): Item {
       r.pack_name === null
         ? null
         : { name: r.pack_name, size: r.pack_size ?? 0, barcode: r.pack_barcode, salePrice: r.pack_price ?? 0 },
+    serialised: r.serialised === 1,
+    warrantyMonths: r.warranty_months,
     active: r.active === 1,
   };
 }
@@ -291,10 +300,10 @@ export function findByBarcode(db: Database.Database, barcode: string): ScannedUn
   const row = db
     .prepare(
       `SELECT i.id AS itemId, i.name_ar AS nameAr, u.kind AS unit, u.name AS unitName, u.size AS quantity,
-              u.sale_price AS salePrice, i.tax_code_id AS taxCodeId
+              u.sale_price AS salePrice, i.tax_code_id AS taxCodeId, i.serialised
          FROM item_units u JOIN items i ON i.id = u.item_id
         WHERE u.barcode = ? AND i.active = 1`,
     )
-    .get(barcode.trim()) as ScannedUnit | undefined;
-  return row ?? null;
+    .get(barcode.trim()) as (Omit<ScannedUnit, "serialised"> & { serialised: number }) | undefined;
+  return row ? { ...row, serialised: row.serialised === 1 } : null;
 }

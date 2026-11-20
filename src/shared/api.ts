@@ -91,6 +91,8 @@ export const BUSINESS_METHODS = [
   "openDocuments",
   "statement",
   "aging",
+  "setItemSerials",
+  "findSerial",
 ] as const satisfies readonly (keyof Business)[];
 
 export type BusinessMethod = (typeof BUSINESS_METHODS)[number];

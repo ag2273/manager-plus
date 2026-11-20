@@ -97,6 +97,8 @@ describe("items", () => {
         taxCodeId: taxCode(business, "standard").id,
         egsCode: "EG-123-456",
         pack: null,
+        serialised: false,
+        warrantyMonths: 0,
         active: true,
       },
     ]);

@@ -6,7 +6,9 @@ import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from 
 import { vatRegistered } from "./purchases";
 import { requireOpenShift } from "./shifts";
 import { findCustomer } from "./customers";
+import { issueSerials, serialsFor, serialsOnLine, warrantyEnd } from "./serials";
 import {
+  type SerialLine,
   type UnitLine,
   accountByRole,
   activeWarehouse,
@@ -19,7 +21,7 @@ import {
 /** A discount in piastres off, or a percentage in basis points (1000 = 10%). */
 export type Discount = { kind: "amount" | "percent"; value: number };
 /** A till line: the item, which unit was rung up, how many (thousandths of that unit), and any discount. */
-export type SaleLineInput = UnitLine & { discount?: Discount };
+export type SaleLineInput = UnitLine & SerialLine & { discount?: Discount };
 export type SaleLine = UnitLine & {
   unitPrice: Piastres;
   /** Quantity × shelf price, before discounts. */
@@ -84,7 +86,7 @@ export type Receipt = {
   customerId: number | null;
   soldBy: string;
   eta: { uuid: string; previousUuid: string; status: string };
-  lines: (SaleLine & { lineId: number; nameAr: string; cost: Piastres; returned: Quantity })[];
+  lines: (SaleLine & { lineId: number; nameAr: string; cost: Piastres; returned: Quantity; serials: string[]; warrantyEnds: IsoDate | null })[];
 };
 
 const ONE_UNIT = 1000;
@@ -206,12 +208,13 @@ export function postSale(db: Database.Database, input: SaleInput, userId: number
 
   // Cost each line in order, so two lines of the same item draw down stock one after the other.
   const taken = new Map<number, { quantity: Quantity; value: Piastres }>();
-  const outs = priced.lines.map((line) => {
+  const outs = priced.lines.map((line, index) => {
     const base = toBaseQuantity(db, line);
+    const serials = serialsFor(db, line.itemId, base, input.lines[index]!.serials);
     const before = taken.get(line.itemId) ?? { quantity: 0, value: 0 };
     const cost = costOfIssue(db, line.itemId, base, before);
     taken.set(line.itemId, { quantity: before.quantity + base, value: before.value + cost });
-    return { line, base, cost };
+    return { line, base, cost, serials };
   });
   const totalCost = outs.reduce((t, o) => t + o.cost, 0);
 
@@ -255,8 +258,9 @@ export function postSale(db: Database.Database, input: SaleInput, userId: number
     `INSERT INTO sales_receipt_lines (receipt_id, item_id, unit, quantity, unit_price, gross, discount, net, vat_rate, vat, cost)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  for (const { line: l, base, cost } of outs) {
-    insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.gross, l.discount, l.net, l.vatRate, l.vat, cost);
+  for (const { line: l, base, cost, serials } of outs) {
+    const lineId = Number(insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.gross, l.discount, l.net, l.vatRate, l.vat, cost).lastInsertRowid);
+    issueSerials(db, l.itemId, serials, { date: input.date, warehouseId: input.warehouseId, source: "sale", sourceId: id, lineId });
     insertMovement(db, {
       date: input.date,
       itemId: l.itemId,
@@ -309,7 +313,10 @@ function toReceipts(db: Database.Database, rows: ReceiptRow[]): Receipt[] {
   );
   const payments = db.prepare("SELECT method, amount FROM sales_receipt_payments WHERE receipt_id = ? ORDER BY id");
   return rows.map((r) => {
-    const ls = lines.all(r.id) as Receipt["lines"];
+    const ls = (lines.all(r.id) as Omit<Receipt["lines"][number], "serials" | "warrantyEnds">[]).map((l) => {
+      const serials = serialsOnLine(db, "sale", r.id, l.lineId);
+      return { ...l, serials, warrantyEnds: serials.length > 0 ? warrantyEnd(db, l.itemId, r.date) : null };
+    });
     const paid = payments.all(r.id) as Payment[];
     const paidTotal = paid.reduce((t, p) => t + p.amount, 0);
     const cashApplied = paid.find((p) => p.method === "cash")?.amount ?? 0;

@@ -7,6 +7,7 @@ import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { SerialsField, splitSerials } from "./Serials";
 import { useA4 } from "./Parties";
 
 type Tab = "invoice" | "invoices";
@@ -42,8 +43,8 @@ export function SalesInvoices() {
   );
 }
 
-type DraftLine = { itemId: number | ""; unit: "base" | "pack"; quantity: string; unitPrice: string; discount: string };
-const emptyLine = (): DraftLine => ({ itemId: "", unit: "base", quantity: "", unitPrice: "", discount: "" });
+type DraftLine = { itemId: number | ""; unit: "base" | "pack"; quantity: string; unitPrice: string; discount: string; serials: string };
+const emptyLine = (): DraftLine => ({ itemId: "", unit: "base", quantity: "", unitPrice: "", discount: "", serials: "" });
 
 /** A draft line as the core takes it, or null while it is incomplete; "bad" when something typed is not a number. */
 function toLine(l: DraftLine): InvoiceLineInput | null | "bad" {
@@ -53,7 +54,8 @@ function toLine(l: DraftLine): InvoiceLineInput | null | "bad" {
   const unitPrice = parseMoney(l.unitPrice);
   const discount = l.discount.trim() === "" ? 0 : parseMoney(l.discount);
   if (l.itemId === "" || quantity === null || quantity === 0 || unitPrice === null || discount === null) return "bad";
-  return { itemId: l.itemId, unit: l.unit, quantity, unitPrice, discount };
+  const serials = splitSerials(l.serials);
+  return { itemId: l.itemId, unit: l.unit, quantity, unitPrice, discount, ...(serials.length > 0 ? { serials } : {}) };
 }
 
 function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted: () => void }) {
@@ -200,7 +202,7 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
           {lines.map((l, i) => {
             const item = items.find((it) => it.id === l.itemId);
             const row = priced?.rows[i];
-            return (
+            return [
               <tr key={i}>
                 <td>
                   <select
@@ -237,8 +239,15 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
                 </td>
                 <td className="num">{row && formatMoney(row.net)}</td>
                 <td className="num muted">{row && formatMoney(row.vat)}</td>
-              </tr>
-            );
+              </tr>,
+              item?.serialised && (
+                <tr key={`${i}-serials`}>
+                  <td colSpan={7}>
+                    <SerialsField name={item.nameAr} value={l.serials} onChange={(serials, count) => setLine(i, { serials, unit: "base", quantity: String(count) })} />
+                  </td>
+                </tr>
+              ),
+            ];
           })}
         </tbody>
         {priced && (
@@ -380,16 +389,17 @@ function CreditNoteForm({ invoice, onChange, send }: { invoice: SalesInvoice; on
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const lines: { lineId: number; quantity: number }[] = [];
+    const lines: { lineId: number; quantity: number; serials?: string[] }[] = [];
     for (const l of invoice.lines) {
       const text = quantities[l.lineId]?.trim() ?? "";
       if (text === "") continue;
-      const quantity = parseQuantity(text);
+      const serials = l.serials.length > 0 ? splitSerials(text) : [];
+      const quantity = serials.length > 0 ? serials.length * 1000 : parseQuantity(text);
       if (quantity === null) {
         setError(ar.errors["quantity_invalid"]!);
         return;
       }
-      if (quantity > 0) lines.push({ lineId: l.lineId, quantity });
+      if (quantity > 0) lines.push({ lineId: l.lineId, quantity, ...(serials.length > 0 ? { serials } : {}) });
     }
     const result = await business.postCreditNote({ date, invoiceId: invoice.id, reason, lines });
     setError(errorText(result));
@@ -418,21 +428,40 @@ function CreditNoteForm({ invoice, onChange, send }: { invoice: SalesInvoice; on
         <tbody>
           {invoice.lines.map((l) => (
             <tr key={l.lineId}>
-              <td>{l.nameAr}</td>
+              <td>
+                {l.nameAr}
+                {l.serials.length > 0 && (
+                  <div className="muted small" dir="ltr">
+                    {l.serials.join("، ")}
+                  </div>
+                )}
+              </td>
               <td className="muted">{l.unitName}</td>
               <td className="num">{formatQuantity(l.quantity)}</td>
               <td className="num">{formatMoney(l.unitPrice)}</td>
               <td className="num">{formatMoney(l.net)}</td>
               <td className="num muted">{l.credited > 0 && formatQuantity(l.credited)}</td>
               <td>
-                <input
-                  aria-label={ar.invoices.creditQuantity(l.nameAr)}
-                  dir="ltr"
-                  inputMode="decimal"
-                  disabled={l.credited >= l.quantity}
-                  value={quantities[l.lineId] ?? ""}
-                  onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
-                />
+                {l.serials.length > 0 ? (
+                  <textarea
+                    aria-label={ar.invoices.creditQuantity(l.nameAr)}
+                    dir="ltr"
+                    rows={2}
+                    placeholder={ar.serials.label}
+                    disabled={l.credited >= l.quantity}
+                    value={quantities[l.lineId] ?? ""}
+                    onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
+                  />
+                ) : (
+                  <input
+                    aria-label={ar.invoices.creditQuantity(l.nameAr)}
+                    dir="ltr"
+                    inputMode="decimal"
+                    disabled={l.credited >= l.quantity}
+                    value={quantities[l.lineId] ?? ""}
+                    onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
+                  />
+                )}
               </td>
             </tr>
           ))}

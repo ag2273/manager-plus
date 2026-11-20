@@ -3,6 +3,7 @@ import type { Customer } from "../core/customers";
 import type { CreditNote, SalesInvoice } from "../core/invoices";
 import type { Statement } from "../core/settlements";
 import { formatMoney } from "./money";
+import { serialNote } from "./serials";
 import { formatQuantity } from "./quantity";
 import { amountInWords } from "./words";
 
@@ -59,7 +60,7 @@ export function invoiceA4(invoice: SalesInvoice, settings: BusinessSettings, cus
     columns: LINE_COLUMNS,
     rows: invoice.lines.map((l, i) => [
       String(i + 1),
-      l.nameAr,
+      l.nameAr + serialNote(l),
       l.unitName,
       formatQuantity(l.quantity),
       formatMoney(l.unitPrice),
@@ -163,7 +164,7 @@ h1 { font-size: 18pt; font-weight: 700; text-align: left; }
 .party { margin: 14px 0; padding: 8px 12px; border: 1px solid #bbb; border-radius: 4px; }
 .party .name { font-weight: 700; font-size: 12pt; }
 table { width: 100%; border-collapse: collapse; }
-.lines th, .lines td { border: 1px solid #999; padding: 4px 6px; text-align: right; vertical-align: top; }
+.lines th, .lines td { border: 1px solid #999; padding: 4px 6px; text-align: right; vertical-align: top; white-space: pre-line; }
 .lines th { background: #eee; font-weight: 600; }
 .num { text-align: left !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lines tr { break-inside: avoid; }

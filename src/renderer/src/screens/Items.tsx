@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Item, ItemInput, TaxCode } from "../../../core/items";
+import type { Warehouse } from "../../../core/stock";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText } from "../api";
 import { ar } from "../strings";
+import { SerialLookup } from "./Serials";
 
 type Filter = "active" | "inactive";
 
@@ -12,6 +14,7 @@ type Filter = "active" | "inactive";
 export function Items() {
   const [items, setItems] = useState<Item[]>([]);
   const [taxCodes, setTaxCodes] = useState<TaxCode[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("active");
   const [editing, setEditing] = useState<Item | "new" | null>(null);
@@ -36,6 +39,7 @@ export function Items() {
 
   useEffect(() => {
     void business.taxCodes().then((r) => r.ok && setTaxCodes(r.value));
+    void business.warehouses().then((r) => r.ok && setWarehouses(r.value));
   }, []);
 
   const taxKind = (id: number) => taxCodes.find((t) => t.id === id)?.kind;
@@ -156,6 +160,7 @@ export function Items() {
           </table>
         )}
       </section>
+      <SerialLookup warehouses={warehouses} />
     </>
   );
 }
@@ -393,6 +398,7 @@ function ItemForm({
           </label>
         </div>
       )}
+      {item && <SerialSettings item={item} onSaved={onSaved} />}
       <div className="row">
         <button type="submit" className="btn btn-primary">
           {ar.save}
@@ -407,5 +413,44 @@ function ItemForm({
         )}
       </div>
     </form>
+  );
+}
+
+/** Whether an item is tracked by serial, and its warranty; saved on its own because it locks once stock moves. */
+function SerialSettings({ item, onSaved }: { item: Item; onSaved: () => Promise<void> }) {
+  const [serialised, setSerialised] = useState(item.serialised);
+  const [months, setMonths] = useState(String(item.warrantyMonths));
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    const warrantyMonths = months.trim() === "" ? 0 : Number(months);
+    if (!Number.isInteger(warrantyMonths) || warrantyMonths < 0) {
+      setError(ar.errors["warranty_invalid"]!);
+      return;
+    }
+    const result = await business.setItemSerials(item.id, { serialised, warrantyMonths });
+    setError(errorText(result));
+    if (result.ok) await onSaved();
+  }
+
+  return (
+    <fieldset className="row" aria-label={ar.serials.save}>
+      <label className="check">
+        <input type="checkbox" checked={serialised} onChange={(e) => setSerialised(e.target.checked)} />
+        {ar.serials.tracked}
+      </label>
+      <label className="field narrow">
+        {ar.serials.warrantyMonths}
+        <input dir="ltr" inputMode="numeric" value={months} onChange={(e) => setMonths(e.target.value)} />
+      </label>
+      <button type="button" className="btn" onClick={() => void save()}>
+        {ar.serials.save}
+      </button>
+      {error && (
+        <div role="alert" className="error">
+          {error}
+        </div>
+      )}
+    </fieldset>
   );
 }

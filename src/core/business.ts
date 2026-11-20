@@ -68,6 +68,7 @@ import {
   postSalesInvoice,
   priceInvoice,
 } from "./invoices";
+import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import {
   type Aging,
@@ -666,6 +667,18 @@ export class Business {
   /** Purchase invoices, newest first. */
   purchaseInvoices(): PurchaseInvoice[] {
     return this.read("purchaseInvoices", () => listPurchaseInvoices(this.db));
+  }
+
+  // Serial numbers
+
+  /** Turns serial tracking on or off for an item, with its warranty in months. */
+  setItemSerials(itemId: number, settings: { serialised: boolean; warrantyMonths: number }): void {
+    this.write("setItemSerials", settings, () => setItemSerials(this.db, itemId, settings), itemId);
+  }
+
+  /** Where a serial number came from and went, and whether it is under warranty on `today`. */
+  findSerial(serial: string, today: IsoDate): SerialHistory[] {
+    return this.read("findSerial", () => findSerial(this.db, serial, today));
   }
 
   /** Sends goods back to a supplier against their invoice. */

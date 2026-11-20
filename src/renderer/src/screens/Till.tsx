@@ -13,7 +13,8 @@ import { ar } from "../strings";
 type Tender = "cash" | "card" | "wallet" | "split" | "credit";
 const TENDERS: Tender[] = ["cash", "card", "wallet", "split", "credit"];
 
-type CartLine = { itemId: number; unit: "base" | "pack"; name: string; barcode: string; quantity: string; discount: string };
+/** A cart line; a serialised item's line holds the scanned serials, one per unit. */
+type CartLine = { itemId: number; unit: "base" | "pack"; name: string; barcode: string; quantity: string; discount: string; serials: string[] };
 
 /** "2.50" is an amount off; "10%" is a percentage. Empty is no discount; null is unreadable. */
 function parseDiscount(text: string): Discount | undefined | null {
@@ -33,7 +34,7 @@ function toSaleLines(lines: CartLine[]): SaleLineInput[] | null {
     const quantity = parseQuantity(l.quantity);
     const discount = parseDiscount(l.discount);
     if (quantity === null || quantity <= 0 || discount === null) return null;
-    out.push({ itemId: l.itemId, unit: l.unit, quantity, ...(discount ? { discount } : {}) });
+    out.push({ itemId: l.itemId, unit: l.unit, quantity, ...(discount ? { discount } : {}), ...(l.serials.length > 0 ? { serials: l.serials } : {}) });
   }
   return out;
 }
@@ -140,6 +141,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
           barcode: (pack ? item.pack!.barcode : item?.barcode) ?? "",
           quantity: formatQuantity(l.quantity),
           discount: l.discount ? formatDiscount(l.discount) : "",
+          serials: l.serials ?? [],
         };
       }),
     );
@@ -183,16 +185,41 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
     setError(null);
     setLines((current) => {
       const at = current.findIndex((l) => l.itemId === unit.itemId && l.unit === unit.unit);
-      if (at === -1) return [...current, { ...unit, quantity: "1", discount: "" }];
+      if (at === -1) return [...current, { ...unit, quantity: "1", discount: "", serials: [] }];
       return current.map((l, i) => (i === at ? { ...l, quantity: String((parseQuantity(l.quantity) ?? 0) / 1000 + 1) } : l));
+    });
+  }
+
+  /** One unit of a serialised item, by its serial. */
+  function addSerial(itemId: number, name: string, serial: string) {
+    setLast(null);
+    setError(null);
+    setLines((current) => {
+      const at = current.findIndex((l) => l.itemId === itemId && l.serials.length > 0);
+      if (at === -1) return [...current, { itemId, unit: "base", name, barcode: "", quantity: "1", discount: "", serials: [serial] }];
+      const line = current[at]!;
+      if (line.serials.includes(serial)) {
+        setError(ar.till.serialTwice);
+        return current;
+      }
+      const serials = [...line.serials, serial];
+      return current.map((l, i) => (i === at ? { ...l, serials, quantity: String(serials.length) } : l));
     });
   }
 
   async function addBarcode(code: string): Promise<boolean> {
     const result = await business.findByBarcode(code);
-    if (!result.ok || !result.value) return false;
-    const u = result.value;
-    addUnit({ itemId: u.itemId, unit: u.unit, name: u.unit === "pack" ? `${u.nameAr} · ${u.unitName}` : u.nameAr, barcode: code });
+    if (result.ok && result.value) {
+      const u = result.value;
+      // A serialised item goes in by each unit's serial, so the receipt knows which one was sold.
+      if (u.serialised) setError(ar.till.scanSerial(u.nameAr));
+      else addUnit({ itemId: u.itemId, unit: u.unit, name: u.unit === "pack" ? `${u.nameAr} · ${u.unitName}` : u.nameAr, barcode: code });
+      return true;
+    }
+    const serial = await business.findSerial(code, today());
+    const unit = serial.ok ? serial.value.find((h) => h.inStock) : undefined;
+    if (!unit) return false;
+    addSerial(unit.itemId, unit.nameAr, unit.serial);
     return true;
   }
 
@@ -218,6 +245,13 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
   }
 
   function pickItem(item: Item) {
+    if (item.serialised) {
+      setError(ar.till.scanSerial(item.nameAr));
+      setQuery("");
+      setMatches([]);
+      search.current?.focus();
+      return;
+    }
     addUnit({ itemId: item.id, unit: "base", name: item.nameAr, barcode: item.barcode ?? "" });
     setQuery("");
     setMatches([]);
@@ -483,7 +517,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
                       <div className="stack">
                         <span className="strong">{l.name}</span>
                         <span className="muted small" dir="ltr">
-                          {l.barcode}
+                          {l.serials.length > 0 ? `S/N: ${l.serials.join(", ")}` : l.barcode}
                         </span>
                       </div>
                     </td>
@@ -493,6 +527,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
                         dir="ltr"
                         inputMode="decimal"
                         value={l.quantity}
+                        readOnly={l.serials.length > 0}
                         onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))}
                         onFocus={(e) => {
                           editing.current = e.currentTarget.value;
@@ -943,6 +978,7 @@ function ReturnPanel({ onDone }: { onDone: () => void }) {
   const [number, setNumber] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [quantities, setQuantities] = useState<Record<number, string>>({});
+  const [picked, setPicked] = useState<Record<number, string[]>>({});
   const [refund, setRefund] = useState<"cash" | "account">("cash");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -960,14 +996,20 @@ function ReturnPanel({ onDone }: { onDone: () => void }) {
     setError(errorText(result));
     setReceipt(result.ok ? result.value : null);
     setQuantities({});
+    setPicked({});
     setRefund(result.ok && result.value.customerId !== null && result.value.onCredit > 0 ? "account" : "cash");
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!receipt) return;
-    const lines: { lineId: number; quantity: number }[] = [];
+    const lines: { lineId: number; quantity: number; serials?: string[] }[] = [];
     for (const l of receipt.lines) {
+      if (l.serials.length > 0) {
+        const serials = picked[l.lineId] ?? [];
+        if (serials.length > 0) lines.push({ lineId: l.lineId, quantity: serials.length * 1000, serials });
+        continue;
+      }
       const text = quantities[l.lineId]?.trim() ?? "";
       if (text === "") continue;
       const quantity = parseQuantity(text);
@@ -1057,6 +1099,23 @@ function ReturnPanel({ onDone }: { onDone: () => void }) {
                   <td className="num muted">{formatQuantity(l.returned)}</td>
                   <td className="num">{formatMoney(l.amount)}</td>
                   <td>
+                    {l.serials.length > 0 ? (
+                      <div className="stack">
+                        {l.serials.map((serial) => (
+                          <label key={serial} className="check" dir="ltr">
+                            <input
+                              type="checkbox"
+                              checked={(picked[l.lineId] ?? []).includes(serial)}
+                              onChange={(e) => {
+                                const now = picked[l.lineId] ?? [];
+                                setPicked({ ...picked, [l.lineId]: e.target.checked ? [...now, serial] : now.filter((x) => x !== serial) });
+                              }}
+                            />
+                            {serial}
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
                     <input
                       aria-label={`${ar.returns.quantity} ${l.nameAr}`}
                       dir="ltr"
@@ -1066,6 +1125,7 @@ function ReturnPanel({ onDone }: { onDone: () => void }) {
                       placeholder="0"
                       onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
                     />
+                    )}
                   </td>
                 </tr>
               ))}

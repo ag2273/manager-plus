@@ -3,7 +3,8 @@ import { assertIsoDate } from "./dates";
 import { BusinessError } from "./errors";
 import { type BasisPoints, type Quantity, vatRate } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
-import { type UnitLine, accountByRole, activeWarehouse, assertQuantity, insertMovement, toBaseQuantity } from "./stock";
+import { receiveSerials, serialsFor } from "./serials";
+import { type SerialLine, type UnitLine, accountByRole, activeWarehouse, assertQuantity, insertMovement, toBaseQuantity } from "./stock";
 
 /** The currencies a supplier can bill in. Only EGP can be posted until exchange rates arrive (#30). */
 export type Currency = "EGP" | "USD" | "EUR" | "CNY";
@@ -13,7 +14,7 @@ export type SupplierInput = { name: string; phone: string; taxRegistrationNumber
 export type SupplierChanges = Partial<SupplierInput>;
 
 /** A purchase line: quantity in thousandths of the chosen unit, price per one of that unit, VAT-exclusive. */
-export type PurchaseLineInput = UnitLine & { unitPrice: Piastres };
+export type PurchaseLineInput = UnitLine & SerialLine & { unitPrice: Piastres };
 export type PurchaseInvoiceInput = {
   date: IsoDate;
   supplierId: number;
@@ -187,8 +188,11 @@ export function postPurchaseInvoice(db: Database.Database, input: PurchaseInvoic
     `INSERT INTO purchase_invoice_lines (invoice_id, item_id, unit, quantity, unit_price, net, vat_rate, vat)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
+  let index = 0;
   for (const l of lines) {
-    insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.net, l.vatRate, l.vat);
+    const lineId = Number(insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.net, l.vatRate, l.vat).lastInsertRowid);
+    const serials = serialsFor(db, l.itemId, l.baseQuantity, input.lines[index++]!.serials);
+    receiveSerials(db, l.itemId, serials, { date: input.date, warehouseId: input.warehouseId, source: "purchase", sourceId: id, lineId });
     insertMovement(db, {
       date: input.date,
       itemId: l.itemId,

@@ -80,7 +80,14 @@ export type BusinessErrorCode =
   | "invoice_not_found"
   | "amount_invalid"
   | "allocation_invalid"
-  | "date_range_invalid";
+  | "date_range_invalid"
+  | "serials_required"
+  | "serials_not_expected"
+  | "serial_in_stock"
+  | "serial_not_in_stock"
+  | "serial_not_on_document"
+  | "serial_setting_locked"
+  | "warranty_invalid";
 
 export class BusinessError extends Error {
   constructor(
