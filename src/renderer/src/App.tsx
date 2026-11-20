@@ -15,6 +15,7 @@ import { Till } from "./screens/Till";
 import { Warehouses } from "./screens/Warehouses";
 import { Welcome } from "./screens/Welcome";
 import { ar } from "./strings";
+import { SERVER_BACK, SERVER_LOST, business } from "./api";
 
 type Screen =
   | "home"
@@ -61,6 +62,25 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const [theme, setTheme] = useState<ThemeId>("calm");
+  const [serverLost, setServerLost] = useState(false);
+
+  // A client PC whose server went away says so on every screen and keeps trying.
+  useEffect(() => {
+    const lost = () => setServerLost(true);
+    const back = () => setServerLost(false);
+    window.addEventListener(SERVER_LOST, lost);
+    window.addEventListener(SERVER_BACK, back);
+    return () => {
+      window.removeEventListener(SERVER_LOST, lost);
+      window.removeEventListener(SERVER_BACK, back);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!serverLost) return;
+    const timer = setInterval(() => void business.settings(), 5_000);
+    return () => clearInterval(timer);
+  }, [serverLost]);
 
   useEffect(() => {
     void window.api.preferences().then((p) => setTheme(p.theme));
@@ -139,6 +159,14 @@ export function App() {
         </div>
       </nav>
       <main className="content">
+        {serverLost && (
+          <div role="alert" className="error server-lost">
+            {ar.errors["server_unreachable"]}{" "}
+            <button type="button" className="link" onClick={() => void business.settings()}>
+              {ar.network.retry}
+            </button>
+          </div>
+        )}
         {screen === "home" && (
           <Home
             settings={open}

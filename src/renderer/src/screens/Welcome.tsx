@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { BusinessSettings, Result } from "../../../shared/api";
+import type { BusinessSettings, FoundServer, Result } from "../../../shared/api";
 import { errorText } from "../api";
 import { ar } from "../strings";
 
@@ -136,6 +136,7 @@ export function Welcome({
           </button>
         </div>
       </form>
+      <ServerConnect onConnected={handle} />
       {recent.length > 0 && (
         <section className="card">
           <h2>{ar.recent}</h2>
@@ -153,5 +154,70 @@ export function Welcome({
         </section>
       )}
     </main>
+  );
+}
+
+/** Finds servers on the network, or takes an address, and connects as a client. */
+function ServerConnect({ onConnected }: { onConnected: (result: Result<BusinessSettings | null>) => void }) {
+  const [found, setFound] = useState<FoundServer[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [last, setLast] = useState<FoundServer | null>(null);
+  const [host, setHost] = useState("");
+  const [port, setPort] = useState("47100");
+
+  useEffect(() => {
+    void window.api.lastServer().then(setLast);
+  }, []);
+
+  async function search() {
+    setSearching(true);
+    setFound(await window.api.discoverServers());
+    setSearching(false);
+  }
+
+  async function connect(to: { host: string; port: number }) {
+    onConnected(await window.api.connectServer(to.host, to.port));
+  }
+
+  return (
+    <section className="card" aria-label={ar.network.title}>
+      <h2>{ar.network.title}</h2>
+      <span className="muted">{ar.network.hint}</span>
+      <div className="row">
+        {last && (
+          <button type="button" className="btn btn-primary" onClick={() => void connect(last)}>
+            {ar.network.last(last.name)}
+          </button>
+        )}
+        <button type="button" className="btn" disabled={searching} onClick={() => void search()}>
+          {searching ? ar.network.searching : ar.network.search}
+        </button>
+      </div>
+      {found && found.length === 0 && <p className="muted">{ar.network.none}</p>}
+      {found?.map((s) => (
+        <button key={`${s.host}:${s.port}`} type="button" className="link" onClick={() => void connect(s)}>
+          {s.name} <span dir="ltr">({s.host}:{s.port})</span>
+        </button>
+      ))}
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void connect({ host: host.trim(), port: Number(port) || 47100 });
+        }}
+      >
+        <label className="field">
+          {ar.network.host}
+          <input dir="ltr" placeholder="192.168.1.10" value={host} onChange={(e) => setHost(e.target.value)} />
+        </label>
+        <label className="field narrow">
+          {ar.network.port}
+          <input dir="ltr" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value)} />
+        </label>
+        <button type="submit" className="btn">
+          {ar.network.connect}
+        </button>
+      </form>
+    </section>
   );
 }
