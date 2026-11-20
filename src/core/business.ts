@@ -8,6 +8,7 @@ import {
   type JournalEntryInput,
   type JournalLine,
   type NewAccount,
+  type Piastres,
   type TrialBalance,
   addAccount,
   deleteAccount,
@@ -36,12 +37,30 @@ import {
 } from "./items";
 import { LATEST_SCHEMA_VERSION, migrate } from "./migrations";
 import {
+  type PricedPurchase,
+  type PurchaseInvoice,
+  type PurchaseLineInput,
+  type PurchaseInvoiceInput,
+  type Supplier,
+  type SupplierChanges,
+  type SupplierInput,
+  addSupplier,
+  listPurchaseInvoices,
+  listSuppliers,
+  postPurchaseInvoice,
+  pricePurchase,
+  setSupplierActive,
+  supplierBalance,
+  updateSupplier,
+} from "./purchases";
+import {
   type OpeningStockLine,
   type StockOnHand,
   type Transfer,
   type TransferInput,
   type Warehouse,
   addWarehouse,
+  averageCost,
   listTransfers,
   listWarehouses,
   postOpeningStock,
@@ -391,6 +410,69 @@ export class Business {
   /** Transfers, newest first. */
   transfers(): Transfer[] {
     return this.read("transfers", () => listTransfers(this.db));
+  }
+
+  /** Weighted average cost of one base unit of an item, in piastres, across all warehouses. */
+  averageCost(itemId: number): Piastres {
+    return this.read("averageCost", () => averageCost(this.db, itemId));
+  }
+
+  // Suppliers and purchases
+
+  suppliers(): Supplier[] {
+    return this.read("suppliers", () => listSuppliers(this.db));
+  }
+
+  addSupplier(supplier: SupplierInput): number {
+    return this.write("addSupplier", supplier, () => addSupplier(this.db, supplier));
+  }
+
+  updateSupplier(id: number, changes: SupplierChanges): void {
+    this.write("updateSupplier", changes, () => updateSupplier(this.db, id, changes), id);
+  }
+
+  /** A stopped supplier stays in the books but cannot be bought from. */
+  deactivateSupplier(id: number): void {
+    this.write("deactivateSupplier", null, () => setSupplierActive(this.db, id, false), id);
+  }
+
+  reactivateSupplier(id: number): void {
+    this.write("reactivateSupplier", null, () => setSupplierActive(this.db, id, true), id);
+  }
+
+  /** What the business owes a supplier, in piastres. */
+  supplierBalance(id: number): Piastres {
+    return this.read("supplierBalance", () => supplierBalance(this.db, id));
+  }
+
+  /** Net, VAT and total of purchase lines on a date, without posting anything. */
+  pricePurchase(date: IsoDate, lines: PurchaseLineInput[]): PricedPurchase {
+    return this.read("pricePurchase", () => {
+      const priced = pricePurchase(this.db, date, lines);
+      return {
+        ...priced,
+        lines: priced.lines.map((l) => ({
+          itemId: l.itemId,
+          unit: l.unit,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          net: l.net,
+          vatRate: l.vatRate,
+          vat: l.vat,
+        })),
+      };
+    });
+  }
+
+  /** Posts a supplier's invoice into a warehouse and returns its id. */
+  postPurchaseInvoice(invoice: PurchaseInvoiceInput): number {
+    const user = this.allow("postPurchaseInvoice");
+    return this.write("postPurchaseInvoice", invoice, () => postPurchaseInvoice(this.db, invoice, user.id));
+  }
+
+  /** Purchase invoices, newest first. */
+  purchaseInvoices(): PurchaseInvoice[] {
+    return this.read("purchaseInvoices", () => listPurchaseInvoices(this.db));
   }
 
   close(): void {

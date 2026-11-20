@@ -28,7 +28,7 @@ function findWarehouse(db: Database.Database, id: number): Warehouse {
   return toWarehouse(row);
 }
 
-function activeWarehouse(db: Database.Database, id: number): Warehouse {
+export function activeWarehouse(db: Database.Database, id: number): Warehouse {
   const warehouse = findWarehouse(db, id);
   if (!warehouse.active) throw new BusinessError("warehouse_inactive", `Warehouse ${warehouse.name} is stopped`);
   return warehouse;
@@ -80,7 +80,18 @@ export function stockOnHand(db: Database.Database, itemId: number): StockOnHand 
   return { total: rows.reduce((t, r) => t + r.quantity, 0), byWarehouse: rows };
 }
 
-function assertQuantity(quantity: number): void {
+/**
+ * Weighted average cost of one base unit, in piastres: the value of all stock
+ * held divided by the quantity held, across every warehouse. Zero when none is held.
+ */
+export function averageCost(db: Database.Database, itemId: number): Piastres {
+  const row = db
+    .prepare("SELECT COALESCE(SUM(quantity), 0) AS q, COALESCE(SUM(value), 0) AS v FROM stock_movements WHERE item_id = ?")
+    .get(itemId) as { q: number; v: number };
+  return row.q <= 0 ? 0 : Math.round((row.v * ONE_BASE_UNIT) / row.q);
+}
+
+export function assertQuantity(quantity: number): void {
   if (!Number.isSafeInteger(quantity) || quantity <= 0) {
     throw new BusinessError("quantity_invalid", `Quantity ${quantity} is not a positive whole number of thousandths`);
   }
@@ -101,7 +112,7 @@ export function toBaseQuantity(db: Database.Database, line: UnitLine): Quantity 
   return base;
 }
 
-function insertMovement(
+export function insertMovement(
   db: Database.Database,
   m: { date: IsoDate; itemId: number; warehouseId: number; quantity: Quantity; value: Piastres; source: string; sourceId: number },
 ): void {
@@ -110,7 +121,7 @@ function insertMovement(
   ).run(m.date, m.itemId, m.warehouseId, m.quantity, m.value, m.source, m.sourceId);
 }
 
-function accountByRole(db: Database.Database, role: string): number {
+export function accountByRole(db: Database.Database, role: string): number {
   return (db.prepare("SELECT id FROM accounts WHERE role = ?").get(role) as { id: number }).id;
 }
 

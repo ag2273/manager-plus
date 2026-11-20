@@ -50,7 +50,13 @@ export type BusinessErrorCode =
   | "transfer_needs_lines"
   | "stock_insufficient"
   | "quantity_invalid"
-  | "item_has_no_pack";
+  | "item_has_no_pack"
+  | "supplier_name_required"
+  | "supplier_name_taken"
+  | "supplier_not_found"
+  | "supplier_inactive"
+  | "invoice_needs_lines"
+  | "invoice_total_zero";
 
 export class BusinessError extends Error {
   constructor(
