@@ -13,10 +13,12 @@ import {
   type Preferences,
   type PrinterSettings,
   type PrintRequest,
+  type A4Request,
   type Result,
 } from "../shared/api";
 import { documentHtml, returnDocument, saleDocument, testDocument } from "../shared/receipt";
-import { listPrinters, printHtml } from "./printer";
+import { listPrinters, printA4, printHtml } from "./printer";
+import { a4Html, creditNoteA4, invoiceA4, statementA4 } from "../shared/a4";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
@@ -171,6 +173,35 @@ ipcMain.handle(CHANNELS.print, async (_event, request: PrintRequest): Promise<Re
   try {
     await printHtml(documentHtml(document.value), printer, { openDrawer: request.kind === "sale" && request.openDrawer });
     return { ok: true, value: null };
+  } catch (error) {
+    console.error(error);
+    return { ok: false, code: "printer_failed", message: String(error) };
+  }
+});
+
+ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Result<{ saved: string | null }>> => {
+  const business = current;
+  const page = attempt(() => {
+    if (!business) throw new BusinessError("sign_in_required", "Sign in first");
+    const settings = business.settings();
+    if (request.kind === "invoice") {
+      const invoice = business.findSalesInvoice(request.number);
+      const customer = business.customers().find((c) => c.id === invoice.customerId)!;
+      return { html: a4Html(invoiceA4(invoice, settings, customer)), name: `فاتورة ${invoice.number}` };
+    }
+    if (request.kind === "creditNote") {
+      const note = business.findCreditNote(request.number);
+      const customer = business.customers().find((c) => c.id === note.customerId)!;
+      return { html: a4Html(creditNoteA4(note, settings, customer)), name: `إشعار دائن ${note.number}` };
+    }
+    const st = business.statement(request.party, request.id, request.from, request.to);
+    const party = request.party === "customer" ? business.customers().find((c) => c.id === request.id)! : business.suppliers().find((x) => x.id === request.id)!;
+    const details = { kind: request.party, address: "address" in party ? party.address : "", taxRegistrationNumber: party.taxRegistrationNumber };
+    return { html: a4Html(statementA4(st, settings, details)), name: `كشف حساب ${st.name} ${st.to}` };
+  });
+  if (!page.ok) return page;
+  try {
+    return { ok: true, value: { saved: await printA4(page.value.html, request.output, page.value.name, window) } };
   } catch (error) {
     console.error(error);
     return { ok: false, code: "printer_failed", message: String(error) };

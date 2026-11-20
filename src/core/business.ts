@@ -53,6 +53,34 @@ import {
   supplierBalance,
   updateSupplier,
 } from "./purchases";
+import {
+  type CreditNote,
+  type CreditNoteInput,
+  type InvoiceLineInput,
+  type PricedInvoice,
+  type SalesInvoice,
+  type SalesInvoiceInput,
+  type SalesInvoiceResult,
+  findCreditNote,
+  findSalesInvoice,
+  listSalesInvoices,
+  postCreditNote,
+  postSalesInvoice,
+  priceInvoice,
+} from "./invoices";
+import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
+import {
+  type Aging,
+  type OpenDocument,
+  type PartyKind,
+  type PaymentInput,
+  type PaymentResult,
+  type Statement,
+  aging,
+  openDocuments,
+  recordPayment,
+  statement,
+} from "./settlements";
 import { type ReturnInput, type ReturnResult, type SaleReturn, findReturn, returnSale } from "./returns";
 import {
   type CashInOut,
@@ -638,6 +666,80 @@ export class Business {
   /** Purchase invoices, newest first. */
   purchaseInvoices(): PurchaseInvoice[] {
     return this.read("purchaseInvoices", () => listPurchaseInvoices(this.db));
+  }
+
+  /** Sends goods back to a supplier against their invoice. */
+  postDebitNote(note: DebitNoteInput): { id: number; number: number; total: Piastres } {
+    const user = this.allow("postDebitNote");
+    return this.write("postDebitNote", note, () => postDebitNote(this.db, note, user.id));
+  }
+
+  /** Debit notes, newest first. */
+  debitNotes(): DebitNote[] {
+    return this.read("debitNotes", () => listDebitNotes(this.db));
+  }
+
+  // Sales invoices
+
+  /** Net, VAT and total of VAT-exclusive invoice lines on a date, without posting anything. */
+  priceInvoice(date: IsoDate, lines: InvoiceLineInput[]): PricedInvoice {
+    return this.read("priceInvoice", () => priceInvoice(this.db, date, lines));
+  }
+
+  /** Posts a tax invoice to a customer's account. */
+  postSalesInvoice(invoice: SalesInvoiceInput): SalesInvoiceResult {
+    const user = this.allow("postSalesInvoice");
+    return this.write("postSalesInvoice", invoice, () => postSalesInvoice(this.db, invoice, user.id));
+  }
+
+  /** Sales invoices, newest first. */
+  salesInvoices(): SalesInvoice[] {
+    return this.read("salesInvoices", () => listSalesInvoices(this.db));
+  }
+
+  /** A sales invoice by its printed number. */
+  findSalesInvoice(number: number): SalesInvoice {
+    return this.read("findSalesInvoice", () => findSalesInvoice(this.db, number));
+  }
+
+  /** Takes goods back against a sales invoice, credited to the customer's account. */
+  postCreditNote(note: CreditNoteInput): { id: number; number: number; total: Piastres } {
+    const user = this.allow("postCreditNote");
+    return this.write("postCreditNote", note, () => postCreditNote(this.db, note, user.id));
+  }
+
+  /** A credit note by its printed number. */
+  findCreditNote(number: number): CreditNote {
+    return this.read("findCreditNote", () => findCreditNote(this.db, number));
+  }
+
+  // Payments, statements and aging
+
+  /** Money received from a customer. */
+  receiveCustomerPayment(payment: PaymentInput): PaymentResult {
+    const user = this.allow("receiveCustomerPayment");
+    return this.write("receiveCustomerPayment", payment, () => recordPayment(this.db, "customer", payment, user.id));
+  }
+
+  /** Money paid to a supplier. */
+  paySupplier(payment: PaymentInput): PaymentResult {
+    const user = this.allow("paySupplier");
+    return this.write("paySupplier", payment, () => recordPayment(this.db, "supplier", payment, user.id));
+  }
+
+  /** A customer's or supplier's documents with something still free to allocate a payment to. */
+  openDocuments(kind: PartyKind, partyId: number): OpenDocument[] {
+    return this.read("openDocuments", () => openDocuments(this.db, kind, partyId));
+  }
+
+  /** A customer's or supplier's account between two dates. */
+  statement(kind: PartyKind, partyId: number, from: IsoDate, to: IsoDate): Statement {
+    return this.read("statement", () => statement(this.db, kind, partyId, from, to));
+  }
+
+  /** Aged receivables (customers) or payables (suppliers) on a date. */
+  aging(kind: PartyKind, asOf: IsoDate): Aging {
+    return this.read("aging", () => aging(this.db, kind, asOf));
   }
 
   close(): void {

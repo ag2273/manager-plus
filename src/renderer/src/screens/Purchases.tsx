@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Item } from "../../../core/items";
-import type { PricedPurchase, PurchaseInvoice, PurchaseLineInput, Supplier } from "../../../core/purchases";
+import { CURRENCIES, type Currency, type PricedPurchase, type PurchaseInvoice, type PurchaseLineInput, type Supplier } from "../../../core/purchases";
 import type { Warehouse } from "../../../core/stock";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { AgingView, PaymentForm, StatementView } from "./Parties";
 
-type Tab = "invoice" | "invoices" | "suppliers";
-const TABS: Tab[] = ["invoice", "invoices", "suppliers"];
+type Tab = "invoice" | "invoices" | "suppliers" | "payment" | "statement" | "aging";
 
 /** Supplier invoices into a warehouse, past invoices, and the supplier list. */
 export function Purchases({ canSeeBalances }: { canSeeBalances: boolean }) {
   const [tab, setTab] = useState<Tab>("invoice");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const tabs: Tab[] = canSeeBalances ? ["invoice", "invoices", "suppliers", "payment", "statement", "aging"] : ["invoice", "invoices", "suppliers"];
 
   const reload = useCallback(async () => {
     const result = await business.suppliers();
@@ -34,7 +35,7 @@ export function Purchases({ canSeeBalances }: { canSeeBalances: boolean }) {
         </div>
       </header>
       <div role="tablist" aria-label={ar.purchases.title} className="pills">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button key={t} type="button" role="tab" aria-selected={t === tab} className="pill" onClick={() => setTab(t)}>
             {ar.purchases.tabs[t]}
           </button>
@@ -43,6 +44,9 @@ export function Purchases({ canSeeBalances }: { canSeeBalances: boolean }) {
       {tab === "invoice" && <InvoiceForm suppliers={suppliers.filter((s) => s.active)} />}
       {tab === "invoices" && <InvoiceList suppliers={suppliers} />}
       {tab === "suppliers" && <SupplierList suppliers={suppliers} onChange={reload} canSeeBalances={canSeeBalances} />}
+      {tab === "payment" && <PaymentForm kind="supplier" parties={suppliers.filter((s) => s.currency === "EGP")} />}
+      {tab === "statement" && <StatementView kind="supplier" parties={suppliers} />}
+      {tab === "aging" && <AgingView kind="supplier" />}
     </>
   );
 }
@@ -279,10 +283,16 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
 
 function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
   const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
+  const [open, setOpen] = useState<number | null>(null);
+
+  const reload = useCallback(async () => {
+    const r = await business.purchaseInvoices();
+    if (r.ok) setInvoices(r.value);
+  }, []);
 
   useEffect(() => {
-    void business.purchaseInvoices().then((r) => r.ok && setInvoices(r.value));
-  }, []);
+    void reload();
+  }, [reload]);
 
   const name = (id: number) => suppliers.find((s) => s.id === id)?.name ?? "";
 
@@ -302,10 +312,11 @@ function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
               <th className="col-money">{ar.purchases.vat}</th>
               <th className="col-money">{ar.purchases.total}</th>
               <th className="col-type">{ar.purchases.postedBy}</th>
+              <th className="col-actions" />
             </tr>
           </thead>
           <tbody>
-            {invoices.map((inv) => (
+            {invoices.map((inv) => [
               <tr key={inv.id}>
                 <td className="muted">{inv.date}</td>
                 <td>{name(inv.supplierId)}</td>
@@ -317,8 +328,20 @@ function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
                 <td className="num">{formatMoney(inv.vat)}</td>
                 <td className="num">{formatMoney(inv.total)}</td>
                 <td className="muted">{inv.postedBy}</td>
-              </tr>
-            ))}
+                <td>
+                  <button type="button" className="btn btn-small" aria-expanded={open === inv.id} onClick={() => setOpen(open === inv.id ? null : inv.id)}>
+                    {ar.purchases.returnToSupplier}
+                  </button>
+                </td>
+              </tr>,
+              open === inv.id && (
+                <tr key={`${inv.id}-return`}>
+                  <td colSpan={9}>
+                    <DebitNoteForm invoice={inv} onChange={reload} />
+                  </td>
+                </tr>
+              ),
+            ])}
           </tbody>
         </table>
       )}
@@ -326,8 +349,98 @@ function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
   );
 }
 
-type SupplierDraft = { name: string; phone: string; taxRegistrationNumber: string };
-const emptySupplier: SupplierDraft = { name: "", phone: "", taxRegistrationNumber: "" };
+function DebitNoteForm({ invoice, onChange }: { invoice: PurchaseInvoice; onChange: () => Promise<void> }) {
+  const [quantities, setQuantities] = useState<Record<number, string>>({});
+  const [reason, setReason] = useState("");
+  const [date, setDate] = useState(today());
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const lines: { lineId: number; quantity: number }[] = [];
+    for (const l of invoice.lines) {
+      const text = quantities[l.lineId]?.trim() ?? "";
+      if (text === "") continue;
+      const quantity = parseQuantity(text);
+      if (quantity === null) {
+        setError(ar.errors["quantity_invalid"]!);
+        return;
+      }
+      if (quantity > 0) lines.push({ lineId: l.lineId, quantity });
+    }
+    const result = await business.postDebitNote({ date, purchaseInvoiceId: invoice.id, reason, lines });
+    setError(errorText(result));
+    if (result.ok) {
+      setDone(ar.purchases.debitNoteDone(result.value.number, formatMoney(result.value.total)));
+      setQuantities({});
+      setReason("");
+      await onChange();
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={submit} aria-label={ar.purchases.debitNote}>
+      <table className="lines">
+        <thead>
+          <tr>
+            <th>{ar.purchases.item}</th>
+            <th className="col-money">{ar.purchases.quantity}</th>
+            <th className="col-money">{ar.purchases.unitPrice}</th>
+            <th className="col-money">{ar.purchases.alreadyReturned}</th>
+            <th className="col-money">{ar.purchases.returnToSupplier}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoice.lines.map((l) => (
+            <tr key={l.lineId}>
+              <td>{l.nameAr}</td>
+              <td className="num">{formatQuantity(l.quantity)}</td>
+              <td className="num">{formatMoney(l.unitPrice)}</td>
+              <td className="num muted">{l.returned > 0 && formatQuantity(l.returned)}</td>
+              <td>
+                <input
+                  aria-label={ar.purchases.returnQuantity(l.nameAr)}
+                  dir="ltr"
+                  inputMode="decimal"
+                  disabled={l.returned >= l.quantity}
+                  value={quantities[l.lineId] ?? ""}
+                  onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {error && (
+        <div role="alert" className="error">
+          {error}
+        </div>
+      )}
+      {done && (
+        <div role="status" className="ok">
+          {done}
+        </div>
+      )}
+      <div className="row">
+        <label className="field">
+          {ar.purchases.reason}
+          <input value={reason} onChange={(e) => setReason(e.target.value)} />
+        </label>
+        <label className="field narrow">
+          {ar.purchases.date}
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <button type="submit" className="btn btn-primary">
+          {ar.purchases.postDebitNote}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+type SupplierDraft = { name: string; phone: string; taxRegistrationNumber: string; currency: Currency };
+const emptySupplier: SupplierDraft = { name: "", phone: "", taxRegistrationNumber: "", currency: "EGP" };
 
 function SupplierList({
   suppliers,
@@ -390,6 +503,16 @@ function SupplierList({
             onChange={(e) => setDraft({ ...draft, taxRegistrationNumber: e.target.value })}
           />
         </label>
+        <label className="field narrow">
+          {ar.purchases.currency}
+          <select value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value as Currency })}>
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="submit" className="btn btn-primary">
           {ar.purchases.addSupplier}
         </button>
@@ -404,6 +527,7 @@ function SupplierList({
                 <th>{ar.purchases.name}</th>
                 <th className="col-type">{ar.purchases.phone}</th>
                 <th className="col-type">{ar.purchases.taxRegistrationNumber}</th>
+                <th className="col-type">{ar.purchases.currency}</th>
                 {canSeeBalances && <th className="col-money">{ar.purchases.balance}</th>}
                 <th className="col-actions" />
               </tr>
@@ -425,6 +549,15 @@ function SupplierList({
                         value={editing.taxRegistrationNumber}
                         onChange={(e) => setEditing({ ...editing, taxRegistrationNumber: e.target.value })}
                       />
+                    </td>
+                    <td>
+                      <select aria-label={ar.purchases.currency} value={editing.currency} onChange={(e) => setEditing({ ...editing, currency: e.target.value as Currency })}>
+                        {CURRENCIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     {canSeeBalances && <td />}
                     <td>
@@ -457,13 +590,14 @@ function SupplierList({
                     <td className="muted" dir="ltr">
                       {s.taxRegistrationNumber}
                     </td>
+                    <td className="muted">{s.currency}</td>
                     {canSeeBalances && <td className="num">{balances[s.id] !== undefined && formatMoney(balances[s.id]!)}</td>}
                     <td>
                       <div className="actions">
                         <button
                           type="button"
                           className="btn btn-small"
-                          onClick={() => setEditing({ id: s.id, name: s.name, phone: s.phone, taxRegistrationNumber: s.taxRegistrationNumber })}
+                          onClick={() => setEditing({ id: s.id, name: s.name, phone: s.phone, taxRegistrationNumber: s.taxRegistrationNumber, currency: s.currency })}
                         >
                           {ar.edit}
                         </button>

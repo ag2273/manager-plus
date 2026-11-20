@@ -71,7 +71,16 @@ export type BusinessErrorCode =
   | "held_sale_not_found"
   | "receipt_not_found"
   | "return_exceeds_sale"
-  | "return_line_invalid";
+  | "return_line_invalid"
+  | "price_level_invalid"
+  | "credit_limit_invalid"
+  | "currency_invalid"
+  | "currency_not_supported"
+  | "supplier_currency_locked"
+  | "invoice_not_found"
+  | "amount_invalid"
+  | "allocation_invalid"
+  | "date_range_invalid";
 
 export class BusinessError extends Error {
   constructor(
