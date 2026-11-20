@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { Business } from "./business";
 
+const manager = { name: "أيمن", password: "كلمة سر قوية" };
+
 function tempFile(name = "shop.mplus"): string {
   return join(mkdtempSync(join(tmpdir(), "manager-plus-")), name);
 }
@@ -19,7 +21,7 @@ const shop = {
 
 describe("creating a business", () => {
   test("a new business remembers its settings", () => {
-    const business = Business.create(":memory:", shop);
+    const business = Business.create(":memory:", shop, manager);
 
     expect(business.settings()).toEqual(shop);
   });
@@ -28,7 +30,7 @@ describe("creating a business", () => {
 describe("opening a business file", () => {
   test("a business saved to a file can be reopened with the same settings", () => {
     const path = tempFile();
-    Business.create(path, shop).close();
+    Business.create(path, shop, manager).close();
 
     const reopened = Business.open(path);
 
@@ -38,7 +40,7 @@ describe("opening a business file", () => {
 
   test("a business file can be opened again and again", () => {
     const path = tempFile();
-    Business.create(path, shop).close();
+    Business.create(path, shop, manager).close();
     Business.open(path).close();
 
     const reopened = Business.open(path);
@@ -49,9 +51,9 @@ describe("opening a business file", () => {
 
   test("creating a business never overwrites an existing file", () => {
     const path = tempFile();
-    Business.create(path, shop).close();
+    Business.create(path, shop, manager).close();
 
-    expect(() => Business.create(path, { ...shop, name: "Other shop" })).toThrow(
+    expect(() => Business.create(path, { ...shop, name: "Other shop" }, manager)).toThrow(
       expect.objectContaining({ code: "file_exists" }),
     );
     const original = Business.open(path);
@@ -81,7 +83,7 @@ describe("opening a business file", () => {
 
   test("a file saved by a newer version of the app is refused rather than damaged", () => {
     const path = tempFile();
-    Business.create(path, shop).close();
+    Business.create(path, shop, manager).close();
     // Simulate a file written by a future app version.
     const raw = new Database(path);
     raw.pragma("user_version = 999");
@@ -93,7 +95,7 @@ describe("opening a business file", () => {
 
 describe("refusing bad input", () => {
   test("a business needs a name", () => {
-    expect(() => Business.create(":memory:", { ...shop, name: "   " })).toThrow(
+    expect(() => Business.create(":memory:", { ...shop, name: "   " }, manager)).toThrow(
       expect.objectContaining({ code: "name_required" }),
     );
   });
@@ -101,14 +103,14 @@ describe("refusing bad input", () => {
   test.each(["12345678", "1234567890", "12345678A"])(
     "a tax registration number must be 9 digits (rejects %s)",
     (taxRegistrationNumber) => {
-      expect(() => Business.create(":memory:", { ...shop, taxRegistrationNumber })).toThrow(
+      expect(() => Business.create(":memory:", { ...shop, taxRegistrationNumber }, manager)).toThrow(
         expect.objectContaining({ code: "tax_registration_number_invalid" }),
       );
     },
   );
 
   test("the fiscal year must start in a real month", () => {
-    expect(() => Business.create(":memory:", { ...shop, fiscalYearStartMonth: 13 })).toThrow(
+    expect(() => Business.create(":memory:", { ...shop, fiscalYearStartMonth: 13 }, manager)).toThrow(
       expect.objectContaining({ code: "fiscal_year_start_month_invalid" }),
     );
   });
@@ -116,19 +118,19 @@ describe("refusing bad input", () => {
 
 describe("tidying input", () => {
   test("a tax registration number typed in Arabic-Indic digits is stored in Western digits", () => {
-    const business = Business.create(":memory:", { ...shop, taxRegistrationNumber: "١٢٣٤٥٦٧٨٩" });
+    const business = Business.create(":memory:", { ...shop, taxRegistrationNumber: "١٢٣٤٥٦٧٨٩" }, manager);
 
     expect(business.settings().taxRegistrationNumber).toBe("123456789");
   });
 
   test("a business can have no tax registration number", () => {
-    const business = Business.create(":memory:", { ...shop, taxRegistrationNumber: "", vatRegistered: false });
+    const business = Business.create(":memory:", { ...shop, taxRegistrationNumber: "", vatRegistered: false }, manager);
 
     expect(business.settings().taxRegistrationNumber).toBe("");
   });
 
   test("surrounding spaces are removed from the name and address", () => {
-    const business = Business.create(":memory:", { ...shop, name: "  بقالة النور ", address: " الدقي  " });
+    const business = Business.create(":memory:", { ...shop, name: "  بقالة النور ", address: " الدقي  " }, manager);
 
     expect(business.settings()).toMatchObject({ name: "بقالة النور", address: "الدقي" });
   });

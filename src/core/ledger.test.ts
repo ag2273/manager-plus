@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { Business } from "./business";
 
+const manager = { name: "أيمن", password: "كلمة سر قوية" };
+
 const shop = {
   name: "بقالة النور",
   address: "الدقي",
@@ -13,7 +15,7 @@ const shop = {
 };
 
 function newShop(): Business {
-  return Business.create(":memory:", shop);
+  return Business.create(":memory:", shop, manager);
 }
 
 function account(business: Business, code: string) {
@@ -258,7 +260,7 @@ describe("opening balances", () => {
 describe("keeping the books in the file", () => {
   test("posted entries are still there after the file is reopened", () => {
     const path = join(mkdtempSync(join(tmpdir(), "manager-plus-")), "shop.mplus");
-    const business = Business.create(path, shop);
+    const business = Business.create(path, shop, manager);
     business.postJournalEntry({
       date: "2026-11-01",
       memo: "",
@@ -266,7 +268,8 @@ describe("keeping the books in the file", () => {
     });
     business.close();
 
-    const reopened = Business.open(path);
+    const file = Business.open(path);
+    const reopened = file.signIn(manager.name, manager.password);
 
     expect(reopened.trialBalance("2026-11-30").totalDebit).toBe(100);
     reopened.close();

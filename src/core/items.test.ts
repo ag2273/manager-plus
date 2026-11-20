@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { Business, type BusinessSettings } from "./business";
 
+const manager = { name: "أيمن", password: "كلمة سر قوية" };
+
 const shop: BusinessSettings = {
   name: "بقالة النور",
   address: "الدقي",
@@ -10,7 +12,7 @@ const shop: BusinessSettings = {
 };
 
 function newShop(settings: Partial<BusinessSettings> = {}): Business {
-  return Business.create(":memory:", { ...shop, ...settings });
+  return Business.create(":memory:", { ...shop, ...settings }, manager);
 }
 
 function taxCode(business: Business, kind: "standard" | "zero_rated" | "exempt") {

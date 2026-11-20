@@ -143,3 +143,11 @@ th.col-money { text-align: left; }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--surface-2); }
 .push-end { margin-inline-start: auto; }
+
+/* Sign-in and users */
+.sign-in { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.sign-in .card { width: min(420px, 100%); }
+.sign-in .field { flex: none; }
+.sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; padding: 16px 10px 0; border-top: 1px solid var(--line); }
+.col-when { width: 200px; }
+.actions input { height: 34px; width: 160px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); padding: 0 10px; }

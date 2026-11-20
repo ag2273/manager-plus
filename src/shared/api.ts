@@ -1,6 +1,7 @@
 import type { Business, BusinessSettings } from "../core/business";
+import type { Credentials, User } from "../core/users";
 
-export type { BusinessSettings };
+export type { BusinessSettings, Credentials, User };
 
 /** What every call across the screen/core channel returns. Errors carry the core's stable code. */
 export type Result<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
@@ -8,6 +9,15 @@ export type Result<T> = { ok: true; value: T } | { ok: false; code: string; mess
 /** The `Business` commands and queries the screens may call on the open business. */
 export const BUSINESS_METHODS = [
   "settings",
+  "currentUser",
+  "users",
+  "addUser",
+  "updateUser",
+  "resetPassword",
+  "changeOwnPassword",
+  "deactivateUser",
+  "reactivateUser",
+  "auditLog",
   "accounts",
   "addAccount",
   "updateAccount",
@@ -46,10 +56,14 @@ export type Preferences = { theme: ThemeId };
  * Screens never touch the database or business rules directly.
  */
 export interface DesktopApi {
-  /** Asks where to save, then creates the business file. `null` value = the user cancelled. */
-  createBusiness(settings: BusinessSettings): Promise<Result<BusinessSettings | null>>;
-  /** Opens `path`, or asks for a file when no path is given. `null` value = the user cancelled. */
+  /** Asks where to save, then creates the business file with its first manager signed in. `null` value = the user cancelled. */
+  createBusiness(settings: BusinessSettings, manager: Credentials): Promise<Result<BusinessSettings | null>>;
+  /** Opens `path`, or asks for a file when no path is given, signed out. `null` value = the user cancelled. */
   openBusiness(path?: string): Promise<Result<BusinessSettings | null>>;
+  /** Signs in to the open business. */
+  signIn(credentials: Credentials): Promise<Result<User>>;
+  /** Signs out, keeping the business open at its sign-in screen. */
+  signOut(): Promise<void>;
   recentFiles(): Promise<string[]>;
   /** Calls a `Business` method on the open business. */
   call(method: BusinessMethod, args: unknown[]): Promise<Result<unknown>>;
@@ -61,6 +75,8 @@ export const CHANNELS = {
   createBusiness: "business:create",
   openBusiness: "business:open",
   recentFiles: "business:recent",
+  signIn: "business:sign-in",
+  signOut: "business:sign-out",
   call: "business:call",
   preferences: "preferences:get",
   setPreferences: "preferences:set",
