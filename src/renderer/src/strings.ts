@@ -1,0 +1,25 @@
+/** Arabic screen text. English arrives with the full English mode ticket (#19). */
+export const ar = {
+  appName: "Manager+",
+  welcome: "أهلًا بك. ابدأ بإنشاء ملف لنشاطك أو افتح ملفًا موجودًا.",
+  newBusiness: "نشاط جديد",
+  name: "اسم النشاط",
+  address: "العنوان",
+  taxRegistrationNumber: "رقم التسجيل الضريبي (9 أرقام، اختياري)",
+  vatRegistered: "مسجل في ضريبة القيمة المضافة",
+  fiscalYearStartMonth: "شهر بداية السنة المالية",
+  create: "إنشاء النشاط",
+  openFile: "فتح ملف نشاط",
+  recent: "آخر الملفات",
+  opened: "النشاط المفتوح",
+  errors: {
+    name_required: "اكتب اسم النشاط.",
+    tax_registration_number_invalid: "رقم التسجيل الضريبي لازم يكون 9 أرقام.",
+    fiscal_year_start_month_invalid: "اختر شهرًا من 1 إلى 12.",
+    file_exists: "يوجد ملف بنفس الاسم في هذا المكان. اختر اسمًا آخر.",
+    file_not_found: "الملف غير موجود. ربما تم نقله أو حذفه.",
+    not_a_business_file: "هذا الملف ليس ملف نشاط من Manager+.",
+    made_by_newer_version: "هذا الملف محفوظ بإصدار أحدث من البرنامج. حدّث البرنامج لفتحه.",
+    unexpected: "حدث خطأ غير متوقع.",
+  } as Record<string, string>,
+};
