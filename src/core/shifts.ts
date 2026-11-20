@@ -124,12 +124,13 @@ export function zReport(db: Database.Database, id: number): ZReport {
   const shift = findShift(db, id);
   const sales = db
     .prepare(
-      `SELECT COUNT(DISTINCT r.id) AS receipts, COALESCE(SUM(l.gross), 0) AS total,
+      `SELECT COUNT(DISTINCT r.id) AS receipts, COALESCE(SUM(l.gross - l.discount), 0) AS total,
+              COALESCE(SUM(l.discount), 0) AS discounts,
               COALESCE(SUM(l.net), 0) AS net, COALESCE(SUM(l.vat), 0) AS vat
          FROM sales_receipts r LEFT JOIN sales_receipt_lines l ON l.receipt_id = r.id
         WHERE r.shift_id = ?`,
     )
-    .get(id) as { receipts: number; total: number; net: number; vat: number };
+    .get(id) as { receipts: number; total: number; discounts: number; net: number; vat: number };
   const paid = db
     .prepare(
       `SELECT p.method, SUM(p.amount) AS amount
@@ -153,7 +154,7 @@ export function zReport(db: Database.Database, id: number): ZReport {
     receipts: sales.receipts,
     sales: { total: sales.total, net: sales.net, vat: sales.vat, byMethod },
     returns: 0,
-    discounts: 0,
+    discounts: sales.discounts,
     cashIn: cash.cashIn,
     cashOut: cash.cashOut,
     openingFloat: shift.openingFloat,

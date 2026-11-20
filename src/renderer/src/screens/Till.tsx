@@ -3,7 +3,7 @@ import type { Account } from "../../../core/ledger";
 import type { Shift, ZReport } from "../../../core/shifts";
 import type { Item } from "../../../core/items";
 import type { Customer } from "../../../core/customers";
-import type { CashSaleResult, Payment, PricedSale } from "../../../core/sales";
+import type { CashSaleResult, Discount, HeldSale, Payment, PricedSale, SaleLineInput } from "../../../core/sales";
 import type { Warehouse } from "../../../core/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
@@ -13,7 +13,30 @@ import { ar } from "../strings";
 type Tender = "cash" | "card" | "wallet" | "split" | "credit";
 const TENDERS: Tender[] = ["cash", "card", "wallet", "split", "credit"];
 
-type CartLine = { itemId: number; unit: "base" | "pack"; name: string; barcode: string; quantity: string };
+type CartLine = { itemId: number; unit: "base" | "pack"; name: string; barcode: string; quantity: string; discount: string };
+
+/** "2.50" is an amount off; "10%" is a percentage. Empty is no discount; null is unreadable. */
+function parseDiscount(text: string): Discount | undefined | null {
+  const t = text.trim();
+  if (t === "") return undefined;
+  const percent = t.endsWith("%");
+  // A percentage reads like money: "12.5" → 1250 basis points.
+  const value = parseMoney(percent ? t.slice(0, -1) : t);
+  if (value === null) return null;
+  return { kind: percent ? "percent" : "amount", value };
+}
+
+/** The cart as the core takes it, or null while a quantity or discount is unreadable. */
+function toSaleLines(lines: CartLine[]): SaleLineInput[] | null {
+  const out: SaleLineInput[] = [];
+  for (const l of lines) {
+    const quantity = parseQuantity(l.quantity);
+    const discount = parseDiscount(l.discount);
+    if (quantity === null || quantity <= 0 || discount === null) return null;
+    out.push({ itemId: l.itemId, unit: l.unit, quantity, ...(discount ? { discount } : {}) });
+  }
+  return out;
+}
 
 /** Keystrokes closer together than this are a scanner, not a person. */
 const SCANNER_GAP_MS = 40;
@@ -33,6 +56,9 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
   const [matches, setMatches] = useState<Item[]>([]);
   const [priced, setPriced] = useState<PricedSale | null>(null);
   const [cash, setCash] = useState("");
+  const [receiptDiscount, setReceiptDiscount] = useState("");
+  const [held, setHeld] = useState<HeldSale[]>([]);
+  const [showHeld, setShowHeld] = useState(false);
   const [tender, setTender] = useState<Tender>("cash");
   const [card, setCard] = useState("");
   const [wallet, setWallet] = useState("");
@@ -56,6 +82,7 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
     });
     search.current?.focus();
     void loadCustomers();
+    void loadHeld();
   }, []);
 
   async function loadCustomers() {
@@ -74,8 +101,57 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
     }
   }
 
+  async function loadHeld() {
+    const result = await business.heldSales();
+    if (result.ok) setHeld(result.value);
+  }
+
+  async function hold() {
+    const cart = toSaleLines(lines);
+    const discount = parseDiscount(receiptDiscount);
+    if (warehouseId === "" || cart === null || cart.length === 0 || discount === null) return;
+    const result = await business.holdSale({ warehouseId, lines: cart, note: lines[0]?.name ?? "", ...(discount ? { discount } : {}) });
+    setError(errorText(result));
+    if (result.ok) {
+      setLines([]);
+      resetPayment();
+      await loadHeld();
+      search.current?.focus();
+    }
+  }
+
+  async function recall(id: number) {
+    const result = await business.recallSale(id);
+    setError(errorText(result));
+    if (!result.ok) return;
+    const cart = result.value;
+    setLast(null);
+    const names = await business.items({ includeInactive: true });
+    const byId = new Map((names.ok ? names.value : []).map((i) => [i.id, i]));
+    setWarehouseId(cart.warehouseId);
+    setLines(
+      cart.lines.map((l) => {
+        const item = byId.get(l.itemId);
+        const pack = l.unit === "pack" && item?.pack;
+        return {
+          itemId: l.itemId,
+          unit: l.unit,
+          name: pack ? `${item.nameAr} · ${item.pack!.name}` : (item?.nameAr ?? ""),
+          barcode: (pack ? item.pack!.barcode : item?.barcode) ?? "",
+          quantity: formatQuantity(l.quantity),
+          discount: l.discount ? formatDiscount(l.discount) : "",
+        };
+      }),
+    );
+    setReceiptDiscount(cart.discount ? formatDiscount(cart.discount) : "");
+    setShowHeld(false);
+    await loadHeld();
+    search.current?.focus();
+  }
+
   function resetPayment() {
     setCash("");
+    setReceiptDiscount("");
     setCard("");
     setWallet("");
     setTender("cash");
@@ -85,29 +161,29 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
 
   // Totals come from the core: the screen never computes money or VAT.
   useEffect(() => {
-    const complete = lines.flatMap((l) => {
-      const quantity = parseQuantity(l.quantity);
-      return quantity !== null && quantity > 0 ? [{ itemId: l.itemId, unit: l.unit, quantity }] : [];
-    });
-    if (complete.length === 0 || complete.length !== lines.length) {
+    const complete = toSaleLines(lines);
+    const discount = parseDiscount(receiptDiscount);
+    if (complete === null || complete.length === 0 || discount === null) {
       setPriced(null);
       return;
     }
     let stale = false;
-    void business.priceSale(today(), complete).then((r) => {
-      if (!stale) setPriced(r.ok ? r.value : null);
+    void business.priceSale(today(), complete, discount).then((r) => {
+      if (stale) return;
+      setPriced(r.ok ? r.value : null);
+      setError(r.ok ? null : errorText(r));
     });
     return () => {
       stale = true;
     };
-  }, [lines]);
+  }, [lines, receiptDiscount]);
 
   function addUnit(unit: { itemId: number; unit: "base" | "pack"; name: string; barcode: string }) {
     setLast(null);
     setError(null);
     setLines((current) => {
       const at = current.findIndex((l) => l.itemId === unit.itemId && l.unit === unit.unit);
-      if (at === -1) return [...current, { ...unit, quantity: "1" }];
+      if (at === -1) return [...current, { ...unit, quantity: "1", discount: "" }];
       return current.map((l, i) => (i === at ? { ...l, quantity: String((parseQuantity(l.quantity) ?? 0) / 1000 + 1) } : l));
     });
   }
@@ -183,7 +259,9 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
   }
 
   async function complete() {
-    if (warehouseId === "" || lines.length === 0 || !priced) return;
+    const cart = toSaleLines(lines);
+    const discount = parseDiscount(receiptDiscount);
+    if (warehouseId === "" || cart === null || cart.length === 0 || discount === null || !priced) return;
     const paid = payments(priced.total);
     if (paid === null) {
       setError(ar.errors["price_invalid"]!);
@@ -198,7 +276,8 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
       warehouseId,
       payments: paid,
       ...(tender === "credit" && customerId !== "" ? { customerId } : {}),
-      lines: lines.map((l) => ({ itemId: l.itemId, unit: l.unit, quantity: parseQuantity(l.quantity) ?? 0 })),
+      ...(discount ? { discount } : {}),
+      lines: cart,
     });
     setError(errorText(result));
     if (result.ok) {
@@ -221,6 +300,12 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
     } else if (event.key === "Escape") {
       event.preventDefault();
       clearSale();
+    } else if (event.key === "F4") {
+      event.preventDefault();
+      document.querySelector<HTMLInputElement>(".till-cart tbody tr:last-child [data-discount]")?.focus();
+    } else if (event.key === "F8") {
+      event.preventDefault();
+      void hold();
     } else if (event.key === "F10") {
       event.preventDefault();
       onClose();
@@ -252,6 +337,12 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
           <span className="muted">{ar.till.keys}</span>
         </div>
         <div className="actions">
+          <button type="button" className="btn" onClick={() => void hold()} disabled={lines.length === 0}>
+            {ar.till.hold}
+          </button>
+          <button type="button" className="btn" onClick={() => setShowHeld(!showHeld)} disabled={held.length === 0}>
+            {ar.till.held(held.length)}
+          </button>
           <button type="button" className="btn" onClick={onCash}>
             {ar.shift.cashInOut}
           </button>
@@ -272,6 +363,19 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
           </label>
         )}
       </header>
+      {showHeld && held.length > 0 && (
+        <section className="card" aria-label={ar.till.heldTitle}>
+          <ul className="till-matches">
+            {held.map((h) => (
+              <li key={h.id}>
+                <button type="button" className="btn btn-small" onClick={() => void recall(h.id)}>
+                  {ar.till.recall(h.note, new Date(h.at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }), h.lines.length)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="till-grid">
         <section className="card till-cart">
           <form
@@ -337,6 +441,7 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
                 <th>{ar.till.item}</th>
                 <th className="col-type">{ar.till.quantity}</th>
                 <th className="col-money">{ar.till.price}</th>
+                <th className="col-type">{ar.till.discount}</th>
                 <th className="col-money">{ar.till.lineTotal}</th>
                 <th className="col-remove" />
               </tr>
@@ -344,7 +449,7 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
             <tbody>
               {lines.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted empty">
+                  <td colSpan={7} className="muted empty">
                     {ar.till.empty}
                   </td>
                 </tr>
@@ -389,7 +494,24 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
                       />
                     </td>
                     <td className="num">{row && formatMoney(row.unitPrice)}</td>
-                    <td className="num strong">{row && formatMoney(row.gross)}</td>
+                    <td>
+                      <input
+                        data-discount
+                        aria-label={`${ar.till.discount} ${l.name}`}
+                        dir="ltr"
+                        value={l.discount}
+                        placeholder="—"
+                        onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, discount: e.target.value } : x)))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            search.current?.focus();
+                          }
+                        }}
+                      />
+                    </td>
+                    <td className="num strong">{row && formatMoney(row.amount)}</td>
                     <td>
                       <button
                         type="button"
@@ -408,6 +530,20 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
           <span className="muted small">{ar.till.count(lines.length, formatQuantity(count))}</span>
         </section>
         <aside className="card till-pay" aria-label={ar.till.payment}>
+          <div className="till-sum">
+            <span className="muted">{ar.till.beforeDiscount}</span>
+            <span className="num">{priced ? formatMoney(priced.gross) : "—"}</span>
+          </div>
+          <label className="till-sum till-discount">
+            <span className="muted">{ar.till.receiptDiscount}</span>
+            <input dir="ltr" value={receiptDiscount} placeholder="0.00 / 5%" onChange={(e) => setReceiptDiscount(e.target.value)} />
+          </label>
+          {priced && priced.discount > 0 && (
+            <div className="till-sum">
+              <span className="muted">{ar.till.totalDiscount}</span>
+              <span className="num">−{formatMoney(priced.discount)}</span>
+            </div>
+          )}
           <div className="till-sum">
             <span className="muted">{ar.till.vatIncluded}</span>
             <span className="num">{priced ? formatMoney(priced.vat) : "—"}</span>
@@ -522,6 +658,10 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
       </div>
     </div>
   );
+}
+
+function formatDiscount(d: Discount): string {
+  return d.kind === "percent" ? `${formatMoney(d.value)}%` : formatMoney(d.value);
 }
 
 type Panel = "sale" | "cash" | "close";

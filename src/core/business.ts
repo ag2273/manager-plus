@@ -77,9 +77,15 @@ import {
 } from "./customers";
 import {
   type CashSaleInput,
+  type Discount,
+  type HeldSale,
+  type HeldSaleInput,
   type SaleInput,
   type SaleResult,
+  holdSale,
+  listHeldSales,
   postSale,
+  recallSale,
   type CashSaleResult,
   type PricedSale,
   type Receipt,
@@ -494,8 +500,23 @@ export class Business {
   }
 
   /** Prices till lines at shelf prices (VAT-inclusive), without selling anything. */
-  priceSale(date: IsoDate, lines: SaleLineInput[]): PricedSale {
-    return this.read("priceSale", () => priceSale(this.db, date, lines));
+  priceSale(date: IsoDate, lines: SaleLineInput[], discount?: Discount): PricedSale {
+    return this.read("priceSale", () => priceSale(this.db, date, lines, discount));
+  }
+
+  /** Puts the cart aside to serve the next customer; returns its id. */
+  holdSale(cart: HeldSaleInput): number {
+    const user = this.allow("holdSale");
+    return this.write("holdSale", cart, () => holdSale(this.db, user.id, cart));
+  }
+
+  heldSales(): HeldSale[] {
+    return this.read("heldSales", () => listHeldSales(this.db));
+  }
+
+  /** Brings a held cart back to the till. */
+  recallSale(id: number): HeldSale {
+    return this.write("recallSale", null, () => recallSale(this.db, id), id);
   }
 
   /** Sells for cash at the till; returns the receipt number and the change to give. */

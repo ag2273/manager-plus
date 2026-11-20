@@ -16,10 +16,31 @@ import {
   toBaseQuantity,
 } from "./stock";
 
-/** A till line: the item, which unit was rung up, and how many (thousandths of that unit). */
-export type SaleLineInput = UnitLine;
-export type SaleLine = SaleLineInput & { unitPrice: Piastres; gross: Piastres; net: Piastres; vatRate: BasisPoints; vat: Piastres };
-export type PricedSale = { lines: SaleLine[]; net: Piastres; vat: Piastres; total: Piastres };
+/** A discount in piastres off, or a percentage in basis points (1000 = 10%). */
+export type Discount = { kind: "amount" | "percent"; value: number };
+/** A till line: the item, which unit was rung up, how many (thousandths of that unit), and any discount. */
+export type SaleLineInput = UnitLine & { discount?: Discount };
+export type SaleLine = UnitLine & {
+  unitPrice: Piastres;
+  /** Quantity × shelf price, before discounts. */
+  gross: Piastres;
+  /** The line's own discount plus its share of the receipt discount. */
+  discount: Piastres;
+  /** What the customer pays for the line: gross − discount, VAT included. */
+  amount: Piastres;
+  net: Piastres;
+  vatRate: BasisPoints;
+  vat: Piastres;
+};
+export type PricedSale = {
+  lines: SaleLine[];
+  /** Shelf prices before any discount. */
+  gross: Piastres;
+  discount: Piastres;
+  net: Piastres;
+  vat: Piastres;
+  total: Piastres;
+};
 export type PaymentMethod = "cash" | "card" | "wallet";
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ["cash", "card", "wallet"];
 /** A tender at the till. Cash is what the customer handed over, before change. */
@@ -29,6 +50,8 @@ export type SaleInput = {
   warehouseId: number;
   lines: SaleLineInput[];
   payments: Payment[];
+  /** A discount on the whole receipt, spread over the lines. */
+  discount?: Discount;
   /** Needed when part of the total is left on credit. */
   customerId?: number;
 };
@@ -67,11 +90,31 @@ export type Receipt = {
 const ONE_UNIT = 1000;
 const WHOLE = 10_000;
 
+/** The piastres a discount takes off `amount`; refuses a negative discount or one larger than the amount. */
+function discountOff(discount: Discount | undefined, amount: Piastres): Piastres {
+  if (!discount) return 0;
+  const { kind, value } = discount;
+  const valid = Number.isSafeInteger(value) && value >= 0 && (kind === "amount" ? value <= amount : kind === "percent" && value <= WHOLE);
+  if (!valid) throw new BusinessError("discount_invalid", `Discount ${kind} ${value} does not fit an amount of ${amount}`);
+  return kind === "amount" ? value : Math.round((amount * value) / WHOLE);
+}
+
+/** Splits `total` over `weights` in proportion, rounding down; the remainder goes to the largest weight. */
+function spread(total: Piastres, weights: Piastres[]): Piastres[] {
+  const sum = weights.reduce((t, w) => t + w, 0);
+  if (total === 0 || sum === 0) return weights.map(() => 0);
+  const shares = weights.map((w) => Math.floor((total * w) / sum));
+  const largest = weights.indexOf(Math.max(...weights));
+  shares[largest]! += total - shares.reduce((t, x) => t + x, 0);
+  return shares;
+}
+
 /**
- * Prices till lines at the shelf price of the unit rung up. Shelf prices include VAT,
- * so per line: net = round(gross / (1 + rate)), half-up, and VAT = gross − net.
+ * Prices till lines at the shelf price of the unit rung up, less line discounts and
+ * a share of any receipt discount. Shelf prices include VAT, so per line:
+ * net = round(amount / (1 + rate)), half-up, and VAT = amount − net.
  */
-export function priceSale(db: Database.Database, date: IsoDate, lines: SaleLineInput[]): PricedSale {
+export function priceSale(db: Database.Database, date: IsoDate, lines: SaleLineInput[], receiptDiscount?: Discount): PricedSale {
   assertIsoDate(date);
   const registered = vatRegistered(db);
   const unitOf = db.prepare(
@@ -79,7 +122,7 @@ export function priceSale(db: Database.Database, date: IsoDate, lines: SaleLineI
        FROM items i JOIN item_units u ON u.item_id = i.id AND u.kind = ?
       WHERE i.id = ?`,
   );
-  const priced = lines.map((line): SaleLine => {
+  const shelf = lines.map((line) => {
     assertQuantity(line.quantity);
     const unit = unitOf.get(line.unit, line.itemId) as { price: number; taxCodeId: number } | undefined;
     if (!unit) {
@@ -88,13 +131,36 @@ export function priceSale(db: Database.Database, date: IsoDate, lines: SaleLineI
       throw new BusinessError("item_has_no_pack", `Item ${line.itemId} has no pack unit`);
     }
     const gross = Math.round((line.quantity * unit.price) / ONE_UNIT);
+    const own = discountOff(line.discount, gross);
+    return { line, unit, gross, own, afterOwn: gross - own };
+  });
+  const subtotal = shelf.reduce((t, l) => t + l.afterOwn, 0);
+  const shares = spread(
+    discountOff(receiptDiscount, subtotal),
+    shelf.map((l) => l.afterOwn),
+  );
+  const priced = shelf.map(({ line, unit, gross, own, afterOwn }, i): SaleLine => {
+    const amount = afterOwn - shares[i]!;
     const rate = vatRate(db, unit.taxCodeId, date, registered);
-    const net = Math.round((gross * WHOLE) / (WHOLE + rate));
-    return { itemId: line.itemId, unit: line.unit, quantity: line.quantity, unitPrice: unit.price, gross, net, vatRate: rate, vat: gross - net };
+    const net = Math.round((amount * WHOLE) / (WHOLE + rate));
+    return {
+      itemId: line.itemId,
+      unit: line.unit,
+      quantity: line.quantity,
+      unitPrice: unit.price,
+      gross,
+      discount: own + shares[i]!,
+      amount,
+      net,
+      vatRate: rate,
+      vat: amount - net,
+    };
   });
   const net = priced.reduce((t, l) => t + l.net, 0);
   const vat = priced.reduce((t, l) => t + l.vat, 0);
-  return { lines: priced, net, vat, total: net + vat };
+  const discount = priced.reduce((t, l) => t + l.discount, 0);
+  const gross = priced.reduce((t, l) => t + l.gross, 0);
+  return { lines: priced, gross, discount, net, vat, total: net + vat };
 }
 
 function nextReceiptNumber(db: Database.Database): number {
@@ -127,7 +193,7 @@ export function postSale(db: Database.Database, input: SaleInput, userId: number
   const shift = requireOpenShift(db, userId);
   activeWarehouse(db, input.warehouseId);
   if (input.lines.length === 0) throw new BusinessError("invoice_needs_lines", "A sale needs at least one line");
-  const priced = priceSale(db, input.date, input.lines);
+  const priced = priceSale(db, input.date, input.lines, input.discount);
   const { applied, cashReceived, change, onCredit } = settle(input.payments, priced.total);
   const customerId = input.customerId;
   if (onCredit > 0 && customerId === undefined) {
@@ -186,11 +252,11 @@ export function postSale(db: Database.Database, input: SaleInput, userId: number
   const insertPayment = db.prepare("INSERT INTO sales_receipt_payments (receipt_id, method, amount) VALUES (?, ?, ?)");
   for (const method of PAYMENT_METHODS) if (applied[method] > 0) insertPayment.run(id, method, applied[method]);
   const insertLine = db.prepare(
-    `INSERT INTO sales_receipt_lines (receipt_id, item_id, unit, quantity, unit_price, gross, net, vat_rate, vat, cost)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sales_receipt_lines (receipt_id, item_id, unit, quantity, unit_price, gross, discount, net, vat_rate, vat, cost)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const { line: l, base, cost } of outs) {
-    insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.gross, l.net, l.vatRate, l.vat, cost);
+    insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.gross, l.discount, l.net, l.vatRate, l.vat, cost);
     insertMovement(db, {
       date: input.date,
       itemId: l.itemId,
@@ -239,7 +305,7 @@ export function listReceipts(db: Database.Database, limit = 200): Receipt[] {
     .all(limit) as ReceiptRow[];
   const lines = db.prepare(
     `SELECT l.item_id AS itemId, i.name_ar AS nameAr, l.unit, l.quantity, l.unit_price AS unitPrice,
-            l.gross, l.net, l.vat_rate AS vatRate, l.vat
+            l.gross, l.discount, l.gross - l.discount AS amount, l.net, l.vat_rate AS vatRate, l.vat
        FROM sales_receipt_lines l JOIN items i ON i.id = l.item_id
       WHERE l.receipt_id = ? ORDER BY l.id`,
   );
@@ -270,4 +336,36 @@ export function listReceipts(db: Database.Database, limit = 200): Receipt[] {
       lines: ls,
     };
   });
+}
+
+export type HeldSaleInput = { warehouseId: number; lines: SaleLineInput[]; discount?: Discount; note: string };
+export type HeldSale = HeldSaleInput & { id: number; at: string; heldBy: string };
+
+/** Puts a cart aside: nothing is posted and no receipt number is used. */
+export function holdSale(db: Database.Database, userId: number, input: HeldSaleInput): number {
+  if (input.lines.length === 0) throw new BusinessError("invoice_needs_lines", "A held sale needs at least one line");
+  input.lines.forEach((l) => assertQuantity(l.quantity));
+  const cart = { warehouseId: input.warehouseId, lines: input.lines, ...(input.discount ? { discount: input.discount } : {}) };
+  return Number(
+    db
+      .prepare("INSERT INTO held_sales (user_id, at, note, cart) VALUES (?, ?, ?, ?)")
+      .run(userId, new Date().toISOString(), input.note.trim(), JSON.stringify(cart)).lastInsertRowid,
+  );
+}
+
+type HeldRow = { id: number; at: string; note: string; cart: string; heldBy: string };
+const toHeld = (r: HeldRow): HeldSale => ({ id: r.id, at: r.at, note: r.note, heldBy: r.heldBy, ...(JSON.parse(r.cart) as Omit<HeldSaleInput, "note">) });
+const SELECT_HELD = "SELECT h.id, h.at, h.note, h.cart, u.name AS heldBy FROM held_sales h JOIN users u ON u.id = h.user_id";
+
+/** Held carts, oldest first. */
+export function listHeldSales(db: Database.Database): HeldSale[] {
+  return (db.prepare(`${SELECT_HELD} ORDER BY h.id`).all() as HeldRow[]).map(toHeld);
+}
+
+/** Takes a held cart back to the till; it is no longer held. */
+export function recallSale(db: Database.Database, id: number): HeldSale {
+  const row = db.prepare(`${SELECT_HELD} WHERE h.id = ?`).get(id) as HeldRow | undefined;
+  if (!row) throw new BusinessError("held_sale_not_found", `No held sale with id ${id}`);
+  db.prepare("DELETE FROM held_sales WHERE id = ?").run(id);
+  return toHeld(row);
 }

@@ -66,7 +66,9 @@ export type BusinessErrorCode =
   | "customer_not_found"
   | "customer_inactive"
   | "change_without_cash"
-  | "payment_method_invalid";
+  | "payment_method_invalid"
+  | "discount_invalid"
+  | "held_sale_not_found";
 
 export class BusinessError extends Error {
   constructor(
