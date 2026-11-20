@@ -57,7 +57,11 @@ export type BusinessErrorCode =
   | "supplier_inactive"
   | "invoice_needs_lines"
   | "invoice_total_zero"
-  | "payment_short";
+  | "payment_short"
+  | "shift_required"
+  | "shift_already_open"
+  | "shift_not_found"
+  | "account_not_allowed";
 
 export class BusinessError extends Error {
   constructor(

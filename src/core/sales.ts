@@ -4,6 +4,7 @@ import { BusinessError } from "./errors";
 import { type BasisPoints, type Quantity, vatRate } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
 import { vatRegistered } from "./purchases";
+import { requireOpenShift } from "./shifts";
 import {
   type UnitLine,
   accountByRole,
@@ -87,6 +88,7 @@ function nextReceiptNumber(db: Database.Database): number {
  * reported in `belowZero`.
  */
 export function postCashSale(db: Database.Database, input: CashSaleInput, userId: number): CashSaleResult {
+  const shift = requireOpenShift(db, userId);
   activeWarehouse(db, input.warehouseId);
   if (input.lines.length === 0) throw new BusinessError("invoice_needs_lines", "A sale needs at least one line");
   const priced = priceSale(db, input.date, input.lines);
@@ -117,10 +119,11 @@ export function postCashSale(db: Database.Database, input: CashSaleInput, userId
   const id = Number(
     db
       .prepare(
-        `INSERT INTO sales_receipts (number, date, at, warehouse_id, entry_id, user_id, cash_received)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales_receipts (number, date, at, warehouse_id, entry_id, user_id, cash_received, shift_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(number, input.date, new Date().toISOString(), input.warehouseId, entryId, userId, input.cashReceived).lastInsertRowid,
+      .run(number, input.date, new Date().toISOString(), input.warehouseId, entryId, userId, input.cashReceived, shift.id)
+      .lastInsertRowid,
   );
   const insertLine = db.prepare(
     `INSERT INTO sales_receipt_lines (receipt_id, item_id, unit, quantity, unit_price, gross, net, vat_rate, vat, cost)

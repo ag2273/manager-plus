@@ -54,6 +54,18 @@ import {
   updateSupplier,
 } from "./purchases";
 import {
+  type CashInOut,
+  type CloseShiftInput,
+  type Shift,
+  type ZReport,
+  cashInOut,
+  closeShift,
+  listShifts,
+  openShift,
+  openShiftOf,
+  zReport,
+} from "./shifts";
+import {
   type CashSaleInput,
   type CashSaleResult,
   type PricedSale,
@@ -434,6 +446,39 @@ export class Business {
   }
 
   // The till
+
+  /** Opens a shift at the till for the signed-in user, with the cash float in the drawer. */
+  openShift(openingFloat: Piastres): number {
+    const user = this.allow("openShift");
+    return this.write("openShift", { openingFloat }, () => openShift(this.db, user.id, openingFloat));
+  }
+
+  /** The signed-in user's open shift, or null. */
+  currentShift(): Shift | null {
+    const user = this.allow("currentShift");
+    return openShiftOf(this.db, user.id);
+  }
+
+  /** Cash paid into or out of the drawer during the signed-in user's shift. */
+  cashInOut(movement: CashInOut): number {
+    const user = this.allow("cashInOut");
+    return this.write("cashInOut", movement, () => cashInOut(this.db, user.id, movement));
+  }
+
+  /** Closes the signed-in user's shift with the cash counted, and returns its Z report. */
+  closeShift(close: CloseShiftInput): ZReport {
+    const user = this.allow("closeShift");
+    return this.write("closeShift", close, () => closeShift(this.db, user.id, close));
+  }
+
+  zReport(shiftId: number): ZReport {
+    return this.read("zReport", () => zReport(this.db, shiftId));
+  }
+
+  /** Shifts, newest first. */
+  shifts(): Shift[] {
+    return this.read("shifts", () => listShifts(this.db));
+  }
 
   /** Prices till lines at shelf prices (VAT-inclusive), without selling anything. */
   priceSale(date: IsoDate, lines: SaleLineInput[]): PricedSale {
