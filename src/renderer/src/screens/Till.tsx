@@ -3,7 +3,7 @@ import type { Account } from "../../../core/ledger";
 import type { Shift, ZReport } from "../../../core/shifts";
 import type { Item } from "../../../core/items";
 import type { Customer } from "../../../core/customers";
-import type { CashSaleResult, Discount, HeldSale, Payment, PricedSale, SaleLineInput } from "../../../core/sales";
+import type { CashSaleResult, Discount, HeldSale, Payment, PricedSale, Receipt, SaleLineInput } from "../../../core/sales";
 import type { Warehouse } from "../../../core/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
@@ -48,7 +48,7 @@ const BARCODE = /^\d{8,}$/;
  * The till. Everything works from the keyboard: type or scan into the search box,
  * Enter adds; F12 goes to payment; Enter there completes the sale; Esc clears.
  */
-function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) {
+function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () => void; onReturn: () => void }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -306,6 +306,9 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
     } else if (event.key === "F8") {
       event.preventDefault();
       void hold();
+    } else if (event.key === "F9") {
+      event.preventDefault();
+      onReturn();
     } else if (event.key === "F10") {
       event.preventDefault();
       onClose();
@@ -342,6 +345,9 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
           </button>
           <button type="button" className="btn" onClick={() => setShowHeld(!showHeld)} disabled={held.length === 0}>
             {ar.till.held(held.length)}
+          </button>
+          <button type="button" className="btn" onClick={onReturn}>
+            {ar.returns.open}
           </button>
           <button type="button" className="btn" onClick={onCash}>
             {ar.shift.cashInOut}
@@ -664,7 +670,7 @@ function formatDiscount(d: Discount): string {
   return d.kind === "percent" ? `${formatMoney(d.value)}%` : formatMoney(d.value);
 }
 
-type Panel = "sale" | "cash" | "close";
+type Panel = "sale" | "cash" | "close" | "return";
 
 /** The till for the signed-in user: open a shift, sell, move cash, close with a Z report. */
 export function Till() {
@@ -685,6 +691,7 @@ export function Till() {
   if (z) return <ZReportView report={z} onDone={() => setZ(null)} />;
   if (shift === null) return <OpenShift onOpened={reload} />;
   if (panel === "cash") return <CashPanel onDone={() => setPanel("sale")} />;
+  if (panel === "return") return <ReturnPanel onDone={() => setPanel("sale")} />;
   if (panel === "close")
     return (
       <ClosePanel
@@ -696,7 +703,7 @@ export function Till() {
         }}
       />
     );
-  return <Sale onCash={() => setPanel("cash")} onClose={() => setPanel("close")} />;
+  return <Sale onCash={() => setPanel("cash")} onClose={() => setPanel("close")} onReturn={() => setPanel("return")} />;
 }
 
 function OpenShift({ onOpened }: { onOpened: () => Promise<void> }) {
@@ -913,6 +920,150 @@ function ZReportView({ report, onDone }: { report: ZReport; onDone: () => void }
           {ar.shift.z.done}
         </button>
       </div>
+    </>
+  );
+}
+
+/** A return against the original receipt: look it up by number, pick quantities, refund. */
+function ReturnPanel({ onDone }: { onDone: () => void }) {
+  const [number, setNumber] = useState("");
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [quantities, setQuantities] = useState<Record<number, string>>({});
+  const [refund, setRefund] = useState<"cash" | "account">("cash");
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const numberField = useRef<HTMLInputElement>(null);
+
+  async function find(event: FormEvent) {
+    event.preventDefault();
+    setDone(null);
+    const n = Number(number.trim());
+    if (!Number.isInteger(n) || n <= 0) {
+      setError(ar.errors["receipt_not_found"]!);
+      return;
+    }
+    const result = await business.findReceipt(n);
+    setError(errorText(result));
+    setReceipt(result.ok ? result.value : null);
+    setQuantities({});
+    setRefund(result.ok && result.value.customerId !== null && result.value.onCredit > 0 ? "account" : "cash");
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!receipt) return;
+    const lines: { lineId: number; quantity: number }[] = [];
+    for (const l of receipt.lines) {
+      const text = quantities[l.lineId]?.trim() ?? "";
+      if (text === "") continue;
+      const quantity = parseQuantity(text);
+      if (quantity === null || quantity <= 0) {
+        setError(ar.errors["quantity_invalid"]!);
+        return;
+      }
+      lines.push({ lineId: l.lineId, quantity });
+    }
+    const result = await business.returnSale({ date: today(), receiptId: receipt.id, lines, refund });
+    setError(errorText(result));
+    if (result.ok) {
+      setDone(ar.returns.done(result.value.number, receipt.number, formatMoney(result.value.total)));
+      setReceipt(null);
+      setNumber("");
+      numberField.current?.focus();
+    }
+  }
+
+  return (
+    <>
+      <header className="screen-head">
+        <div>
+          <h1>{ar.returns.title}</h1>
+          <span className="muted">{ar.returns.hint}</span>
+        </div>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onDone}>
+            {ar.returns.back}
+          </button>
+        </div>
+      </header>
+      {error && (
+        <div role="alert" className="error">
+          {error}
+        </div>
+      )}
+      {done && (
+        <div role="status" className="ok">
+          {done}
+        </div>
+      )}
+      <form className="card form-row" onSubmit={find} onKeyDown={(e) => e.key === "Escape" && onDone()}>
+        <label className="field narrow">
+          {ar.returns.receiptNumber}
+          <input ref={numberField} autoFocus dir="ltr" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} />
+        </label>
+        <button type="submit" className="btn btn-primary">
+          {ar.returns.find}
+        </button>
+      </form>
+      {receipt && (
+        <form className="card" onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onDone()}>
+          <span className="muted">
+            {ar.returns.receiptInfo(receipt.number, receipt.date, receipt.soldBy, formatMoney(receipt.total))}
+          </span>
+          <table className="lines">
+            <thead>
+              <tr>
+                <th>{ar.till.item}</th>
+                <th className="col-type">{ar.returns.sold}</th>
+                <th className="col-type">{ar.returns.returned}</th>
+                <th className="col-money">{ar.till.lineTotal}</th>
+                <th className="col-type">{ar.returns.quantity}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.lines.map((l) => (
+                <tr key={l.lineId}>
+                  <td>{l.nameAr}</td>
+                  <td className="num">{formatQuantity(l.quantity)}</td>
+                  <td className="num muted">{formatQuantity(l.returned)}</td>
+                  <td className="num">{formatMoney(l.amount)}</td>
+                  <td>
+                    <input
+                      aria-label={`${ar.returns.quantity} ${l.nameAr}`}
+                      dir="ltr"
+                      inputMode="decimal"
+                      disabled={l.returned >= l.quantity}
+                      value={quantities[l.lineId] ?? ""}
+                      placeholder="0"
+                      onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div role="radiogroup" aria-label={ar.returns.refund} className="pills">
+            {(["cash", "account"] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                role="radio"
+                aria-checked={r === refund}
+                className="pill"
+                disabled={r === "account" && receipt.customerId === null}
+                onClick={() => setRefund(r)}
+              >
+                {ar.returns.refunds[r]}
+              </button>
+            ))}
+          </div>
+          <div className="row">
+            <button type="submit" className="btn btn-primary">
+              {ar.returns.submit}
+            </button>
+          </div>
+        </form>
+      )}
     </>
   );
 }

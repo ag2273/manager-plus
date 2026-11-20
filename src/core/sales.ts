@@ -84,7 +84,7 @@ export type Receipt = {
   customerId: number | null;
   soldBy: string;
   eta: { uuid: string; previousUuid: string; status: string };
-  lines: (SaleLine & { nameAr: string })[];
+  lines: (SaleLine & { lineId: number; nameAr: string; cost: Piastres; returned: Quantity })[];
 };
 
 const ONE_UNIT = 1000;
@@ -293,19 +293,17 @@ type ReceiptRow = {
   etaStatus: string;
 };
 
-/** Receipts, newest first. */
-export function listReceipts(db: Database.Database, limit = 200): Receipt[] {
-  const rows = db
-    .prepare(
-      `SELECT r.id, r.number, r.date, r.at, r.warehouse_id AS warehouseId, r.cash_received AS cashReceived,
-              r.customer_id AS customerId, u.name AS soldBy, r.eta_uuid AS etaUuid, r.eta_previous_uuid AS etaPreviousUuid, r.eta_status AS etaStatus
-         FROM sales_receipts r JOIN users u ON u.id = r.user_id
-        ORDER BY r.number DESC LIMIT ?`,
-    )
-    .all(limit) as ReceiptRow[];
+const SELECT_RECEIPTS = `
+  SELECT r.id, r.number, r.date, r.at, r.warehouse_id AS warehouseId, r.cash_received AS cashReceived,
+         r.customer_id AS customerId, u.name AS soldBy, r.eta_uuid AS etaUuid,
+         r.eta_previous_uuid AS etaPreviousUuid, r.eta_status AS etaStatus
+    FROM sales_receipts r JOIN users u ON u.id = r.user_id`;
+
+function toReceipts(db: Database.Database, rows: ReceiptRow[]): Receipt[] {
   const lines = db.prepare(
-    `SELECT l.item_id AS itemId, i.name_ar AS nameAr, l.unit, l.quantity, l.unit_price AS unitPrice,
-            l.gross, l.discount, l.gross - l.discount AS amount, l.net, l.vat_rate AS vatRate, l.vat
+    `SELECT l.id AS lineId, l.item_id AS itemId, i.name_ar AS nameAr, l.unit, l.quantity, l.unit_price AS unitPrice,
+            l.gross, l.discount, l.gross - l.discount AS amount, l.net, l.vat_rate AS vatRate, l.vat, l.cost,
+            COALESCE((SELECT SUM(x.quantity) FROM sales_return_lines x WHERE x.receipt_line_id = l.id), 0) AS returned
        FROM sales_receipt_lines l JOIN items i ON i.id = l.item_id
       WHERE l.receipt_id = ? ORDER BY l.id`,
   );
@@ -336,6 +334,18 @@ export function listReceipts(db: Database.Database, limit = 200): Receipt[] {
       lines: ls,
     };
   });
+}
+
+/** Receipts, newest first. */
+export function listReceipts(db: Database.Database, limit = 200): Receipt[] {
+  return toReceipts(db, db.prepare(`${SELECT_RECEIPTS} ORDER BY r.number DESC LIMIT ?`).all(limit) as ReceiptRow[]);
+}
+
+/** One receipt by its printed number, with how much of each line was already returned. */
+export function findReceipt(db: Database.Database, number: number): Receipt {
+  const row = db.prepare(`${SELECT_RECEIPTS} WHERE r.number = ?`).get(number) as ReceiptRow | undefined;
+  if (!row) throw new BusinessError("receipt_not_found", `No receipt number ${number}`);
+  return toReceipts(db, [row])[0]!;
 }
 
 export type HeldSaleInput = { warehouseId: number; lines: SaleLineInput[]; discount?: Discount; note: string };

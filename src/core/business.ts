@@ -53,6 +53,7 @@ import {
   supplierBalance,
   updateSupplier,
 } from "./purchases";
+import { type ReturnInput, type ReturnResult, returnSale } from "./returns";
 import {
   type CashInOut,
   type CloseShiftInput,
@@ -77,6 +78,7 @@ import {
 } from "./customers";
 import {
   type CashSaleInput,
+  findReceipt,
   type Discount,
   type HeldSale,
   type HeldSaleInput,
@@ -557,6 +559,17 @@ export class Business {
   /** What a customer owes the business, in piastres. */
   customerBalance(id: number): Piastres {
     return this.read("customerBalance", () => customerBalance(this.db, id));
+  }
+
+  /** A receipt by its printed number, with what of each line was already returned. */
+  findReceipt(number: number): Receipt {
+    return this.read("findReceipt", () => findReceipt(this.db, number));
+  }
+
+  /** Takes items back against their receipt, refunded in cash or to the receipt's customer. */
+  returnSale(input: ReturnInput): ReturnResult {
+    const user = this.allow("returnSale");
+    return this.write("returnSale", input, () => returnSale(this.db, input, user.id));
   }
 
   /** Till receipts, newest first. */

@@ -57,6 +57,8 @@ export const BUSINESS_METHODS = [
   "postCashSale",
   "postSale",
   "holdSale",
+  "findReceipt",
+  "returnSale",
   "heldSales",
   "recallSale",
   "customers",

@@ -68,7 +68,10 @@ export type BusinessErrorCode =
   | "change_without_cash"
   | "payment_method_invalid"
   | "discount_invalid"
-  | "held_sale_not_found";
+  | "held_sale_not_found"
+  | "receipt_not_found"
+  | "return_exceeds_sale"
+  | "return_line_invalid";
 
 export class BusinessError extends Error {
   constructor(
