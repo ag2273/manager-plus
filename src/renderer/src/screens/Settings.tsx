@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { NO_PRINTER, THEMES, type PrinterSettings, type ThemeId } from "../../../shared/api";
+import { NO_PRINTER, THEMES, type Connection, type PrinterSettings, type ServerStatus, type ThemeId } from "../../../shared/api";
 import { errorText } from "../api";
 import { ar } from "../strings";
 
@@ -59,6 +59,7 @@ export function Settings({
         ))}
       </section>
       <PrinterSetup />
+      <ServerSetup />
     </>
   );
 }
@@ -172,5 +173,82 @@ function PrinterSetup() {
         )}
       </div>
     </form>
+  );
+}
+
+/** Serving the open file to other PCs (ADR 0002), or which server this PC is a client of. */
+function ServerSetup() {
+  const [connection, setConnection] = useState<Connection | null>(null);
+  const [status, setStatus] = useState<ServerStatus | null>(null);
+  const [port, setPort] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void window.api.connection().then(setConnection);
+    void window.api.serverStatus().then((s) => {
+      setStatus(s);
+      setPort(String(s.port));
+    });
+    const timer = setInterval(() => void window.api.serverStatus().then(setStatus), 5_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function toggle(on: boolean) {
+    const result = await window.api.setServing(on, Number(port));
+    setError(errorText(result));
+    if (result.ok) setStatus(result.value);
+  }
+
+  if (!connection || !status) return null;
+  if (connection.mode === "client") {
+    return (
+      <section className="card printer-card" aria-label={ar.network.title}>
+        <h2>{ar.network.title}</h2>
+        <div role="status" className="ok">
+          {ar.network.connectedTo(connection.name, connection.host, connection.port)}
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="card printer-card" aria-label={ar.network.serverTitle}>
+      <div className="stack">
+        <h2>{ar.network.serverTitle}</h2>
+        <span className="muted">{ar.network.serverHint}</span>
+      </div>
+      {error && (
+        <div role="alert" className="error">
+          {error}
+        </div>
+      )}
+      <div role="status" className={status.serving ? "ok" : "muted"}>
+        {status.serving ? ar.network.running : ar.network.stopped}
+        {status.serving && ` · ${ar.network.clients(status.clients)}`}
+      </div>
+      {status.serving && (
+        <dl className="server-facts">
+          <dt>{ar.network.addresses}</dt>
+          <dd dir="ltr">{status.addresses.map((a) => `${a}:${status.port}`).join("  ")}</dd>
+          <dt>{ar.network.fingerprint}</dt>
+          <dd dir="ltr">{status.fingerprint}</dd>
+        </dl>
+      )}
+      <div className="row">
+        <label className="field narrow">
+          {ar.network.port}
+          <input dir="ltr" inputMode="numeric" disabled={status.serving} value={port} onChange={(e) => setPort(e.target.value)} />
+        </label>
+        {status.serving ? (
+          <button type="button" className="btn" onClick={() => void toggle(false)}>
+            {ar.network.stop}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary" onClick={() => void toggle(true)}>
+            {ar.network.serve}
+          </button>
+        )}
+      </div>
+      <span className="small muted">{ar.network.managerOnly}</span>
+    </section>
   );
 }

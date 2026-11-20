@@ -178,3 +178,6 @@ tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--surface
 .printer-card { max-width: 720px; }
 .printer-card .field { flex: none; }
 .printer-card textarea { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.server-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.server-facts dt { color: var(--muted); }
+.server-facts dd { margin: 0; font-variant-numeric: tabular-nums; }

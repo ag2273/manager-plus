@@ -13,6 +13,12 @@ const api: DesktopApi = {
   printers: () => ipcRenderer.invoke(CHANNELS.printers),
   print: (request) => ipcRenderer.invoke(CHANNELS.print, request),
   printA4: (request) => ipcRenderer.invoke(CHANNELS.printA4, request),
+  discoverServers: () => ipcRenderer.invoke(CHANNELS.discoverServers),
+  lastServer: () => ipcRenderer.invoke(CHANNELS.lastServer),
+  connectServer: (host, port) => ipcRenderer.invoke(CHANNELS.connectServer, host, port),
+  connection: () => ipcRenderer.invoke(CHANNELS.connection),
+  serverStatus: () => ipcRenderer.invoke(CHANNELS.serverStatus),
+  setServing: (on, port) => ipcRenderer.invoke(CHANNELS.setServing, on, port),
 };
 
 contextBridge.exposeInMainWorld("api", api);

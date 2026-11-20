@@ -59,6 +59,7 @@ export const BUSINESS_METHODS = [
   "holdSale",
   "findReceipt",
   "returnSale",
+  "findReturn",
   "heldSales",
   "recallSale",
   "customers",
@@ -113,6 +114,13 @@ export const NO_PRINTER: PrinterSettings = { kind: "none" };
 /** Preferences of this computer, kept outside the business file. */
 export type Preferences = { theme: ThemeId; printer: PrinterSettings };
 
+/** A Manager+ server heard on the network, or typed in. */
+export type FoundServer = { name: string; host: string; port: number };
+/** This PC serving its open business to others. */
+export type ServerStatus = { serving: boolean; port: number; fingerprint: string; addresses: string[]; clients: number };
+/** Where the open business lives: in a file on this PC, or on a server. */
+export type Connection = { mode: "none" } | { mode: "local"; path: string } | { mode: "client"; host: string; port: number; name: string };
+
 /** An A4 page to print or save as PDF. */
 export type A4Request = (
   | { kind: "invoice"; number: number }
@@ -151,6 +159,18 @@ export interface DesktopApi {
   print(request: PrintRequest): Promise<Result<null>>;
   /** Prints an A4 document through the system print dialog, or saves it as a PDF; `saved` is the PDF's path. */
   printA4(request: A4Request): Promise<Result<{ saved: string | null }>>;
+  /** Servers announcing themselves on the local network. */
+  discoverServers(): Promise<FoundServer[]>;
+  /** The server this PC last connected to, for a one-click reconnect. */
+  lastServer(): Promise<FoundServer | null>;
+  /** Connects to a server as a client, signed out; the first connection pins the server's certificate. */
+  connectServer(host: string, port: number): Promise<Result<BusinessSettings>>;
+  /** Where the open business lives. */
+  connection(): Promise<Connection>;
+  /** Whether this PC serves its open business, and to how many PCs. */
+  serverStatus(): Promise<ServerStatus>;
+  /** Starts or stops serving the open business to other PCs (managers only); remembered for this file. */
+  setServing(on: boolean, port: number): Promise<Result<ServerStatus>>;
 }
 
 export const CHANNELS = {
@@ -165,4 +185,10 @@ export const CHANNELS = {
   printers: "printer:list",
   print: "printer:print",
   printA4: "printer:a4",
+  discoverServers: "network:discover",
+  lastServer: "network:last",
+  connectServer: "network:connect",
+  connection: "network:connection",
+  serverStatus: "network:status",
+  setServing: "network:serve",
 } as const;
