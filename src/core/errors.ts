@@ -9,7 +9,19 @@ export type BusinessErrorCode =
   | "file_exists"
   | "file_not_found"
   | "not_a_business_file"
-  | "made_by_newer_version";
+  | "made_by_newer_version"
+  | "date_invalid"
+  | "entry_needs_two_lines"
+  | "entry_unbalanced"
+  | "line_amount_invalid"
+  | "account_not_found"
+  | "account_inactive"
+  | "account_code_required"
+  | "account_name_required"
+  | "account_code_taken"
+  | "account_type_invalid"
+  | "account_is_system"
+  | "account_has_postings";
 
 export class BusinessError extends Error {
   constructor(

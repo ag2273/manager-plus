@@ -1,3 +1,28 @@
+import type { BusinessErrorCode } from "../../core/errors";
+
+const errors = {
+  name_required: "اكتب اسم النشاط.",
+  tax_registration_number_invalid: "رقم التسجيل الضريبي لازم يكون 9 أرقام.",
+  fiscal_year_start_month_invalid: "اختر شهرًا من 1 إلى 12.",
+  file_exists: "يوجد ملف بنفس الاسم في هذا المكان. اختر اسمًا آخر.",
+  file_not_found: "الملف غير موجود. ربما تم نقله أو حذفه.",
+  not_a_business_file: "هذا الملف ليس ملف نشاط من Manager+.",
+  made_by_newer_version: "هذا الملف محفوظ بإصدار أحدث من البرنامج. حدّث البرنامج لفتحه.",
+  date_invalid: "التاريخ غير صحيح.",
+  entry_needs_two_lines: "القيد يحتاج سطرين على الأقل.",
+  entry_unbalanced: "إجمالي المدين لا يساوي إجمالي الدائن.",
+  line_amount_invalid: "كل سطر يحتاج مبلغًا مدينًا أو دائنًا فقط، بالقرش.",
+  account_not_found: "الحساب غير موجود.",
+  account_inactive: "هذا الحساب موقوف، لا يمكن الترحيل عليه.",
+  account_code_required: "اكتب كود الحساب.",
+  account_name_required: "اكتب اسم الحساب.",
+  account_code_taken: "هذا الكود مستخدم لحساب آخر.",
+  account_type_invalid: "اختر نوع الحساب.",
+  account_is_system: "البرنامج يرحّل على هذا الحساب تلقائيًا، لا يمكن حذفه أو إيقافه.",
+  account_has_postings: "على هذا الحساب حركات، لا يمكن حذفه. يمكنك إيقافه بدلًا من ذلك.",
+  unexpected: "حدث خطأ غير متوقع.",
+} satisfies Record<BusinessErrorCode | "unexpected", string>;
+
 /** Arabic screen text. English arrives with the full English mode ticket (#19). */
 export const ar = {
   appName: "Manager+",
@@ -12,14 +37,5 @@ export const ar = {
   openFile: "فتح ملف نشاط",
   recent: "آخر الملفات",
   opened: "النشاط المفتوح",
-  errors: {
-    name_required: "اكتب اسم النشاط.",
-    tax_registration_number_invalid: "رقم التسجيل الضريبي لازم يكون 9 أرقام.",
-    fiscal_year_start_month_invalid: "اختر شهرًا من 1 إلى 12.",
-    file_exists: "يوجد ملف بنفس الاسم في هذا المكان. اختر اسمًا آخر.",
-    file_not_found: "الملف غير موجود. ربما تم نقله أو حذفه.",
-    not_a_business_file: "هذا الملف ليس ملف نشاط من Manager+.",
-    made_by_newer_version: "هذا الملف محفوظ بإصدار أحدث من البرنامج. حدّث البرنامج لفتحه.",
-    unexpected: "حدث خطأ غير متوقع.",
-  } as Record<string, string>,
+  errors: errors as Record<string, string>,
 };
