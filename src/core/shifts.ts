@@ -19,13 +19,19 @@ export type CloseShiftInput = { date: IsoDate; countedCash: Piastres };
 export type ZReport = {
   shift: Shift;
   receipts: number;
-  sales: { total: Piastres; net: Piastres; vat: Piastres; byMethod: { cash: Piastres } };
+  sales: {
+    total: Piastres;
+    net: Piastres;
+    vat: Piastres;
+    /** Cash is after change; credit is what was left on customers' accounts. */
+    byMethod: { cash: Piastres; card: Piastres; wallet: Piastres; credit: Piastres };
+  };
   returns: Piastres;
   discounts: Piastres;
   cashIn: Piastres;
   cashOut: Piastres;
   openingFloat: Piastres;
-  /** Float + cash sales + cash in − cash out. */
+  /** Float + cash taken for sales + cash in − cash out. */
   expectedCash: Piastres;
   countedCash: Piastres | null;
   /** Counted − expected: positive is cash over, negative cash short. */
@@ -124,6 +130,16 @@ export function zReport(db: Database.Database, id: number): ZReport {
         WHERE r.shift_id = ?`,
     )
     .get(id) as { receipts: number; total: number; net: number; vat: number };
+  const paid = db
+    .prepare(
+      `SELECT p.method, SUM(p.amount) AS amount
+         FROM sales_receipt_payments p JOIN sales_receipts r ON r.id = p.receipt_id
+        WHERE r.shift_id = ? GROUP BY p.method`,
+    )
+    .all(id) as { method: "cash" | "card" | "wallet"; amount: number }[];
+  const byMethod = { cash: 0, card: 0, wallet: 0, credit: 0 };
+  for (const p of paid) byMethod[p.method] = p.amount;
+  byMethod.credit = sales.total - byMethod.cash - byMethod.card - byMethod.wallet;
   const cash = db
     .prepare(
       `SELECT COALESCE(SUM(CASE WHEN direction = 'in' THEN amount END), 0) AS cashIn,
@@ -131,11 +147,11 @@ export function zReport(db: Database.Database, id: number): ZReport {
          FROM cash_movements WHERE shift_id = ?`,
     )
     .get(id) as { cashIn: number; cashOut: number };
-  const expectedCash = shift.openingFloat + sales.total + cash.cashIn - cash.cashOut;
+  const expectedCash = shift.openingFloat + byMethod.cash + cash.cashIn - cash.cashOut;
   return {
     shift,
     receipts: sales.receipts,
-    sales: { total: sales.total, net: sales.net, vat: sales.vat, byMethod: { cash: sales.total } },
+    sales: { total: sales.total, net: sales.net, vat: sales.vat, byMethod },
     returns: 0,
     discounts: 0,
     cashIn: cash.cashIn,

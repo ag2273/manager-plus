@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import type { Account } from "../../../core/ledger";
 import type { Shift, ZReport } from "../../../core/shifts";
 import type { Item } from "../../../core/items";
-import type { CashSaleResult, PricedSale } from "../../../core/sales";
+import type { Customer } from "../../../core/customers";
+import type { CashSaleResult, Payment, PricedSale } from "../../../core/sales";
 import type { Warehouse } from "../../../core/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+
+type Tender = "cash" | "card" | "wallet" | "split" | "credit";
+const TENDERS: Tender[] = ["cash", "card", "wallet", "split", "credit"];
 
 type CartLine = { itemId: number; unit: "base" | "pack"; name: string; barcode: string; quantity: string };
 
@@ -29,10 +33,17 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
   const [matches, setMatches] = useState<Item[]>([]);
   const [priced, setPriced] = useState<PricedSale | null>(null);
   const [cash, setCash] = useState("");
+  const [tender, setTender] = useState<Tender>("cash");
+  const [card, setCard] = useState("");
+  const [wallet, setWallet] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState<number | "">("");
+  const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<(CashSaleResult & { names: string[] }) | null>(null);
   const search = useRef<HTMLInputElement>(null);
-  const pay = useRef<HTMLInputElement>(null);
+  /** Moves the cursor to the first payment field: the cash amount, the customer, or the complete button. */
+  const focusPayment = () => document.querySelector<HTMLElement>(".till-pay [data-pay]")?.focus();
   const scan = useRef({ buffer: "", at: 0 });
   const editing = useRef("");
 
@@ -44,7 +55,33 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
       setWarehouseId(active[0]?.id ?? "");
     });
     search.current?.focus();
+    void loadCustomers();
   }, []);
+
+  async function loadCustomers() {
+    const result = await business.customers();
+    if (result.ok) setCustomers(result.value.filter((c) => c.active));
+  }
+
+  async function createCustomer() {
+    if (!newCustomer) return;
+    const result = await business.addCustomer({ ...newCustomer, taxRegistrationNumber: "" });
+    setError(errorText(result));
+    if (result.ok) {
+      await loadCustomers();
+      setCustomerId(result.value);
+      setNewCustomer(null);
+    }
+  }
+
+  function resetPayment() {
+    setCash("");
+    setCard("");
+    setWallet("");
+    setTender("cash");
+    setCustomerId("");
+    setNewCustomer(null);
+  }
 
   // Totals come from the core: the screen never computes money or VAT.
   useEffect(() => {
@@ -86,7 +123,7 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
   async function submitSearch() {
     const text = query.trim();
     if (text === "") {
-      if (lines.length > 0) pay.current?.focus();
+      if (lines.length > 0) focusPayment();
       return;
     }
     if (await addBarcode(text)) {
@@ -113,24 +150,54 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
 
   function clearSale() {
     setLines([]);
-    setCash("");
+    resetPayment();
     setQuery("");
     setMatches([]);
     setError(null);
     search.current?.focus();
   }
 
+  /** The tenders as typed. Cash left empty in cash mode means the exact total. */
+  function payments(total: number): Payment[] | null {
+    const amount = (text: string) => (text.trim() === "" ? 0 : parseMoney(text));
+    switch (tender) {
+      case "cash": {
+        const c = cash.trim() === "" ? total : parseMoney(cash);
+        return c === null ? null : [{ method: "cash", amount: c }];
+      }
+      case "card":
+        return [{ method: "card", amount: total }];
+      case "wallet":
+        return [{ method: "wallet", amount: total }];
+      case "split":
+      case "credit": {
+        const parts = [
+          { method: "cash" as const, amount: amount(cash) },
+          { method: "card" as const, amount: tender === "split" ? amount(card) : 0 },
+          { method: "wallet" as const, amount: tender === "split" ? amount(wallet) : 0 },
+        ];
+        if (parts.some((p) => p.amount === null)) return null;
+        return parts.filter((p): p is Payment => p.amount !== null && p.amount > 0);
+      }
+    }
+  }
+
   async function complete() {
     if (warehouseId === "" || lines.length === 0 || !priced) return;
-    const received = cash.trim() === "" ? priced.total : parseMoney(cash);
-    if (received === null) {
+    const paid = payments(priced.total);
+    if (paid === null) {
       setError(ar.errors["price_invalid"]!);
       return;
     }
-    const result = await business.postCashSale({
+    if (tender === "credit" && customerId === "") {
+      setError(ar.errors["customer_not_found"]!);
+      return;
+    }
+    const result = await business.postSale({
       date: today(),
       warehouseId,
-      cashReceived: received,
+      payments: paid,
+      ...(tender === "credit" && customerId !== "" ? { customerId } : {}),
       lines: lines.map((l) => ({ itemId: l.itemId, unit: l.unit, quantity: parseQuantity(l.quantity) ?? 0 })),
     });
     setError(errorText(result));
@@ -138,7 +205,7 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
       const names = result.value.belowZero.map((id) => lines.find((l) => l.itemId === id)?.name ?? "");
       setLast({ ...result.value, names });
       setLines([]);
-      setCash("");
+      resetPayment();
       search.current?.focus();
     }
   }
@@ -150,14 +217,14 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
       search.current?.focus();
     } else if (event.key === "F12") {
       event.preventDefault();
-      pay.current?.focus();
+      focusPayment();
     } else if (event.key === "Escape") {
       event.preventDefault();
       clearSale();
     } else if (event.key === "F10") {
       event.preventDefault();
       onClose();
-    } else if (event.target !== search.current && event.target !== pay.current) {
+    } else if (event.target !== search.current && !(event.target instanceof HTMLElement && event.target.closest(".till-pay"))) {
       const now = Date.now();
       const s = scan.current;
       if (now - s.at > SCANNER_GAP_MS) s.buffer = "";
@@ -349,6 +416,23 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
             <span>{ar.till.due}</span>
             <span className="num">{priced ? formatMoney(priced.total) : "0.00"}</span>
           </div>
+          <div role="radiogroup" aria-label={ar.till.method} className="pills till-tenders">
+            {TENDERS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="radio"
+                aria-checked={t === tender}
+                className="pill"
+                onClick={() => {
+                  setTender(t);
+                  setTimeout(focusPayment);
+                }}
+              >
+                {ar.till.tenders[t]}
+              </button>
+            ))}
+          </div>
           <form
             className="stack"
             onSubmit={(e) => {
@@ -356,19 +440,78 @@ function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) 
               void complete();
             }}
           >
-            <label className="field">
-              {ar.till.cash}
-              <input
-                ref={pay}
-                className="till-cash"
-                dir="ltr"
-                inputMode="decimal"
-                value={cash}
-                placeholder={priced ? formatMoney(priced.total) : ""}
-                onChange={(e) => setCash(e.target.value)}
-              />
-            </label>
-            <button type="submit" className="btn btn-primary till-complete" disabled={!priced}>
+            {tender === "credit" && (
+              <>
+                <label className="field">
+                  {ar.till.customer}
+                  <select data-pay value={customerId} onChange={(e) => setCustomerId(e.target.value === "" ? "" : Number(e.target.value))}>
+                    <option value="">{ar.till.pickCustomer}</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.phone ? ` · ${c.phone}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {newCustomer ? (
+                  <div className="stack till-new-customer">
+                    <label className="field">
+                      {ar.till.customerName}
+                      <input autoFocus value={newCustomer.name} onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })} />
+                    </label>
+                    <label className="field">
+                      {ar.till.customerPhone}
+                      <input dir="ltr" value={newCustomer.phone} onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })} />
+                    </label>
+                    <div className="row">
+                      <button type="button" className="btn btn-small btn-primary" onClick={() => void createCustomer()}>
+                        {ar.save}
+                      </button>
+                      <button type="button" className="btn btn-small" onClick={() => setNewCustomer(null)}>
+                        {ar.cancel}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="link" onClick={() => setNewCustomer({ name: "", phone: "" })}>
+                    {ar.till.newCustomer}
+                  </button>
+                )}
+              </>
+            )}
+            {(tender === "cash" || tender === "split" || tender === "credit") && (
+              <label className="field">
+                {tender === "cash" ? ar.till.cash : tender === "credit" ? ar.till.paidNow : ar.till.tenders.cash}
+                <input
+                  data-pay={tender === "credit" ? undefined : true}
+                  className="till-cash"
+                  dir="ltr"
+                  inputMode="decimal"
+                  value={cash}
+                  placeholder={tender === "cash" && priced ? formatMoney(priced.total) : "0.00"}
+                  onChange={(e) => setCash(e.target.value)}
+                />
+              </label>
+            )}
+            {tender === "split" && (
+              <>
+                <label className="field">
+                  {ar.till.tenders.card}
+                  <input dir="ltr" inputMode="decimal" value={card} placeholder="0.00" onChange={(e) => setCard(e.target.value)} />
+                </label>
+                <label className="field">
+                  {ar.till.tenders.wallet}
+                  <input dir="ltr" inputMode="decimal" value={wallet} placeholder="0.00" onChange={(e) => setWallet(e.target.value)} />
+                </label>
+              </>
+            )}
+            <button
+              data-pay={tender === "card" || tender === "wallet" ? true : undefined}
+              type="submit"
+              className="btn btn-primary till-complete"
+              disabled={!priced}
+            >
               {ar.till.complete}
             </button>
           </form>
@@ -587,7 +730,11 @@ function ClosePanel({ onCancel, onClosed }: { onCancel: () => void; onClosed: (r
 function ZReportView({ report, onDone }: { report: ZReport; onDone: () => void }) {
   const rows: [string, number | null][] = [
     [ar.shift.z.receipts, null],
+    [ar.shift.z.salesTotal, report.sales.total],
     [ar.shift.z.salesCash, report.sales.byMethod.cash],
+    [ar.shift.z.salesCard, report.sales.byMethod.card],
+    [ar.shift.z.salesWallet, report.sales.byMethod.wallet],
+    [ar.shift.z.salesCredit, report.sales.byMethod.credit],
     [ar.shift.z.net, report.sales.net],
     [ar.shift.z.vat, report.sales.vat],
     [ar.shift.z.returns, report.returns],

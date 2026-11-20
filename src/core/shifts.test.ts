@@ -85,7 +85,7 @@ describe("shifts", () => {
     expect(z).toEqual(
       expect.objectContaining({
         receipts: 2,
-        sales: { total: 22_800, net: 20_000, vat: 2_800, byMethod: { cash: 22_800 } },
+        sales: { total: 22_800, net: 20_000, vat: 2_800, byMethod: { cash: 22_800, card: 0, wallet: 0, credit: 0 } },
         returns: 0,
         discounts: 0,
         cashIn: 0,

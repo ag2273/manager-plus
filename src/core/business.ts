@@ -66,7 +66,20 @@ import {
   zReport,
 } from "./shifts";
 import {
+  type Customer,
+  type CustomerChanges,
+  type CustomerInput,
+  addCustomer,
+  customerBalance,
+  listCustomers,
+  setCustomerActive,
+  updateCustomer,
+} from "./customers";
+import {
   type CashSaleInput,
+  type SaleInput,
+  type SaleResult,
+  postSale,
   type CashSaleResult,
   type PricedSale,
   type Receipt,
@@ -489,6 +502,40 @@ export class Business {
   postCashSale(sale: CashSaleInput): CashSaleResult {
     const user = this.allow("postCashSale");
     return this.write("postCashSale", sale, () => postCashSale(this.db, sale, user.id));
+  }
+
+  /** Sells at the till, paid by any mix of cash, card and wallet, with any rest on a customer's account. */
+  postSale(sale: SaleInput): SaleResult {
+    const user = this.allow("postSale");
+    return this.write("postSale", sale, () => postSale(this.db, sale, user.id));
+  }
+
+  // Customers
+
+  customers(): Customer[] {
+    return this.read("customers", () => listCustomers(this.db));
+  }
+
+  addCustomer(customer: CustomerInput): number {
+    return this.write("addCustomer", customer, () => addCustomer(this.db, customer));
+  }
+
+  updateCustomer(id: number, changes: CustomerChanges): void {
+    this.write("updateCustomer", changes, () => updateCustomer(this.db, id, changes), id);
+  }
+
+  /** A stopped customer stays in the books but cannot buy on credit. */
+  deactivateCustomer(id: number): void {
+    this.write("deactivateCustomer", null, () => setCustomerActive(this.db, id, false), id);
+  }
+
+  reactivateCustomer(id: number): void {
+    this.write("reactivateCustomer", null, () => setCustomerActive(this.db, id, true), id);
+  }
+
+  /** What a customer owes the business, in piastres. */
+  customerBalance(id: number): Piastres {
+    return this.read("customerBalance", () => customerBalance(this.db, id));
   }
 
   /** Till receipts, newest first. */
