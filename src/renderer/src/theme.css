@@ -172,3 +172,6 @@ tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--surface
 .till-new-customer { padding: 10px; border-radius: 10px; background: var(--surface-2); gap: 8px; }
 .till-pay .field, .shift-card .field { flex: none; }
 .till-pay .stack { gap: 10px; }
+.till-discount { align-items: center; gap: 10px; }
+.till-discount input { width: 120px; height: 34px; }
+.screen-head > div.actions { flex-direction: row; flex-wrap: wrap; }
