@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import type { Account } from "../../../core/ledger";
+import type { Shift, ZReport } from "../../../core/shifts";
 import type { Item } from "../../../core/items";
 import type { CashSaleResult, PricedSale } from "../../../core/sales";
 import type { Warehouse } from "../../../core/stock";
@@ -19,7 +21,7 @@ const BARCODE = /^\d{8,}$/;
  * The till. Everything works from the keyboard: type or scan into the search box,
  * Enter adds; F12 goes to payment; Enter there completes the sale; Esc clears.
  */
-export function Till() {
+function Sale({ onCash, onClose }: { onCash: () => void; onClose: () => void }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -152,6 +154,9 @@ export function Till() {
     } else if (event.key === "Escape") {
       event.preventDefault();
       clearSale();
+    } else if (event.key === "F10") {
+      event.preventDefault();
+      onClose();
     } else if (event.target !== search.current && event.target !== pay.current) {
       const now = Date.now();
       const s = scan.current;
@@ -178,6 +183,14 @@ export function Till() {
         <div>
           <h1>{ar.till.title}</h1>
           <span className="muted">{ar.till.keys}</span>
+        </div>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onCash}>
+            {ar.shift.cashInOut}
+          </button>
+          <button type="button" className="btn" onClick={onClose}>
+            {ar.shift.close}
+          </button>
         </div>
         {warehouses.length > 1 && (
           <label className="field narrow">
@@ -365,5 +378,254 @@ export function Till() {
         </aside>
       </div>
     </div>
+  );
+}
+
+type Panel = "sale" | "cash" | "close";
+
+/** The till for the signed-in user: open a shift, sell, move cash, close with a Z report. */
+export function Till() {
+  const [shift, setShift] = useState<Shift | null | undefined>(undefined);
+  const [panel, setPanel] = useState<Panel>("sale");
+  const [z, setZ] = useState<ZReport | null>(null);
+
+  const reload = useCallback(async () => {
+    const result = await business.currentShift();
+    setShift(result.ok ? result.value : null);
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  if (shift === undefined) return null;
+  if (z) return <ZReportView report={z} onDone={() => setZ(null)} />;
+  if (shift === null) return <OpenShift onOpened={reload} />;
+  if (panel === "cash") return <CashPanel onDone={() => setPanel("sale")} />;
+  if (panel === "close")
+    return (
+      <ClosePanel
+        onCancel={() => setPanel("sale")}
+        onClosed={(report) => {
+          setZ(report);
+          setPanel("sale");
+          void reload();
+        }}
+      />
+    );
+  return <Sale onCash={() => setPanel("cash")} onClose={() => setPanel("close")} />;
+}
+
+function OpenShift({ onOpened }: { onOpened: () => Promise<void> }) {
+  const [float, setFloat] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const amount = float.trim() === "" ? 0 : parseMoney(float);
+    if (amount === null) {
+      setError(ar.errors["line_amount_invalid"]!);
+      return;
+    }
+    const result = await business.openShift(amount);
+    setError(errorText(result));
+    if (result.ok) await onOpened();
+  }
+
+  return (
+    <>
+      <header className="screen-head">
+        <div>
+          <h1>{ar.till.title}</h1>
+          <span className="muted">{ar.shift.noShift}</span>
+        </div>
+      </header>
+      <form className="card shift-card" onSubmit={submit}>
+        <h2>{ar.shift.open}</h2>
+        {error && (
+          <div role="alert" className="error">
+            {error}
+          </div>
+        )}
+        <label className="field">
+          {ar.shift.float}
+          <input autoFocus dir="ltr" inputMode="decimal" value={float} placeholder="0.00" onChange={(e) => setFloat(e.target.value)} />
+        </label>
+        <button type="submit" className="btn btn-primary">
+          {ar.shift.open}
+        </button>
+      </form>
+    </>
+  );
+}
+
+function CashPanel({ onDone }: { onDone: () => void }) {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [direction, setDirection] = useState<"in" | "out">("out");
+  const [amount, setAmount] = useState("");
+  const [accountId, setAccountId] = useState<number | "">("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void business.accounts().then((r) => r.ok && setAccounts(r.value.filter((a) => a.active && a.role !== "cash_drawer")));
+  }, []);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = parseMoney(amount);
+    if (value === null || value <= 0) {
+      setError(ar.errors["line_amount_invalid"]!);
+      return;
+    }
+    if (accountId === "") {
+      setError(ar.errors["account_not_found"]!);
+      return;
+    }
+    const result = await business.cashInOut({ date: today(), direction, amount: value, accountId, reason });
+    setError(errorText(result));
+    if (result.ok) onDone();
+  }
+
+  return (
+    <>
+      <header className="screen-head">
+        <h1>{ar.shift.cashInOut}</h1>
+      </header>
+      <form className="card shift-card" onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onDone()}>
+        {error && (
+          <div role="alert" className="error">
+            {error}
+          </div>
+        )}
+        <div role="radiogroup" aria-label={ar.shift.direction} className="pills">
+          {(["out", "in"] as const).map((d) => (
+            <button key={d} type="button" role="radio" aria-checked={d === direction} className="pill" onClick={() => setDirection(d)}>
+              {ar.shift.directions[d]}
+            </button>
+          ))}
+        </div>
+        <label className="field">
+          {ar.shift.amount}
+          <input autoFocus dir="ltr" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </label>
+        <label className="field">
+          {direction === "out" ? ar.shift.toAccount : ar.shift.fromAccount}
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value === "" ? "" : Number(e.target.value))}>
+            <option value="">{ar.shift.pickAccount}</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.code} · {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          {ar.shift.reason}
+          <input value={reason} onChange={(e) => setReason(e.target.value)} />
+        </label>
+        <div className="row">
+          <button type="submit" className="btn btn-primary">
+            {ar.save}
+          </button>
+          <button type="button" className="btn" onClick={onDone}>
+            {ar.cancel}
+          </button>
+        </div>
+      </form>
+    </>
+  );
+}
+
+function ClosePanel({ onCancel, onClosed }: { onCancel: () => void; onClosed: (report: ZReport) => void }) {
+  const [counted, setCounted] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = parseMoney(counted);
+    if (value === null || value < 0) {
+      setError(ar.errors["line_amount_invalid"]!);
+      return;
+    }
+    const result = await business.closeShift({ date: today(), countedCash: value });
+    setError(errorText(result));
+    if (result.ok) onClosed(result.value);
+  }
+
+  return (
+    <>
+      <header className="screen-head">
+        <div>
+          <h1>{ar.shift.close}</h1>
+          <span className="muted">{ar.shift.closeHint}</span>
+        </div>
+      </header>
+      <form className="card shift-card" onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onCancel()}>
+        {error && (
+          <div role="alert" className="error">
+            {error}
+          </div>
+        )}
+        <label className="field">
+          {ar.shift.counted}
+          <input autoFocus dir="ltr" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} />
+        </label>
+        <div className="row">
+          <button type="submit" className="btn btn-primary">
+            {ar.shift.closeNow}
+          </button>
+          <button type="button" className="btn" onClick={onCancel}>
+            {ar.cancel}
+          </button>
+        </div>
+      </form>
+    </>
+  );
+}
+
+function ZReportView({ report, onDone }: { report: ZReport; onDone: () => void }) {
+  const rows: [string, number | null][] = [
+    [ar.shift.z.receipts, null],
+    [ar.shift.z.salesCash, report.sales.byMethod.cash],
+    [ar.shift.z.net, report.sales.net],
+    [ar.shift.z.vat, report.sales.vat],
+    [ar.shift.z.returns, report.returns],
+    [ar.shift.z.discounts, report.discounts],
+    [ar.shift.z.float, report.openingFloat],
+    [ar.shift.z.cashIn, report.cashIn],
+    [ar.shift.z.cashOut, report.cashOut],
+    [ar.shift.z.expected, report.expectedCash],
+    [ar.shift.z.counted, report.countedCash],
+    [ar.shift.z.difference, report.difference],
+  ];
+  return (
+    <>
+      <header className="screen-head">
+        <div>
+          <h1>{ar.shift.z.title}</h1>
+          <span className="muted">
+            {report.shift.userName} · {new Date(report.shift.openedAt).toLocaleString("ar-EG")}
+          </span>
+        </div>
+      </header>
+      <section className="table-card z-report" aria-label={ar.shift.z.title}>
+        <table>
+          <tbody>
+            {rows.map(([label, value], i) => (
+              <tr key={label} className={i === rows.length - 1 ? "z-total" : undefined}>
+                <td>{label}</td>
+                <td className="num">{i === 0 ? report.receipts : value === null ? "—" : formatMoney(value)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <div className="row">
+        <button type="button" className="btn btn-primary" autoFocus onClick={onDone}>
+          {ar.shift.z.done}
+        </button>
+      </div>
+    </>
   );
 }

@@ -85,7 +85,7 @@ td input, td select { height: 38px; }
 .link { background: none; border: 0; padding: 8px 0; color: var(--accent); text-align: start; }
 .pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .pill { height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-weight: 500; }
-.pill[aria-selected="true"], .pill[aria-pressed="true"] { background: var(--soft); border-color: var(--soft); color: var(--soft-text); }
+.pill[aria-selected="true"], .pill[aria-pressed="true"], .pill[aria-checked="true"] { background: var(--soft); border-color: var(--soft); color: var(--soft-text); }
 .chip { display: inline-block; margin-inline-start: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--soft); color: var(--soft-text); }
 .chip-warn { background: var(--warn-soft); color: var(--warn); }
 .badge { align-self: flex-start; padding: 2px 10px; border-radius: 999px; font-size: 12px; background: var(--soft); color: var(--soft-text); }
@@ -164,3 +164,7 @@ tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--surface
 .till-cash { height: 52px; font-size: 22px; }
 .till-complete { height: 56px; font-size: 17px; margin-top: 10px; }
 @media (max-width: 900px) { .till-grid { grid-template-columns: 1fr; } }
+.shift-card { max-width: 480px; }
+.z-report { max-width: 480px; }
+.z-report td { padding: 10px 14px; }
+.z-total td { font-weight: 700; }

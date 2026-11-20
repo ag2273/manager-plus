@@ -155,7 +155,8 @@ export function readAuditLog(db: Database.Database, limit = 500): AuditEntry[] {
 
 /** Which roles may call each facade method. Anything not listed is manager-only. */
 export const PERMISSIONS: Record<string, readonly Role[]> = {
-  accounts: ["manager", "accountant"],
+  // Cashiers pick the account for cash paid in or out of the drawer.
+  accounts: ["manager", "accountant", "cashier"],
   addAccount: ["manager", "accountant"],
   updateAccount: ["manager", "accountant"],
   deactivateAccount: ["manager", "accountant"],
@@ -192,6 +193,12 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   reactivateSupplier: ["manager", "accountant"],
   supplierBalance: ["manager", "accountant"],
   stockValue: ["manager", "accountant", "storekeeper"],
+  openShift: ["manager", "cashier"],
+  currentShift: ["manager", "cashier"],
+  cashInOut: ["manager", "cashier"],
+  closeShift: ["manager", "cashier"],
+  zReport: ["manager", "accountant", "cashier"],
+  shifts: ["manager", "accountant", "cashier"],
   priceSale: ["manager", "accountant", "cashier"],
   postCashSale: ["manager", "cashier"],
   receipts: ["manager", "accountant", "cashier"],

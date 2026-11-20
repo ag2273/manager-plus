@@ -31,6 +31,7 @@ function setup(settings = shop) {
       { itemId: bread, unit: "base", quantity: 100_000, unitPrice: 100 },
     ],
   });
+  business.openShift(0);
   return { business, main, soap, bread };
 }
 
@@ -201,7 +202,9 @@ describe("cash sales", () => {
     business.addUser({ name: "محمود", role: "storekeeper", password: "123456" });
     const sale = { date: "2026-11-20", warehouseId: main, lines: [{ itemId: soap, unit: "base" as const, quantity: 1_000 }], cashReceived: 5_700 };
 
-    business.signIn("سارة", "123456").postCashSale(sale);
+    const sara = business.signIn("سارة", "123456");
+    sara.openShift(0);
+    sara.postCashSale(sale);
     expect(() => business.signIn("محمود", "123456").postCashSale(sale)).toThrow(expect.objectContaining({ code: "not_allowed" }));
     expect(business.receipts()[0]!.soldBy).toBe("سارة");
   });
