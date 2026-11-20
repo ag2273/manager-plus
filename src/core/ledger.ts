@@ -17,7 +17,14 @@ export type Account = {
   active: boolean;
 };
 
-export type JournalLine = { accountId: number; debit?: Piastres; credit?: Piastres; memo?: string };
+export type JournalLine = {
+  accountId: number;
+  debit?: Piastres;
+  credit?: Piastres;
+  memo?: string;
+  /** The supplier a payables line belongs to. */
+  supplierId?: number;
+};
 export type JournalEntryInput = { date: IsoDate; memo: string; lines: JournalLine[] };
 
 export type TrialBalanceRow = {
@@ -105,10 +112,10 @@ export function postJournalEntry(db: Database.Database, input: JournalEntryInput
     .run(input.date, input.memo.trim(), kind);
   const entryId = Number(entry.lastInsertRowid);
   const insert = db.prepare(
-    "INSERT INTO ledger_lines (entry_id, account_id, debit, credit, memo) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO ledger_lines (entry_id, account_id, debit, credit, memo, supplier_id) VALUES (?, ?, ?, ?, ?, ?)",
   );
   for (const line of input.lines) {
-    insert.run(entryId, line.accountId, line.debit ?? 0, line.credit ?? 0, line.memo ?? "");
+    insert.run(entryId, line.accountId, line.debit ?? 0, line.credit ?? 0, line.memo ?? "", line.supplierId ?? null);
   }
   return entryId;
 }
