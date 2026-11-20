@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 import { CHANNELS, type DesktopApi } from "../shared/api";
 
 const api: DesktopApi = {
-  createBusiness: (settings) => ipcRenderer.invoke(CHANNELS.createBusiness, settings),
+  createBusiness: (settings, manager) => ipcRenderer.invoke(CHANNELS.createBusiness, settings, manager),
+  signIn: (credentials) => ipcRenderer.invoke(CHANNELS.signIn, credentials),
+  signOut: () => ipcRenderer.invoke(CHANNELS.signOut),
   openBusiness: (path) => ipcRenderer.invoke(CHANNELS.openBusiness, path),
   recentFiles: () => ipcRenderer.invoke(CHANNELS.recentFiles),
   call: (method, args) => ipcRenderer.invoke(CHANNELS.call, method, args),

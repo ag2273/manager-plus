@@ -31,7 +31,16 @@ export type BusinessErrorCode =
   | "item_code_taken"
   | "barcode_taken"
   | "price_invalid"
-  | "pack_size_invalid";
+  | "pack_size_invalid"
+  | "user_name_required"
+  | "user_name_taken"
+  | "user_not_found"
+  | "password_too_short"
+  | "role_invalid"
+  | "last_manager"
+  | "sign_in_required"
+  | "sign_in_failed"
+  | "not_allowed";
 
 export class BusinessError extends Error {
   constructor(

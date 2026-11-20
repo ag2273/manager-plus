@@ -2,7 +2,13 @@ import { THEMES, type ThemeId } from "../../../shared/api";
 import { ar } from "../strings";
 
 /** Appearance settings: the theme picker from the approved design. */
-export function Settings({ theme, onTheme }: { theme: ThemeId; onTheme: (theme: ThemeId) => void }) {
+export function Settings({
+  theme,
+  onTheme,
+}: {
+  theme: ThemeId;
+  onTheme: (theme: ThemeId) => void;
+}) {
   return (
     <>
       <header className="screen-head">

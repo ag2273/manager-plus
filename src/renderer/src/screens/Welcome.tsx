@@ -12,8 +12,13 @@ const blank: BusinessSettings = {
 };
 
 /** Create a business file or open one; shown until a business is open. */
-export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => void }) {
+export function Welcome({
+  onOpen,
+}: {
+  onOpen: (settings: BusinessSettings) => void;
+}) {
   const [draft, setDraft] = useState(blank);
+  const [manager, setManager] = useState({ name: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
 
@@ -28,7 +33,7 @@ export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => vo
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    handle(await window.api.createBusiness(draft));
+    handle(await window.api.createBusiness(draft, manager));
   }
 
   return (
@@ -47,11 +52,17 @@ export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => vo
         <div className="row">
           <label className="field">
             {ar.name}
-            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            <input
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
           </label>
           <label className="field">
             {ar.address}
-            <input value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} />
+            <input
+              value={draft.address}
+              onChange={(e) => setDraft({ ...draft, address: e.target.value })}
+            />
           </label>
         </div>
         <div className="row">
@@ -60,7 +71,9 @@ export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => vo
             <input
               inputMode="numeric"
               value={draft.taxRegistrationNumber}
-              onChange={(e) => setDraft({ ...draft, taxRegistrationNumber: e.target.value })}
+              onChange={(e) =>
+                setDraft({ ...draft, taxRegistrationNumber: e.target.value })
+              }
             />
           </label>
           <label className="field">
@@ -70,7 +83,33 @@ export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => vo
               min={1}
               max={12}
               value={draft.fiscalYearStartMonth}
-              onChange={(e) => setDraft({ ...draft, fiscalYearStartMonth: Number(e.target.value) })}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  fiscalYearStartMonth: Number(e.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+        <h2>{ar.manager}</h2>
+        <div className="row">
+          <label className="field">
+            {ar.managerName}
+            <input
+              value={manager.name}
+              onChange={(e) => setManager({ ...manager, name: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            {ar.password}
+            <input
+              type="password"
+              placeholder={ar.passwordHint}
+              value={manager.password}
+              onChange={(e) =>
+                setManager({ ...manager, password: e.target.value })
+              }
             />
           </label>
         </div>
@@ -78,7 +117,9 @@ export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => vo
           <input
             type="checkbox"
             checked={draft.vatRegistered}
-            onChange={(e) => setDraft({ ...draft, vatRegistered: e.target.checked })}
+            onChange={(e) =>
+              setDraft({ ...draft, vatRegistered: e.target.checked })
+            }
           />
           {ar.vatRegistered}
         </label>
@@ -86,7 +127,11 @@ export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => vo
           <button type="submit" className="btn btn-primary">
             {ar.create}
           </button>
-          <button type="button" className="btn" onClick={async () => handle(await window.api.openBusiness())}>
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => handle(await window.api.openBusiness())}
+          >
             {ar.openFile}
           </button>
         </div>
@@ -95,7 +140,13 @@ export function Welcome({ onOpen }: { onOpen: (settings: BusinessSettings) => vo
         <section className="card">
           <h2>{ar.recent}</h2>
           {recent.map((path) => (
-            <button key={path} type="button" className="link" dir="ltr" onClick={async () => handle(await window.api.openBusiness(path))}>
+            <button
+              key={path}
+              type="button"
+              className="link"
+              dir="ltr"
+              onClick={async () => handle(await window.api.openBusiness(path))}
+            >
               {path}
             </button>
           ))}

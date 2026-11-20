@@ -1,29 +1,46 @@
 import { useEffect, useState } from "react";
-import type { BusinessSettings, ThemeId } from "../../shared/api";
+import type { Role } from "../../core/users";
+import type { BusinessSettings, ThemeId, User } from "../../shared/api";
 import { Accounts } from "./screens/Accounts";
+import { AuditLog } from "./screens/AuditLog";
 import { Home } from "./screens/Home";
 import { Items } from "./screens/Items";
 import { Settings } from "./screens/Settings";
+import { SignIn } from "./screens/SignIn";
+import { Users } from "./screens/Users";
 import { Welcome } from "./screens/Welcome";
 import { ar } from "./strings";
 
-type Screen = "home" | "items" | "accounts" | "settings";
+type Screen = "home" | "items" | "accounts" | "users" | "audit" | "settings";
 
-/** Screens of the main menu. Those without a screen yet are shown but disabled. */
-const NAV: { label: string; screen?: Screen }[] = [
-  { label: ar.nav.home, screen: "home" },
-  { label: ar.nav.till },
-  { label: ar.nav.items, screen: "items" },
-  { label: ar.nav.purchases },
-  { label: ar.nav.customers },
-  { label: ar.nav.money },
-  { label: ar.nav.accounts, screen: "accounts" },
-  { label: ar.nav.reports },
-  { label: ar.nav.settings, screen: "settings" },
+const ALL: Role[] = ["manager", "accountant", "cashier", "storekeeper"];
+
+/**
+ * Screens of the main menu and the roles that see them. The core checks every
+ * command itself; this only hides what a role cannot use. Entries without a
+ * screen yet are shown but disabled.
+ */
+const NAV: { label: string; screen?: Screen; roles: Role[] }[] = [
+  { label: ar.nav.home, screen: "home", roles: ALL },
+  { label: ar.nav.till, roles: ALL },
+  { label: ar.nav.items, screen: "items", roles: ALL },
+  { label: ar.nav.purchases, roles: ["manager", "accountant", "storekeeper"] },
+  { label: ar.nav.customers, roles: ["manager", "accountant", "cashier"] },
+  { label: ar.nav.money, roles: ["manager", "accountant"] },
+  {
+    label: ar.nav.accounts,
+    screen: "accounts",
+    roles: ["manager", "accountant"],
+  },
+  { label: ar.nav.reports, roles: ["manager", "accountant"] },
+  { label: ar.nav.users, screen: "users", roles: ["manager"] },
+  { label: ar.nav.audit, screen: "audit", roles: ["manager", "accountant"] },
+  { label: ar.nav.settings, screen: "settings", roles: ALL },
 ];
 
 export function App() {
   const [open, setOpen] = useState<BusinessSettings | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const [theme, setTheme] = useState<ThemeId>("calm");
 
@@ -40,7 +57,31 @@ export function App() {
     void window.api.setPreferences({ theme: next });
   }
 
-  if (!open) return <Welcome onOpen={setOpen} />;
+  async function opened(settings: BusinessSettings) {
+    setOpen(settings);
+    setScreen("home");
+    // A newly created business comes back with its first manager already signed in.
+    const me = await window.api.call("currentUser", []);
+    setUser(me.ok ? (me.value as User | null) : null);
+  }
+
+  async function signOut() {
+    await window.api.signOut();
+    setUser(null);
+  }
+
+  if (!open) return <Welcome onOpen={opened} />;
+  if (!user)
+    return (
+      <SignIn
+        settings={open}
+        onSignedIn={(u) => {
+          setUser(u);
+          setScreen("home");
+        }}
+        onOtherFile={() => setOpen(null)}
+      />
+    );
 
   return (
     <div className="shell">
@@ -49,7 +90,7 @@ export function App() {
           {ar.appName}
         </strong>
         <span className="muted business-name">{open.name}</span>
-        {NAV.map((item) =>
+        {NAV.filter((item) => item.roles.includes(user.role)).map((item) =>
           item.screen ? (
             <button
               key={item.label}
@@ -61,18 +102,39 @@ export function App() {
               {item.label}
             </button>
           ) : (
-            <span key={item.label} className="nav-item nav-soon" title={ar.nav.soon}>
+            <span
+              key={item.label}
+              className="nav-item nav-soon"
+              title={ar.nav.soon}
+            >
               {item.label}
               <small>{ar.nav.soon}</small>
             </span>
           ),
         )}
+        <div className="sidebar-foot">
+          <span>{user.name}</span>
+          <span className="muted small">{ar.roles[user.role]}</span>
+          <button type="button" className="link" onClick={signOut}>
+            {ar.signIn.signOut}
+          </button>
+        </div>
       </nav>
       <main className="content">
-        {screen === "home" && <Home settings={open} onGo={setScreen} />}
+        {screen === "home" && (
+          <Home
+            settings={open}
+            canKeepBooks={user.role === "manager" || user.role === "accountant"}
+            onGo={setScreen}
+          />
+        )}
         {screen === "items" && <Items />}
         {screen === "accounts" && <Accounts />}
-        {screen === "settings" && <Settings theme={theme} onTheme={chooseTheme} />}
+        {screen === "users" && <Users me={user} />}
+        {screen === "audit" && <AuditLog />}
+        {screen === "settings" && (
+          <Settings theme={theme} onTheme={chooseTheme} />
+        )}
       </main>
     </div>
   );

@@ -2,12 +2,15 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Business, type BusinessSettings } from "../core/business";
+import type { Credentials } from "../core/users";
 import { BusinessError } from "../core/errors";
 import { BUSINESS_METHODS, CHANNELS, THEMES, type BusinessMethod, type Preferences, type Result } from "../shared/api";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
 
+/** The open business file, signed out, and the same business acting for the signed-in user. */
+let file: Business | null = null;
 let current: Business | null = null;
 let window: BrowserWindow | null = null;
 
@@ -30,8 +33,9 @@ function rememberRecent(path: string): void {
 }
 
 function switchTo(business: Business, path: string): BusinessSettings {
-  current?.close();
-  current = business;
+  file?.close();
+  file = business;
+  current = business.currentUser() ? business : null;
   rememberRecent(path);
   return business.settings();
 }
@@ -46,14 +50,14 @@ function attempt<T>(work: () => T): Result<T> {
   }
 }
 
-ipcMain.handle(CHANNELS.createBusiness, async (_event, settings: BusinessSettings) => {
+ipcMain.handle(CHANNELS.createBusiness, async (_event, settings: BusinessSettings, manager: Credentials) => {
   const target = await dialog.showSaveDialog(window!, {
     defaultPath: `${settings.name || "business"}.mplus`,
     filters: [FILE_FILTER],
   });
   if (target.canceled || !target.filePath) return { ok: true, value: null };
   const path = target.filePath;
-  return attempt(() => switchTo(Business.create(path, settings), path));
+  return attempt(() => switchTo(Business.create(path, settings, manager), path));
 });
 
 ipcMain.handle(CHANNELS.openBusiness, async (_event, given?: string) => {
@@ -69,11 +73,24 @@ ipcMain.handle(CHANNELS.openBusiness, async (_event, given?: string) => {
 
 ipcMain.handle(CHANNELS.recentFiles, () => readRecent());
 
+ipcMain.handle(CHANNELS.signIn, (_event, credentials: Credentials) => {
+  if (!file) return { ok: false, code: "unexpected", message: "No business is open" };
+  const opened = file;
+  return attempt(() => {
+    current = opened.signIn(credentials.name, credentials.password);
+    return current.currentUser();
+  });
+});
+
+ipcMain.handle(CHANNELS.signOut, () => {
+  current = null;
+});
+
 ipcMain.handle(CHANNELS.call, (_event, method: BusinessMethod, args: unknown[]) => {
   if (!BUSINESS_METHODS.includes(method) || !Array.isArray(args)) {
     return { ok: false, code: "unexpected", message: `Not a business method: ${String(method)}` };
   }
-  if (!current) return { ok: false, code: "unexpected", message: "No business is open" };
+  if (!current) return { ok: false, code: "sign_in_required", message: "Sign in first" };
   const business = current;
   return attempt(() => (business[method] as (...a: unknown[]) => unknown).apply(business, args));
 });
@@ -119,6 +136,6 @@ function createWindow(): void {
 
 void app.whenReady().then(createWindow);
 app.on("window-all-closed", () => {
-  current?.close();
+  file?.close();
   app.quit();
 });

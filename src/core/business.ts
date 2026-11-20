@@ -35,6 +35,23 @@ import {
   vatRate,
 } from "./items";
 import { LATEST_SCHEMA_VERSION, migrate } from "./migrations";
+import {
+  type AuditEntry,
+  type Credentials,
+  type NewUser,
+  type User,
+  type UserChanges,
+  PERMISSIONS,
+  addUser,
+  authenticate,
+  findUser,
+  listUsers,
+  readAuditLog,
+  setPassword,
+  setUserActive,
+  updateUser,
+  writeAudit,
+} from "./users";
 
 const IN_MEMORY = ":memory:";
 /** Marks a SQLite file as a Manager+ business file ("MPLS"). */
@@ -51,24 +68,33 @@ export type BusinessSettings = {
 };
 
 /**
- * The one entry point to a shop's books. Every business rule lives behind
+ * The one entry point to a business's books. Every business rule lives behind
  * this facade; screens only call its commands and queries.
+ *
+ * A `Business` acts for one signed-in user. `create` signs in the first
+ * manager; `open` returns a signed-out business whose `signIn` returns one
+ * that acts for that user. Every command checks the user's role and is
+ * written to the audit log in the same transaction.
  */
 export class Business {
-  private constructor(private readonly db: Database.Database) {}
+  private constructor(
+    private readonly db: Database.Database,
+    private readonly user: User | null,
+  ) {}
 
-  /** Create a new business file at `path` (or ":memory:"). */
-  static create(path: string, settings: BusinessSettings): Business {
+  /** Create a new business file at `path` (or ":memory:"), with its first manager signed in. */
+  static create(path: string, settings: BusinessSettings, manager: Credentials): Business {
     const clean = normalizeSettings(settings);
     if (path !== IN_MEMORY && existsSync(path)) {
       throw new BusinessError("file_exists", `A file already exists at ${path}`);
     }
     const db = new Database(path);
+    let first: User;
     try {
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
       db.pragma(`application_id = ${APPLICATION_ID}`);
-      db.transaction(() => {
+      first = db.transaction(() => {
         migrate(db);
         db.prepare(
           `INSERT INTO business_settings
@@ -81,6 +107,9 @@ export class Business {
           clean.vatRegistered ? 1 : 0,
           clean.fiscalYearStartMonth,
         );
+        const id = addUser(db, { ...manager, role: "manager" });
+        writeAudit(db, { userId: id, action: "createBusiness", entityId: null, detail: JSON.stringify(clean) });
+        return findUser(db, id);
       })();
     } catch (error) {
       // Never leave a half-made business file behind.
@@ -90,10 +119,10 @@ export class Business {
       }
       throw error;
     }
-    return new Business(db);
+    return new Business(db, first);
   }
 
-  /** Open an existing business file. */
+  /** Open an existing business file, signed out. */
   static open(path: string): Business {
     if (!existsSync(path)) {
       throw new BusinessError("file_not_found", `No file at ${path}`);
@@ -114,9 +143,20 @@ export class Business {
       if (error instanceof BusinessError) throw error;
       throw new BusinessError("not_a_business_file", `${path} is not a Manager+ business file`);
     }
-    return new Business(db);
+    return new Business(db, null);
   }
 
+  /** Returns this business acting for the user with these credentials. */
+  signIn(name: string, password: string): Business {
+    return new Business(this.db, authenticate(this.db, { name, password }));
+  }
+
+  /** The signed-in user, or null when signed out. */
+  currentUser(): User | null {
+    return this.user;
+  }
+
+  /** Shown before sign-in, so it needs none. */
   settings(): BusinessSettings {
     const row = this.db
       .prepare(
@@ -139,86 +179,158 @@ export class Business {
     };
   }
 
+  private allow(method: string): User {
+    if (!this.user) throw new BusinessError("sign_in_required", "Sign in first");
+    const roles = PERMISSIONS[method] ?? ["manager"];
+    if (!roles.includes(this.user.role)) {
+      throw new BusinessError("not_allowed", `A ${this.user.role} may not ${method}`);
+    }
+    return this.user;
+  }
+
+  /** A query: role check only. */
+  private read<T>(method: string, work: () => T): T {
+    this.allow(method);
+    return work();
+  }
+
+  /** A command: role check, then the change and its audit entry in one transaction. */
+  private write<T>(method: string, detail: unknown, work: () => T, entityId?: number): T {
+    const user = this.allow(method);
+    return this.db.transaction(() => {
+      const result = work();
+      writeAudit(this.db, {
+        userId: user.id,
+        action: method,
+        entityId: entityId ?? (typeof result === "number" ? result : null),
+        detail: JSON.stringify(detail ?? null),
+      });
+      return result;
+    })();
+  }
+
+  // Users
+
+  users(): User[] {
+    return this.read("users", () => listUsers(this.db));
+  }
+
+  /** Adds a user and returns their id. */
+  addUser(user: NewUser): number {
+    return this.write("addUser", { name: user.name, role: user.role }, () => addUser(this.db, user));
+  }
+
+  updateUser(id: number, changes: UserChanges): void {
+    this.write("updateUser", changes, () => updateUser(this.db, id, changes), id);
+  }
+
+  resetPassword(id: number, password: string): void {
+    this.write("resetPassword", null, () => setPassword(this.db, id, password), id);
+  }
+
+  changeOwnPassword(current: string, next: string): void {
+    const user = this.allow("changeOwnPassword");
+    authenticate(this.db, { name: user.name, password: current });
+    this.write("changeOwnPassword", null, () => setPassword(this.db, user.id, next), user.id);
+  }
+
+  deactivateUser(id: number): void {
+    this.write("deactivateUser", null, () => setUserActive(this.db, id, false), id);
+  }
+
+  reactivateUser(id: number): void {
+    this.write("reactivateUser", null, () => setUserActive(this.db, id, true), id);
+  }
+
+  /** Who changed what, newest first. */
+  auditLog(): AuditEntry[] {
+    return this.read("auditLog", () => readAuditLog(this.db));
+  }
+
+  // Accounts and the ledger
+
   accounts(): Account[] {
-    return listAccounts(this.db);
+    return this.read("accounts", () => listAccounts(this.db));
   }
 
   /** Posts a manual journal entry and returns its id. */
   postJournalEntry(entry: JournalEntryInput): number {
-    return this.db.transaction(() => postJournalEntry(this.db, entry))();
+    return this.write("postJournalEntry", entry, () => postJournalEntry(this.db, entry));
   }
 
   /** Adds an account to the chart and returns its id. */
   addAccount(account: NewAccount): number {
-    return this.db.transaction(() => addAccount(this.db, account))();
+    return this.write("addAccount", account, () => addAccount(this.db, account));
   }
 
   /** Renames or renumbers an account. Its postings stay with it. */
   updateAccount(id: number, changes: AccountChanges): void {
-    this.db.transaction(() => updateAccount(this.db, id, changes))();
+    this.write("updateAccount", changes, () => updateAccount(this.db, id, changes), id);
   }
 
   deactivateAccount(id: number): void {
-    this.db.transaction(() => setAccountActive(this.db, id, false))();
+    this.write("deactivateAccount", null, () => setAccountActive(this.db, id, false), id);
   }
 
   reactivateAccount(id: number): void {
-    this.db.transaction(() => setAccountActive(this.db, id, true))();
+    this.write("reactivateAccount", null, () => setAccountActive(this.db, id, true), id);
   }
 
   /** Deletes an account that has never been posted to. */
   deleteAccount(id: number): void {
-    this.db.transaction(() => deleteAccount(this.db, id))();
+    this.write("deleteAccount", null, () => deleteAccount(this.db, id), id);
   }
 
   /** Posts opening balances; the difference goes to the opening balances account. */
   postOpeningBalances(date: IsoDate, lines: JournalLine[]): number {
-    return this.db.transaction(() => postOpeningBalances(this.db, date, lines))();
+    return this.write("postOpeningBalances", { date, lines }, () => postOpeningBalances(this.db, date, lines));
   }
 
   trialBalance(asOf: IsoDate): TrialBalance {
-    return trialBalance(this.db, asOf);
+    return this.read("trialBalance", () => trialBalance(this.db, asOf));
   }
 
+  // Tax codes and items
+
   taxCodes(): TaxCode[] {
-    return listTaxCodes(this.db);
+    return this.read("taxCodes", () => listTaxCodes(this.db));
   }
 
   /** Adds a rate that applies from `from` onwards, for example when the law changes. */
   addTaxRate(taxCodeId: number, rate: { from: IsoDate; rate: BasisPoints }): void {
-    this.db.transaction(() => addTaxRate(this.db, taxCodeId, rate))();
+    this.write("addTaxRate", rate, () => addTaxRate(this.db, taxCodeId, rate), taxCodeId);
   }
 
   /** The VAT rate (basis points) in force on a document date; zero when the business is not VAT-registered. */
   vatRate(taxCodeId: number, date: IsoDate): BasisPoints {
-    return vatRate(this.db, taxCodeId, date, this.settings().vatRegistered);
+    return this.read("vatRate", () => vatRate(this.db, taxCodeId, date, this.settings().vatRegistered));
   }
 
   /** Active items by Arabic name; `search` matches Arabic or English name, code or barcode. */
   items(options: { search?: string; includeInactive?: boolean } = {}): Item[] {
-    return listItems(this.db, options);
+    return this.read("items", () => listItems(this.db, options));
   }
 
   addItem(item: ItemInput): number {
-    return this.db.transaction(() => addItem(this.db, item))();
+    return this.write("addItem", item, () => addItem(this.db, item));
   }
 
   /** Changes an item; pass `pack: null` to remove its pack unit. */
   updateItem(id: number, changes: ItemChanges): void {
-    this.db.transaction(() => updateItem(this.db, id, changes))();
+    this.write("updateItem", changes, () => updateItem(this.db, id, changes), id);
   }
 
   /** Hides an item from lists and the till; its history stays. */
   deactivateItem(id: number): void {
-    this.db.transaction(() => setItemActive(this.db, id, false))();
+    this.write("deactivateItem", null, () => setItemActive(this.db, id, false), id);
   }
 
   reactivateItem(id: number): void {
-    this.db.transaction(() => setItemActive(this.db, id, true))();
+    this.write("reactivateItem", null, () => setItemActive(this.db, id, true), id);
   }
 
   findByBarcode(barcode: string): ScannedUnit | null {
-    return findByBarcode(this.db, barcode);
+    return this.read("findByBarcode", () => findByBarcode(this.db, barcode));
   }
 
   close(): void {
