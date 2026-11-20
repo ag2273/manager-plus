@@ -168,3 +168,7 @@ tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--surface
 .z-report { max-width: 480px; }
 .z-report td { padding: 10px 14px; }
 .z-total td { font-weight: 700; }
+.till-tenders .pill { height: 36px; padding: 0 12px; font-size: 14px; }
+.till-new-customer { padding: 10px; border-radius: 10px; background: var(--surface-2); gap: 8px; }
+.till-pay .field, .shift-card .field { flex: none; }
+.till-pay .stack { gap: 10px; }

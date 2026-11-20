@@ -61,7 +61,12 @@ export type BusinessErrorCode =
   | "shift_required"
   | "shift_already_open"
   | "shift_not_found"
-  | "account_not_allowed";
+  | "account_not_allowed"
+  | "customer_name_required"
+  | "customer_not_found"
+  | "customer_inactive"
+  | "change_without_cash"
+  | "payment_method_invalid";
 
 export class BusinessError extends Error {
   constructor(
