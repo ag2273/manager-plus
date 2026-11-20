@@ -36,6 +36,21 @@ import {
 } from "./items";
 import { LATEST_SCHEMA_VERSION, migrate } from "./migrations";
 import {
+  type OpeningStockLine,
+  type StockOnHand,
+  type Transfer,
+  type TransferInput,
+  type Warehouse,
+  addWarehouse,
+  listTransfers,
+  listWarehouses,
+  postOpeningStock,
+  renameWarehouse,
+  setWarehouseActive,
+  stockOnHand,
+  transferStock,
+} from "./stock";
+import {
   type AuditEntry,
   type Credentials,
   type NewUser,
@@ -331,6 +346,51 @@ export class Business {
 
   findByBarcode(barcode: string): ScannedUnit | null {
     return this.read("findByBarcode", () => findByBarcode(this.db, barcode));
+  }
+
+  // Warehouses and stock
+
+  warehouses(): Warehouse[] {
+    return this.read("warehouses", () => listWarehouses(this.db));
+  }
+
+  addWarehouse(name: string): number {
+    return this.write("addWarehouse", { name }, () => addWarehouse(this.db, name));
+  }
+
+  renameWarehouse(id: number, name: string): void {
+    this.write("renameWarehouse", { name }, () => renameWarehouse(this.db, id, name), id);
+  }
+
+  /** Stops a warehouse that holds no stock. */
+  deactivateWarehouse(id: number): void {
+    this.write("deactivateWarehouse", null, () => setWarehouseActive(this.db, id, false), id);
+  }
+
+  reactivateWarehouse(id: number): void {
+    this.write("reactivateWarehouse", null, () => setWarehouseActive(this.db, id, true), id);
+  }
+
+  /** Quantity of an item in thousandths of its base unit: in total and per warehouse. */
+  stockOnHand(itemId: number): StockOnHand {
+    return this.read("stockOnHand", () => stockOnHand(this.db, itemId));
+  }
+
+  /** Stock held on the day the business starts using the app, at its cost. */
+  postOpeningStock(date: IsoDate, warehouseId: number, lines: OpeningStockLine[]): number {
+    return this.write("postOpeningStock", { date, warehouseId, lines }, () =>
+      postOpeningStock(this.db, date, warehouseId, lines),
+    );
+  }
+
+  /** Moves stock from one warehouse to another and returns the transfer's id. */
+  transferStock(transfer: TransferInput): number {
+    return this.write("transferStock", transfer, () => transferStock(this.db, transfer));
+  }
+
+  /** Transfers, newest first. */
+  transfers(): Transfer[] {
+    return this.read("transfers", () => listTransfers(this.db));
   }
 
   close(): void {

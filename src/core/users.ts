@@ -175,4 +175,13 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   findByBarcode: ROLES,
   changeOwnPassword: ROLES,
   auditLog: ["manager", "accountant"],
+  warehouses: ROLES,
+  addWarehouse: ["manager", "storekeeper"],
+  renameWarehouse: ["manager", "storekeeper"],
+  deactivateWarehouse: ["manager", "storekeeper"],
+  reactivateWarehouse: ["manager", "storekeeper"],
+  stockOnHand: ROLES,
+  postOpeningStock: ["manager", "accountant"],
+  transferStock: ["manager", "storekeeper"],
+  transfers: ["manager", "accountant", "storekeeper"],
 };

@@ -40,7 +40,17 @@ export type BusinessErrorCode =
   | "last_manager"
   | "sign_in_required"
   | "sign_in_failed"
-  | "not_allowed";
+  | "not_allowed"
+  | "warehouse_name_required"
+  | "warehouse_name_taken"
+  | "warehouse_not_found"
+  | "warehouse_inactive"
+  | "warehouse_has_stock"
+  | "transfer_same_warehouse"
+  | "transfer_needs_lines"
+  | "stock_insufficient"
+  | "quantity_invalid"
+  | "item_has_no_pack";
 
 export class BusinessError extends Error {
   constructor(

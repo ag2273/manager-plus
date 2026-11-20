@@ -36,6 +36,15 @@ export const BUSINESS_METHODS = [
   "deactivateItem",
   "reactivateItem",
   "findByBarcode",
+  "warehouses",
+  "addWarehouse",
+  "renameWarehouse",
+  "deactivateWarehouse",
+  "reactivateWarehouse",
+  "stockOnHand",
+  "postOpeningStock",
+  "transferStock",
+  "transfers",
 ] as const satisfies readonly (keyof Business)[];
 
 export type BusinessMethod = (typeof BUSINESS_METHODS)[number];
