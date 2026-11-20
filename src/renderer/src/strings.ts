@@ -20,6 +20,16 @@ const errors = {
   account_type_invalid: "اختر نوع الحساب.",
   account_is_system: "البرنامج يرحّل على هذا الحساب تلقائيًا، لا يمكن حذفه أو إيقافه.",
   account_has_postings: "على هذا الحساب حركات، لا يمكن حذفه. يمكنك إيقافه بدلًا من ذلك.",
+  tax_code_not_found: "اختر نوع الضريبة.",
+  tax_rate_invalid: "النسبة لازم تكون بين 0% و 100%.",
+  tax_rate_missing: "لا توجد نسبة ضريبة سارية في هذا التاريخ.",
+  item_not_found: "الصنف غير موجود.",
+  item_name_required: "اكتب اسم الصنف بالعربي.",
+  item_unit_required: "اكتب اسم الوحدة.",
+  item_code_taken: "هذا الكود مستخدم لصنف آخر.",
+  barcode_taken: "هذا الباركود مستخدم لصنف آخر أو لوحدة أخرى.",
+  price_invalid: "السعر غير صحيح.",
+  pack_size_invalid: "عدد الوحدات في العبوة لازم يكون أكبر من صفر.",
   unexpected: "حدث خطأ غير متوقع.",
 } satisfies Record<BusinessErrorCode | "unexpected", string>;
 
