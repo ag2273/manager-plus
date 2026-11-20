@@ -1,6 +1,23 @@
 import { existsSync, rmSync } from "node:fs";
 import Database from "better-sqlite3";
 import { BusinessError } from "./errors";
+import {
+  type Account,
+  type AccountChanges,
+  type IsoDate,
+  type JournalEntryInput,
+  type JournalLine,
+  type NewAccount,
+  type TrialBalance,
+  addAccount,
+  deleteAccount,
+  listAccounts,
+  postJournalEntry,
+  postOpeningBalances,
+  setAccountActive,
+  trialBalance,
+  updateAccount,
+} from "./ledger";
 import { LATEST_SCHEMA_VERSION, migrate } from "./migrations";
 
 const IN_MEMORY = ":memory:";
@@ -104,6 +121,47 @@ export class Business {
       vatRegistered: row.vat_registered === 1,
       fiscalYearStartMonth: row.fiscal_year_start_month,
     };
+  }
+
+  accounts(): Account[] {
+    return listAccounts(this.db);
+  }
+
+  /** Posts a manual journal entry and returns its id. */
+  postJournalEntry(entry: JournalEntryInput): number {
+    return this.db.transaction(() => postJournalEntry(this.db, entry))();
+  }
+
+  /** Adds an account to the chart and returns its id. */
+  addAccount(account: NewAccount): number {
+    return this.db.transaction(() => addAccount(this.db, account))();
+  }
+
+  /** Renames or renumbers an account. Its postings stay with it. */
+  updateAccount(id: number, changes: AccountChanges): void {
+    this.db.transaction(() => updateAccount(this.db, id, changes))();
+  }
+
+  deactivateAccount(id: number): void {
+    this.db.transaction(() => setAccountActive(this.db, id, false))();
+  }
+
+  reactivateAccount(id: number): void {
+    this.db.transaction(() => setAccountActive(this.db, id, true))();
+  }
+
+  /** Deletes an account that has never been posted to. */
+  deleteAccount(id: number): void {
+    this.db.transaction(() => deleteAccount(this.db, id))();
+  }
+
+  /** Posts opening balances; the difference goes to the opening balances account. */
+  postOpeningBalances(date: IsoDate, lines: JournalLine[]): number {
+    return this.db.transaction(() => postOpeningBalances(this.db, date, lines))();
+  }
+
+  trialBalance(asOf: IsoDate): TrialBalance {
+    return trialBalance(this.db, asOf);
   }
 
   close(): void {

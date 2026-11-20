@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Business, type BusinessSettings } from "../core/business";
 import { BusinessError } from "../core/errors";
-import { CHANNELS, type Result } from "../shared/api";
+import { BUSINESS_METHODS, CHANNELS, THEMES, type BusinessMethod, type Preferences, type Result } from "../shared/api";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
@@ -68,6 +68,33 @@ ipcMain.handle(CHANNELS.openBusiness, async (_event, given?: string) => {
 });
 
 ipcMain.handle(CHANNELS.recentFiles, () => readRecent());
+
+ipcMain.handle(CHANNELS.call, (_event, method: BusinessMethod, args: unknown[]) => {
+  if (!BUSINESS_METHODS.includes(method) || !Array.isArray(args)) {
+    return { ok: false, code: "unexpected", message: `Not a business method: ${String(method)}` };
+  }
+  if (!current) return { ok: false, code: "unexpected", message: "No business is open" };
+  const business = current;
+  return attempt(() => (business[method] as (...a: unknown[]) => unknown).apply(business, args));
+});
+
+function preferencesPath(): string {
+  return join(app.getPath("userData"), "preferences.json");
+}
+
+function readPreferences(): Preferences {
+  try {
+    const saved = JSON.parse(readFileSync(preferencesPath(), "utf8")) as Partial<Preferences>;
+    return { theme: saved.theme && THEMES.includes(saved.theme) ? saved.theme : "calm" };
+  } catch {
+    return { theme: "calm" };
+  }
+}
+
+ipcMain.handle(CHANNELS.preferences, () => readPreferences());
+ipcMain.handle(CHANNELS.setPreferences, (_event, preferences: Preferences) => {
+  if (THEMES.includes(preferences.theme)) writeFileSync(preferencesPath(), JSON.stringify({ theme: preferences.theme }));
+});
 
 function createWindow(): void {
   window = new BrowserWindow({
