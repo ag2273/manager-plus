@@ -199,6 +199,25 @@ export const ar = {
     submit: "تسجيل المرتجع",
     done: (n: number, receipt: number, total: string) => `تم تسجيل مرتجع رقم ${n} من إيصال ${receipt} · المبلغ المردود ${total}`,
   },
+  printer: {
+    title: "طابعة الإيصالات",
+    hint: "طابعة حرارية 80 مم على هذا الجهاز. الإيصال يترسم بالعربي كصورة، فيطبع صح على أي طابعة.",
+    kind: "نوع التوصيل",
+    kinds: { none: "بدون طابعة", windows: "طابعة ويندوز (USB)", network: "طابعة شبكة (IP)" },
+    device: "الطابعة",
+    noneInstalled: "لا توجد طابعات مثبتة على ويندوز",
+    windowsDrawer: "درج النقدية يفتح من إعدادات تعريف الطابعة في ويندوز (فتح الدرج قبل الطباعة).",
+    host: "عنوان IP للطابعة",
+    port: "المنفذ",
+    openDrawer: "افتح درج النقدية مع البيع النقدي",
+    autoPrint: "اطبع الإيصال تلقائيًا بعد كل بيع",
+    footer: "سطر آخر الإيصال",
+    test: "طباعة تجربة",
+    testSent: "اتبعتت ورقة التجربة للطابعة.",
+    saved: "تم حفظ إعدادات الطابعة.",
+    reprint: "إعادة طباعة (نسخة)",
+    print: "طباعة",
+  },
   shift: {
     noShift: "لا توجد وردية مفتوحة لك.",
     open: "فتح وردية",
@@ -435,5 +454,10 @@ export const ar = {
     total: "الإجمالي",
     empty: "لا توجد حركات حتى هذا التاريخ.",
   },
-  errors: errors as Record<string, string>,
+  errors: {
+    ...errors,
+    // Printing happens on this computer, outside the core.
+    printer_not_set: "لم يتم إعداد طابعة الإيصالات. اضبطها من الإعدادات.",
+    printer_failed: "تعذرت الطباعة. تأكد إن الطابعة شغالة ومتوصلة.",
+  } as Record<string, string>,
 };

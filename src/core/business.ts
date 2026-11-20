@@ -53,7 +53,7 @@ import {
   supplierBalance,
   updateSupplier,
 } from "./purchases";
-import { type ReturnInput, type ReturnResult, returnSale } from "./returns";
+import { type ReturnInput, type ReturnResult, type SaleReturn, findReturn, returnSale } from "./returns";
 import {
   type CashInOut,
   type CloseShiftInput,
@@ -570,6 +570,11 @@ export class Business {
   returnSale(input: ReturnInput): ReturnResult {
     const user = this.allow("returnSale");
     return this.write("returnSale", input, () => returnSale(this.db, input, user.id));
+  }
+
+  /** A return by its printed number. */
+  findReturn(number: number): SaleReturn {
+    return this.read("findReturn", () => findReturn(this.db, number));
   }
 
   /** Till receipts, newest first. */

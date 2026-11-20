@@ -283,6 +283,13 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
     if (result.ok) {
       const names = result.value.belowZero.map((id) => lines.find((l) => l.itemId === id)?.name ?? "");
       setLast({ ...result.value, names });
+      const sold = result.value.number;
+      const tookCash = paid.some((p) => p.method === "cash" && p.amount > 0);
+      void window.api.preferences().then(({ printer }) => {
+        if (printer.kind !== "none" && printer.autoPrint) {
+          void window.api.print({ kind: "sale", number: sold, copy: false, openDrawer: tookCash }).then((r) => setError(errorText(r)));
+        }
+      });
       setLines([]);
       resetPayment();
       search.current?.focus();
@@ -436,7 +443,14 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
           )}
           {last && (
             <div role="status" className="ok">
-              {ar.till.done(last.number, formatMoney(last.change))}
+              {ar.till.done(last.number, formatMoney(last.change))}{" "}
+              <button
+                type="button"
+                className="link"
+                onClick={() => void window.api.print({ kind: "sale", number: last.number, copy: true, openDrawer: false }).then((r) => setError(errorText(r)))}
+              >
+                {ar.printer.reprint}
+              </button>
               {last.names.length > 0 && <div className="warn-text">{ar.till.belowZero(last.names.join("، "))}</div>}
             </div>
           )}
@@ -967,6 +981,12 @@ function ReturnPanel({ onDone }: { onDone: () => void }) {
     setError(errorText(result));
     if (result.ok) {
       setDone(ar.returns.done(result.value.number, receipt.number, formatMoney(result.value.total)));
+      const returned = result.value.number;
+      void window.api.preferences().then(({ printer }) => {
+        if (printer.kind !== "none" && printer.autoPrint) {
+          void window.api.print({ kind: "return", number: returned, copy: false }).then((r) => setError(errorText(r)));
+        }
+      });
       setReceipt(null);
       setNumber("");
       numberField.current?.focus();
@@ -1007,9 +1027,18 @@ function ReturnPanel({ onDone }: { onDone: () => void }) {
       </form>
       {receipt && (
         <form className="card" onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onDone()}>
-          <span className="muted">
-            {ar.returns.receiptInfo(receipt.number, receipt.date, receipt.soldBy, formatMoney(receipt.total))}
-          </span>
+          <div className="row">
+            <span className="muted">
+              {ar.returns.receiptInfo(receipt.number, receipt.date, receipt.soldBy, formatMoney(receipt.total))}
+            </span>
+            <button
+              type="button"
+              className="btn btn-small push-end"
+              onClick={() => void window.api.print({ kind: "sale", number: receipt.number, copy: true, openDrawer: false }).then((r) => setError(errorText(r)))}
+            >
+              {ar.printer.reprint}
+            </button>
+          </div>
           <table className="lines">
             <thead>
               <tr>

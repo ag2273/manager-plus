@@ -205,6 +205,7 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   holdSale: ["manager", "cashier"],
   findReceipt: ["manager", "accountant", "cashier"],
   returnSale: ["manager", "cashier"],
+  findReturn: ["manager", "accountant", "cashier"],
   heldSales: ["manager", "cashier"],
   recallSale: ["manager", "cashier"],
   customers: ["manager", "accountant", "cashier"],

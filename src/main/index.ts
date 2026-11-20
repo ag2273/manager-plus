@@ -4,7 +4,19 @@ import { join } from "node:path";
 import { Business, type BusinessSettings } from "../core/business";
 import type { Credentials } from "../core/users";
 import { BusinessError } from "../core/errors";
-import { BUSINESS_METHODS, CHANNELS, THEMES, type BusinessMethod, type Preferences, type Result } from "../shared/api";
+import {
+  BUSINESS_METHODS,
+  CHANNELS,
+  NO_PRINTER,
+  THEMES,
+  type BusinessMethod,
+  type Preferences,
+  type PrinterSettings,
+  type PrintRequest,
+  type Result,
+} from "../shared/api";
+import { documentHtml, returnDocument, saleDocument, testDocument } from "../shared/receipt";
+import { listPrinters, printHtml } from "./printer";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
@@ -99,18 +111,70 @@ function preferencesPath(): string {
   return join(app.getPath("userData"), "preferences.json");
 }
 
+function cleanPrinter(value: unknown): PrinterSettings {
+  if (typeof value !== "object" || value === null) return NO_PRINTER;
+  const p = value as Record<string, unknown>;
+  const text = (v: unknown) => (typeof v === "string" ? v : "");
+  const flag = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  if (p["kind"] === "windows") {
+    return { kind: "windows", deviceName: text(p["deviceName"]), autoPrint: flag(p["autoPrint"], true), footer: text(p["footer"]) };
+  }
+  if (p["kind"] === "network") {
+    const port = Number(p["port"]);
+    return {
+      kind: "network",
+      host: text(p["host"]).trim(),
+      port: Number.isInteger(port) && port > 0 && port < 65536 ? port : 9100,
+      openDrawer: flag(p["openDrawer"], true),
+      autoPrint: flag(p["autoPrint"], true),
+      footer: text(p["footer"]),
+    };
+  }
+  return NO_PRINTER;
+}
+
 function readPreferences(): Preferences {
   try {
     const saved = JSON.parse(readFileSync(preferencesPath(), "utf8")) as Partial<Preferences>;
-    return { theme: saved.theme && THEMES.includes(saved.theme) ? saved.theme : "calm" };
+    return {
+      theme: saved.theme && THEMES.includes(saved.theme) ? saved.theme : "calm",
+      printer: cleanPrinter(saved.printer),
+    };
   } catch {
-    return { theme: "calm" };
+    return { theme: "calm", printer: NO_PRINTER };
   }
 }
 
 ipcMain.handle(CHANNELS.preferences, () => readPreferences());
-ipcMain.handle(CHANNELS.setPreferences, (_event, preferences: Preferences) => {
-  if (THEMES.includes(preferences.theme)) writeFileSync(preferencesPath(), JSON.stringify({ theme: preferences.theme }));
+ipcMain.handle(CHANNELS.setPreferences, (_event, changes: Partial<Preferences>) => {
+  const next = { ...readPreferences() };
+  if (changes.theme && THEMES.includes(changes.theme)) next.theme = changes.theme;
+  if (changes.printer) next.printer = cleanPrinter(changes.printer);
+  writeFileSync(preferencesPath(), JSON.stringify(next));
+});
+
+ipcMain.handle(CHANNELS.printers, () => listPrinters());
+
+ipcMain.handle(CHANNELS.print, async (_event, request: PrintRequest): Promise<Result<null>> => {
+  const printer = readPreferences().printer;
+  const business = current;
+  const document = attempt(() => {
+    if (!business) throw new BusinessError("sign_in_required", "Sign in first");
+    const settings = business.settings();
+    const footer = printer.kind === "none" ? "" : printer.footer;
+    if (request.kind === "sale") return saleDocument(business.findReceipt(request.number), settings, { footer, copy: request.copy });
+    if (request.kind === "return") return returnDocument(business.findReturn(request.number), settings, { footer, copy: request.copy });
+    return testDocument(settings, footer);
+  });
+  if (!document.ok) return document;
+  if (printer.kind === "none") return { ok: false, code: "printer_not_set", message: "No receipt printer is set up" };
+  try {
+    await printHtml(documentHtml(document.value), printer, { openDrawer: request.kind === "sale" && request.openDrawer });
+    return { ok: true, value: null };
+  } catch (error) {
+    console.error(error);
+    return { ok: false, code: "printer_failed", message: String(error) };
+  }
 });
 
 function createWindow(): void {
