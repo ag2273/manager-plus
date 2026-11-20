@@ -31,7 +31,7 @@ export type ZReport = {
   cashIn: Piastres;
   cashOut: Piastres;
   openingFloat: Piastres;
-  /** Float + cash taken for sales + cash in − cash out. */
+  /** Float + cash taken for sales − cash refunds + cash in − cash out. */
   expectedCash: Piastres;
   countedCash: Piastres | null;
   /** Counted − expected: positive is cash over, negative cash short. */
@@ -148,12 +148,20 @@ export function zReport(db: Database.Database, id: number): ZReport {
          FROM cash_movements WHERE shift_id = ?`,
     )
     .get(id) as { cashIn: number; cashOut: number };
-  const expectedCash = shift.openingFloat + byMethod.cash + cash.cashIn - cash.cashOut;
+  const returns = db
+    .prepare(
+      `SELECT COALESCE(SUM(l.amount), 0) AS total,
+              COALESCE(SUM(CASE WHEN r.refund = 'cash' THEN l.amount END), 0) AS cash
+         FROM sales_returns r JOIN sales_return_lines l ON l.return_id = r.id
+        WHERE r.shift_id = ?`,
+    )
+    .get(id) as { total: number; cash: number };
+  const expectedCash = shift.openingFloat + byMethod.cash - returns.cash + cash.cashIn - cash.cashOut;
   return {
     shift,
     receipts: sales.receipts,
     sales: { total: sales.total, net: sales.net, vat: sales.vat, byMethod },
-    returns: 0,
+    returns: returns.total,
     discounts: sales.discounts,
     cashIn: cash.cashIn,
     cashOut: cash.cashOut,
