@@ -12,6 +12,7 @@ const api: DesktopApi = {
   setPreferences: (preferences) => ipcRenderer.invoke(CHANNELS.setPreferences, preferences),
   printers: () => ipcRenderer.invoke(CHANNELS.printers),
   print: (request) => ipcRenderer.invoke(CHANNELS.print, request),
+  printA4: (request) => ipcRenderer.invoke(CHANNELS.printA4, request),
 };
 
 contextBridge.exposeInMainWorld("api", api);

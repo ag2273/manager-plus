@@ -1,5 +1,5 @@
-import { BrowserWindow, webContents } from "electron";
-import { readFileSync } from "node:fs";
+import { BrowserWindow, dialog, webContents } from "electron";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Socket } from "node:net";
 import { type Bitmap, receiptJob } from "../shared/escpos";
@@ -95,6 +95,34 @@ export async function printHtml(html: string, settings: PrinterSettings, options
       );
     });
   });
+}
+
+/**
+ * An A4 page through the system print dialog, or saved as a PDF where the user picks.
+ * Returns the PDF's path, or null when printed or the save was cancelled.
+ */
+export async function printA4(html: string, output: "pdf" | "print", suggestedName: string, parent: BrowserWindow | null): Promise<string | null> {
+  cachedFont ??= fontCss();
+  const page = new BrowserWindow({ show: false, width: 794, height: 1123, webPreferences: { sandbox: true, javascript: false } });
+  try {
+    await page.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html.replace("<style>", `<style>\n${cachedFont}`))}`);
+    if (output === "print") {
+      await new Promise<void>((resolve, reject) => {
+        page.webContents.print({ silent: false, printBackground: true }, (ok, reason) =>
+          ok || reason === "Print job canceled" || reason === "cancelled" ? resolve() : reject(new Error(reason)),
+        );
+      });
+      return null;
+    }
+    const pdf = await page.webContents.printToPDF({ pageSize: "A4", printBackground: true, preferCSSPageSize: true });
+    const options = { defaultPath: `${suggestedName}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] };
+    const choice = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options);
+    if (choice.canceled || !choice.filePath) return null;
+    writeFileSync(choice.filePath, pdf);
+    return choice.filePath;
+  } finally {
+    page.destroy();
+  }
 }
 
 /** Printers installed in Windows, for the setup screen. */

@@ -77,6 +77,19 @@ export const BUSINESS_METHODS = [
   "pricePurchase",
   "postPurchaseInvoice",
   "purchaseInvoices",
+  "postDebitNote",
+  "debitNotes",
+  "priceInvoice",
+  "postSalesInvoice",
+  "salesInvoices",
+  "findSalesInvoice",
+  "postCreditNote",
+  "findCreditNote",
+  "receiveCustomerPayment",
+  "paySupplier",
+  "openDocuments",
+  "statement",
+  "aging",
 ] as const satisfies readonly (keyof Business)[];
 
 export type BusinessMethod = (typeof BUSINESS_METHODS)[number];
@@ -99,6 +112,13 @@ export const NO_PRINTER: PrinterSettings = { kind: "none" };
 
 /** Preferences of this computer, kept outside the business file. */
 export type Preferences = { theme: ThemeId; printer: PrinterSettings };
+
+/** An A4 page to print or save as PDF. */
+export type A4Request = (
+  | { kind: "invoice"; number: number }
+  | { kind: "creditNote"; number: number }
+  | { kind: "statement"; party: "customer" | "supplier"; id: number; from: string; to: string }
+) & { output: "pdf" | "print" };
 
 /** What to print: a sale or return by its number, or a sample. */
 export type PrintRequest =
@@ -129,6 +149,8 @@ export interface DesktopApi {
   printers(): Promise<string[]>;
   /** Prints on this computer's receipt printer. */
   print(request: PrintRequest): Promise<Result<null>>;
+  /** Prints an A4 document through the system print dialog, or saves it as a PDF; `saved` is the PDF's path. */
+  printA4(request: A4Request): Promise<Result<{ saved: string | null }>>;
 }
 
 export const CHANNELS = {
@@ -142,4 +164,5 @@ export const CHANNELS = {
   setPreferences: "preferences:set",
   printers: "printer:list",
   print: "printer:print",
+  printA4: "printer:a4",
 } as const;
