@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 import type { BusinessSettings, ThemeId } from "../../shared/api";
 import { Accounts } from "./screens/Accounts";
 import { Home } from "./screens/Home";
+import { Items } from "./screens/Items";
 import { Settings } from "./screens/Settings";
 import { Welcome } from "./screens/Welcome";
 import { ar } from "./strings";
 
-type Screen = "home" | "accounts" | "settings";
+type Screen = "home" | "items" | "accounts" | "settings";
 
 /** Screens of the main menu. Those without a screen yet are shown but disabled. */
 const NAV: { label: string; screen?: Screen }[] = [
   { label: ar.nav.home, screen: "home" },
   { label: ar.nav.till },
-  { label: ar.nav.items },
+  { label: ar.nav.items, screen: "items" },
   { label: ar.nav.purchases },
   { label: ar.nav.customers },
   { label: ar.nav.money },
@@ -69,6 +70,7 @@ export function App() {
       </nav>
       <main className="content">
         {screen === "home" && <Home settings={open} onGo={setScreen} />}
+        {screen === "items" && <Items />}
         {screen === "accounts" && <Accounts />}
         {screen === "settings" && <Settings theme={theme} onTheme={chooseTheme} />}
       </main>

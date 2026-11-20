@@ -18,6 +18,22 @@ import {
   trialBalance,
   updateAccount,
 } from "./ledger";
+import {
+  type BasisPoints,
+  type Item,
+  type ItemChanges,
+  type ItemInput,
+  type ScannedUnit,
+  type TaxCode,
+  addItem,
+  addTaxRate,
+  findByBarcode,
+  listItems,
+  listTaxCodes,
+  setItemActive,
+  updateItem,
+  vatRate,
+} from "./items";
 import { LATEST_SCHEMA_VERSION, migrate } from "./migrations";
 
 const IN_MEMORY = ":memory:";
@@ -162,6 +178,47 @@ export class Business {
 
   trialBalance(asOf: IsoDate): TrialBalance {
     return trialBalance(this.db, asOf);
+  }
+
+  taxCodes(): TaxCode[] {
+    return listTaxCodes(this.db);
+  }
+
+  /** Adds a rate that applies from `from` onwards, for example when the law changes. */
+  addTaxRate(taxCodeId: number, rate: { from: IsoDate; rate: BasisPoints }): void {
+    this.db.transaction(() => addTaxRate(this.db, taxCodeId, rate))();
+  }
+
+  /** The VAT rate (basis points) in force on a document date; zero when the business is not VAT-registered. */
+  vatRate(taxCodeId: number, date: IsoDate): BasisPoints {
+    return vatRate(this.db, taxCodeId, date, this.settings().vatRegistered);
+  }
+
+  /** Active items by Arabic name; `search` matches Arabic or English name, code or barcode. */
+  items(options: { search?: string; includeInactive?: boolean } = {}): Item[] {
+    return listItems(this.db, options);
+  }
+
+  addItem(item: ItemInput): number {
+    return this.db.transaction(() => addItem(this.db, item))();
+  }
+
+  /** Changes an item; pass `pack: null` to remove its pack unit. */
+  updateItem(id: number, changes: ItemChanges): void {
+    this.db.transaction(() => updateItem(this.db, id, changes))();
+  }
+
+  /** Hides an item from lists and the till; its history stays. */
+  deactivateItem(id: number): void {
+    this.db.transaction(() => setItemActive(this.db, id, false))();
+  }
+
+  reactivateItem(id: number): void {
+    this.db.transaction(() => setItemActive(this.db, id, true))();
+  }
+
+  findByBarcode(barcode: string): ScannedUnit | null {
+    return findByBarcode(this.db, barcode);
   }
 
   close(): void {

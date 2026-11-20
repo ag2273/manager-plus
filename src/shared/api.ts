@@ -17,6 +17,15 @@ export const BUSINESS_METHODS = [
   "postJournalEntry",
   "postOpeningBalances",
   "trialBalance",
+  "taxCodes",
+  "addTaxRate",
+  "vatRate",
+  "items",
+  "addItem",
+  "updateItem",
+  "deactivateItem",
+  "reactivateItem",
+  "findByBarcode",
 ] as const satisfies readonly (keyof Business)[];
 
 export type BusinessMethod = (typeof BUSINESS_METHODS)[number];

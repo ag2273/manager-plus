@@ -21,7 +21,17 @@ export type BusinessErrorCode =
   | "account_code_taken"
   | "account_type_invalid"
   | "account_is_system"
-  | "account_has_postings";
+  | "account_has_postings"
+  | "tax_code_not_found"
+  | "tax_rate_invalid"
+  | "tax_rate_missing"
+  | "item_not_found"
+  | "item_name_required"
+  | "item_unit_required"
+  | "item_code_taken"
+  | "barcode_taken"
+  | "price_invalid"
+  | "pack_size_invalid";
 
 export class BusinessError extends Error {
   constructor(

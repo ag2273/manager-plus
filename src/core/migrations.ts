@@ -57,6 +57,58 @@ export const migrations: readonly Migration[] = [
       for (const a of RETAIL_CHART_OF_ACCOUNTS) insert.run(a.code, a.name, a.type, a.role ?? null);
     },
   },
+  {
+    version: 3,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE tax_codes (
+          id INTEGER PRIMARY KEY,
+          kind TEXT NOT NULL UNIQUE CHECK (kind IN ('standard', 'zero_rated', 'exempt')),
+          name TEXT NOT NULL
+        ) STRICT;
+
+        -- Rates in basis points (1400 = 14%), each in force from its date until the next one.
+        CREATE TABLE tax_rates (
+          tax_code_id INTEGER NOT NULL REFERENCES tax_codes (id),
+          effective_from TEXT NOT NULL,
+          rate INTEGER NOT NULL CHECK (rate BETWEEN 0 AND 10000),
+          PRIMARY KEY (tax_code_id, effective_from)
+        ) STRICT;
+
+        CREATE TABLE items (
+          id INTEGER PRIMARY KEY,
+          name_ar TEXT NOT NULL,
+          name_en TEXT NOT NULL DEFAULT '',
+          code TEXT UNIQUE,
+          tax_code_id INTEGER NOT NULL REFERENCES tax_codes (id),
+          egs_code TEXT NOT NULL DEFAULT '',
+          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
+        ) STRICT;
+
+        -- Every item has one base unit (size 1000 = one base unit) and at most one pack unit.
+        CREATE TABLE item_units (
+          id INTEGER PRIMARY KEY,
+          item_id INTEGER NOT NULL REFERENCES items (id),
+          kind TEXT NOT NULL CHECK (kind IN ('base', 'pack')),
+          name TEXT NOT NULL,
+          size INTEGER NOT NULL CHECK (size > 0),
+          barcode TEXT UNIQUE,
+          sale_price INTEGER NOT NULL CHECK (sale_price >= 0),
+          UNIQUE (item_id, kind),
+          CHECK (kind = 'pack' OR size = 1000)
+        ) STRICT;
+      `);
+      const code = db.prepare("INSERT INTO tax_codes (kind, name) VALUES (?, ?)");
+      const rate = db.prepare("INSERT INTO tax_rates (tax_code_id, effective_from, rate) VALUES (?, ?, ?)");
+      const standard = Number(code.run("standard", "ضريبة قيمة مضافة 14%").lastInsertRowid);
+      // VAT Law 67/2016: 13% from 8 September 2016, 14% from 1 July 2017.
+      rate.run(standard, "2016-09-08", 1300);
+      rate.run(standard, "2017-07-01", 1400);
+      for (const [kind, name] of [["zero_rated", "خاضع بنسبة صفر"], ["exempt", "معفى"]] as const) {
+        rate.run(Number(code.run(kind, name).lastInsertRowid), "2016-09-08", 0);
+      }
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

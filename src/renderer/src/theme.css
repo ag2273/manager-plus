@@ -132,3 +132,14 @@ th.col-money { text-align: left; }
 .sw-accent { background: var(--accent); }
 .sw-soft { background: var(--soft); }
 .sw-bg { background: var(--bg); }
+
+/* Items */
+.stack { display: flex; flex-direction: column; gap: 2px; }
+.strong { font-weight: 500; }
+.small { font-size: 13px; }
+.col-barcode { width: 160px; }
+.col-unit { width: 180px; }
+.pill-tall { height: 44px; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--surface-2); }
+.push-end { margin-inline-start: auto; }
