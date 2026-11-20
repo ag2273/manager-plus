@@ -105,7 +105,7 @@ export function supplierBalance(db: Database.Database, id: number): Piastres {
   return row.owed;
 }
 
-function vatRegistered(db: Database.Database): boolean {
+export function vatRegistered(db: Database.Database): boolean {
   return (db.prepare("SELECT vat_registered FROM business_settings WHERE id = 1").get() as { vat_registered: number })
     .vat_registered === 1;
 }

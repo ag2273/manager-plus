@@ -54,6 +54,16 @@ import {
   updateSupplier,
 } from "./purchases";
 import {
+  type CashSaleInput,
+  type CashSaleResult,
+  type PricedSale,
+  type Receipt,
+  type SaleLineInput,
+  listReceipts,
+  postCashSale,
+  priceSale,
+} from "./sales";
+import {
   type OpeningStockLine,
   type StockOnHand,
   type Transfer,
@@ -62,6 +72,7 @@ import {
   addWarehouse,
   averageCost,
   listTransfers,
+  stockValue,
   listWarehouses,
   postOpeningStock,
   renameWarehouse,
@@ -236,7 +247,7 @@ export class Business {
       writeAudit(this.db, {
         userId: user.id,
         action: method,
-        entityId: entityId ?? (typeof result === "number" ? result : null),
+        entityId: entityId ?? idOf(result),
         detail: JSON.stringify(detail ?? null),
       });
       return result;
@@ -417,6 +428,29 @@ export class Business {
     return this.read("averageCost", () => averageCost(this.db, itemId));
   }
 
+  /** Value at cost of all stock held of an item, in piastres. */
+  stockValue(itemId: number): Piastres {
+    return this.read("stockValue", () => stockValue(this.db, itemId));
+  }
+
+  // The till
+
+  /** Prices till lines at shelf prices (VAT-inclusive), without selling anything. */
+  priceSale(date: IsoDate, lines: SaleLineInput[]): PricedSale {
+    return this.read("priceSale", () => priceSale(this.db, date, lines));
+  }
+
+  /** Sells for cash at the till; returns the receipt number and the change to give. */
+  postCashSale(sale: CashSaleInput): CashSaleResult {
+    const user = this.allow("postCashSale");
+    return this.write("postCashSale", sale, () => postCashSale(this.db, sale, user.id));
+  }
+
+  /** Till receipts, newest first. */
+  receipts(): Receipt[] {
+    return this.read("receipts", () => listReceipts(this.db));
+  }
+
   // Suppliers and purchases
 
   suppliers(): Supplier[] {
@@ -478,6 +512,13 @@ export class Business {
   close(): void {
     this.db.close();
   }
+}
+
+/** The id a command returned, either as a number or as `{ id }`. */
+function idOf(result: unknown): number | null {
+  if (typeof result === "number") return result;
+  if (typeof result === "object" && result !== null && "id" in result && typeof result.id === "number") return result.id;
+  return null;
 }
 
 const ARABIC_INDIC_ZERO = 0x0660;

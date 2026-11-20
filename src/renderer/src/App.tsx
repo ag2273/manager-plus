@@ -9,11 +9,12 @@ import { Settings } from "./screens/Settings";
 import { SignIn } from "./screens/SignIn";
 import { Users } from "./screens/Users";
 import { Purchases } from "./screens/Purchases";
+import { Till } from "./screens/Till";
 import { Warehouses } from "./screens/Warehouses";
 import { Welcome } from "./screens/Welcome";
 import { ar } from "./strings";
 
-type Screen = "home" | "items" | "warehouses" | "purchases" | "accounts" | "users" | "audit" | "settings";
+type Screen = "home" | "till" | "items" | "warehouses" | "purchases" | "accounts" | "users" | "audit" | "settings";
 
 const ALL: Role[] = ["manager", "accountant", "cashier", "storekeeper"];
 
@@ -24,7 +25,7 @@ const ALL: Role[] = ["manager", "accountant", "cashier", "storekeeper"];
  */
 const NAV: { label: string; screen?: Screen; roles: Role[] }[] = [
   { label: ar.nav.home, screen: "home", roles: ALL },
-  { label: ar.nav.till, roles: ALL },
+  { label: ar.nav.till, screen: "till", roles: ["manager", "cashier"] },
   { label: ar.nav.items, screen: "items", roles: ALL },
   { label: ar.nav.warehouses, screen: "warehouses", roles: ["manager", "accountant", "storekeeper"] },
   { label: ar.nav.purchases, screen: "purchases", roles: ["manager", "accountant", "storekeeper"] },
@@ -132,6 +133,7 @@ export function App() {
           />
         )}
         {screen === "items" && <Items />}
+        {screen === "till" && <Till />}
         {screen === "purchases" && <Purchases canSeeBalances={user.role === "manager" || user.role === "accountant"} />}
         {screen === "warehouses" && <Warehouses canChange={user.role === "manager" || user.role === "storekeeper"} />}
         {screen === "accounts" && <Accounts />}

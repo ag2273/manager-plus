@@ -91,6 +91,34 @@ export function averageCost(db: Database.Database, itemId: number): Piastres {
   return row.q <= 0 ? 0 : Math.round((row.v * ONE_BASE_UNIT) / row.q);
 }
 
+/** Value of all stock held of an item, in piastres: what the Stock account holds for it. */
+export function stockValue(db: Database.Database, itemId: number): Piastres {
+  return (db.prepare("SELECT COALESCE(SUM(value), 0) AS v FROM stock_movements WHERE item_id = ?").get(itemId) as { v: number }).v;
+}
+
+/**
+ * The cost of taking a base quantity out of stock at the weighted average. Taking
+ * everything held takes exactly its value, so no rounding is left behind. With
+ * nothing held, the unit cost of the last receipt is used. `alreadyTaken` is stock taken
+ * earlier in the same document but not yet recorded.
+ */
+export function costOfIssue(
+  db: Database.Database,
+  itemId: number,
+  quantity: Quantity,
+  alreadyTaken: { quantity: Quantity; value: Piastres } = { quantity: 0, value: 0 },
+): Piastres {
+  const row = db
+    .prepare("SELECT COALESCE(SUM(quantity), 0) AS q, COALESCE(SUM(value), 0) AS v FROM stock_movements WHERE item_id = ?")
+    .get(itemId) as { q: number; v: number };
+  const held = { q: row.q - alreadyTaken.quantity, v: row.v - alreadyTaken.value };
+  if (held.q > 0) return quantity === held.q ? held.v : Math.round((quantity * held.v) / held.q);
+  const last = db
+    .prepare("SELECT quantity, value FROM stock_movements WHERE item_id = ? AND quantity > 0 AND value > 0 ORDER BY id DESC LIMIT 1")
+    .get(itemId) as { quantity: number; value: number } | undefined;
+  return last ? Math.round((quantity * last.value) / last.quantity) : 0;
+}
+
 export function assertQuantity(quantity: number): void {
   if (!Number.isSafeInteger(quantity) || quantity <= 0) {
     throw new BusinessError("quantity_invalid", `Quantity ${quantity} is not a positive whole number of thousandths`);
