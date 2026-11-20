@@ -89,8 +89,22 @@ export type RemoteBusiness = {
 export type ThemeId = "calm" | "sage" | "sand" | "night";
 export const THEMES: readonly ThemeId[] = ["calm", "sage", "sand", "night"];
 
+/** How this computer prints receipts. */
+export type PrinterSettings =
+  | { kind: "none" }
+  | { kind: "windows"; deviceName: string; autoPrint: boolean; footer: string }
+  | { kind: "network"; host: string; port: number; openDrawer: boolean; autoPrint: boolean; footer: string };
+
+export const NO_PRINTER: PrinterSettings = { kind: "none" };
+
 /** Preferences of this computer, kept outside the business file. */
-export type Preferences = { theme: ThemeId };
+export type Preferences = { theme: ThemeId; printer: PrinterSettings };
+
+/** What to print: a sale or return by its number, or a sample. */
+export type PrintRequest =
+  | { kind: "sale"; number: number; copy: boolean; openDrawer: boolean }
+  | { kind: "return"; number: number; copy: boolean }
+  | { kind: "test" };
 
 /**
  * The typed channel between the screens (renderer) and the core (main process).
@@ -109,7 +123,12 @@ export interface DesktopApi {
   /** Calls a `Business` method on the open business. */
   call(method: BusinessMethod, args: unknown[]): Promise<Result<unknown>>;
   preferences(): Promise<Preferences>;
-  setPreferences(preferences: Preferences): Promise<void>;
+  /** Saves the given preferences, keeping the others. */
+  setPreferences(preferences: Partial<Preferences>): Promise<void>;
+  /** Printers installed in Windows. */
+  printers(): Promise<string[]>;
+  /** Prints on this computer's receipt printer. */
+  print(request: PrintRequest): Promise<Result<null>>;
 }
 
 export const CHANNELS = {
@@ -121,4 +140,6 @@ export const CHANNELS = {
   call: "business:call",
   preferences: "preferences:get",
   setPreferences: "preferences:set",
+  printers: "printer:list",
+  print: "printer:print",
 } as const;

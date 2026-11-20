@@ -133,3 +133,38 @@ export function returnSale(db: Database.Database, input: ReturnInput, userId: nu
   }
   return { id, number, total };
 }
+
+export type SaleReturn = {
+  id: number;
+  number: number;
+  date: IsoDate;
+  at: string;
+  receiptNumber: number;
+  refund: "cash" | "account";
+  returnedBy: string;
+  total: Piastres;
+  vat: Piastres;
+  lines: { itemId: number; nameAr: string; unit: "base" | "pack"; quantity: Quantity; amount: Piastres; vat: Piastres }[];
+};
+
+/** One return by its printed number. */
+export function findReturn(db: Database.Database, number: number): SaleReturn {
+  const row = db
+    .prepare(
+      `SELECT x.id, x.number, x.date, x.at, r.number AS receiptNumber, x.refund, u.name AS returnedBy
+         FROM sales_returns x JOIN sales_receipts r ON r.id = x.receipt_id JOIN users u ON u.id = x.user_id
+        WHERE x.number = ?`,
+    )
+    .get(number) as Omit<SaleReturn, "lines" | "total" | "vat"> | undefined;
+  if (!row) throw new BusinessError("receipt_not_found", `No return number ${number}`);
+  const lines = db
+    .prepare(
+      `SELECT l.item_id AS itemId, i.name_ar AS nameAr, l.unit, x.quantity, x.amount, x.vat
+         FROM sales_return_lines x
+         JOIN sales_receipt_lines l ON l.id = x.receipt_line_id
+         JOIN items i ON i.id = l.item_id
+        WHERE x.return_id = ? ORDER BY x.id`,
+    )
+    .all(row.id) as SaleReturn["lines"];
+  return { ...row, lines, total: lines.reduce((t, l) => t + l.amount, 0), vat: lines.reduce((t, l) => t + l.vat, 0) };
+}

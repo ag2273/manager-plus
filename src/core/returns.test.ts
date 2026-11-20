@@ -71,6 +71,9 @@ describe("returns", () => {
 
     const soapLine = receipt.lines[1]!;
     expect(done).toEqual(expect.objectContaining({ number: 1, total: soapLine.amount }));
+    expect(business.findReturn(1)).toEqual(
+      expect.objectContaining({ receiptNumber: 1, refund: "cash", total: soapLine.amount, returnedBy: "أيمن", lines: [expect.objectContaining({ itemId: soap, quantity: 1_000 })] }),
+    );
     expect(balanceOf(business, "sales") - before.sales).toBe(soapLine.net);
     expect(balanceOf(business, "output_vat") - before.vat).toBe(soapLine.vat);
     expect(balanceOf(business, "cost_of_goods_sold") - before.cogs).toBe(-4_000);

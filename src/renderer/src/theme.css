@@ -175,3 +175,6 @@ tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--surface
 .till-discount { align-items: center; gap: 10px; }
 .till-discount input { width: 120px; height: 34px; }
 .screen-head > div.actions { flex-direction: row; flex-wrap: wrap; }
+.printer-card { max-width: 720px; }
+.printer-card .field { flex: none; }
+.printer-card textarea { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
