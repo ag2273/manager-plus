@@ -3,11 +3,12 @@ import type { Account } from "../../../core/ledger";
 import type { Aging, OpenDocument, PartyKind, Statement } from "../../../core/settlements";
 import type { A4Request, Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
+import { parseRate } from "../../../shared/rate";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 
 /** A customer or supplier as the payment, statement and aging views need them. */
-export type Party = { id: number; name: string; active: boolean };
+export type Party = { id: number; name: string; active: boolean; currency?: string };
 
 const MONEY_ROLES = ["cash_drawer", "main_cash", "bank", "wallet"];
 const startOfYear = () => `${today().slice(0, 4)}-01-01`;
@@ -36,6 +37,9 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState("");
   const [reference, setReference] = useState("");
+  const [rateText, setRateText] = useState("");
+  const currency = parties.find((p) => p.id === partyId)?.currency ?? "EGP";
+  const foreign = currency !== "EGP";
   const [documents, setDocuments] = useState<OpenDocument[]>([]);
   const [split, setSplit] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +87,20 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
       }
       if (part > 0) allocations.push({ entryId: d.entryId, amount: part });
     }
-    const input = { date, partyId, accountId: accountId === "" ? 0 : accountId, amount: value, reference, allocations };
+    const rate = foreign ? parseRate(rateText) : null;
+    if (foreign && rate === null) {
+      setError(ar.errors["rate_invalid"]!);
+      return;
+    }
+    const input = {
+      date,
+      partyId,
+      accountId: accountId === "" ? 0 : accountId,
+      amount: value,
+      reference,
+      allocations,
+      ...(foreign && rate !== null ? { rate } : {}),
+    };
     const result: Result<{ number: number }> =
       kind === "customer" ? await business.receiveCustomerPayment(input) : await business.paySupplier(input);
     setError(errorText(result));
@@ -134,9 +151,15 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
           </select>
         </label>
         <label className="field narrow">
-          {ar.parties.amount}
+          {foreign ? `${ar.parties.amount} (${currency})` : ar.parties.amount}
           <input dir="ltr" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </label>
+        {foreign && (
+          <label className="field narrow">
+            {ar.purchases.rate(currency)}
+            <input dir="ltr" inputMode="decimal" placeholder="49.20" value={rateText} onChange={(e) => setRateText(e.target.value)} />
+          </label>
+        )}
         <label className="field narrow">
           {ar.parties.reference}
           <input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} />
@@ -248,7 +271,10 @@ export function StatementView({ kind, parties }: { kind: PartyKind; parties: Par
       {statement && (
         <section className="table-card" aria-label={statement.name}>
           <div className="row table-head">
-            <strong>{statement.name}</strong>
+            <strong>
+              {statement.name}
+              {statement.currency !== "EGP" && ` (${statement.currency})`}
+            </strong>
             <div className="actions">
               <button type="button" className="btn btn-small" onClick={() => void a4.send({ kind: "statement", party: kind, id: statement.partyId, from, to, output: "print" })}>
                 {ar.parties.print}

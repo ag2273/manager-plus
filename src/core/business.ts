@@ -51,6 +51,9 @@ import {
   pricePurchase,
   setSupplierActive,
   supplierBalance,
+  supplierAccount,
+  type SupplierAccount,
+  type PurchaseMoney,
   updateSupplier,
 } from "./purchases";
 import {
@@ -639,12 +642,20 @@ export class Business {
     return this.read("supplierBalance", () => supplierBalance(this.db, id));
   }
 
+  /** What the business owes a supplier in their own currency, and in EGP as the books carry it. */
+  supplierAccount(id: number): SupplierAccount {
+    return this.read("supplierAccount", () => supplierAccount(this.db, id));
+  }
+
   /** Net, VAT and total of purchase lines on a date, without posting anything. */
-  pricePurchase(date: IsoDate, lines: PurchaseLineInput[]): PricedPurchase {
+  pricePurchase(date: IsoDate, lines: PurchaseLineInput[], money?: PurchaseMoney): PricedPurchase {
     return this.read("pricePurchase", () => {
-      const priced = pricePurchase(this.db, date, lines);
+      const priced = pricePurchase(this.db, date, lines, money);
       return {
-        ...priced,
+        net: priced.net,
+        vat: priced.vat,
+        total: priced.total,
+        totalEgp: priced.totalEgp,
         lines: priced.lines.map((l) => ({
           itemId: l.itemId,
           unit: l.unit,

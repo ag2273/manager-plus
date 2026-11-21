@@ -167,6 +167,7 @@ describe("purchase invoices", () => {
       net: 2_164_000,
       vat: 302_400,
       total: 2_466_400,
+      totalEgp: 2_466_400,
     });
     expect(business.stockOnHand(router).total).toBe(0);
   });

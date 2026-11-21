@@ -154,14 +154,14 @@ describe("customer and supplier details", () => {
     expect(() => s.business.updateCustomer(s.customer, { creditLimit: -1 })).toThrow(expect.objectContaining({ code: "credit_limit_invalid" }));
   });
 
-  test("a supplier's currency is fixed once they have postings, and foreign currency is not posted yet", () => {
+  test("a supplier's currency is fixed once they have postings, and a foreign invoice needs a rate", () => {
     const s = setup();
     const importer = s.business.addSupplier({ name: "Shenzhen Tech", phone: "", taxRegistrationNumber: "", currency: "USD" });
 
     expect(s.business.suppliers().find((x) => x.id === importer)!.currency).toBe("USD");
     expect(() =>
       s.business.postPurchaseInvoice({ date: "2026-01-05", supplierId: importer, warehouseId: s.main, reference: "", lines: [{ itemId: s.router, unit: "base", quantity: 1_000, unitPrice: 100 }] }),
-    ).toThrow(expect.objectContaining({ code: "currency_not_supported" }));
+    ).toThrow(expect.objectContaining({ code: "rate_invalid" }));
     expect(() => s.business.updateSupplier(s.supplier, { currency: "EUR" })).toThrow(expect.objectContaining({ code: "supplier_currency_locked" }));
     expect(s.business.suppliers().find((x) => x.id === s.supplier)!.currency).toBe("EGP");
   });

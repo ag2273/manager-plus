@@ -26,6 +26,8 @@ export type JournalLine = {
   supplierId?: number;
   /** The customer a receivables line belongs to. */
   customerId?: number;
+  /** On a payables line of a supplier billing in another currency: the same amount in that currency. */
+  foreign?: number;
 };
 export type JournalEntryInput = { date: IsoDate; memo: string; lines: JournalLine[] };
 
@@ -114,11 +116,11 @@ export function postJournalEntry(db: Database.Database, input: JournalEntryInput
     .run(input.date, input.memo.trim(), kind);
   const entryId = Number(entry.lastInsertRowid);
   const insert = db.prepare(
-    `INSERT INTO ledger_lines (entry_id, account_id, debit, credit, memo, supplier_id, customer_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ledger_lines (entry_id, account_id, debit, credit, memo, supplier_id, customer_id, foreign_amount)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const line of input.lines) {
-    insert.run(entryId, line.accountId, line.debit ?? 0, line.credit ?? 0, line.memo ?? "", line.supplierId ?? null, line.customerId ?? null);
+    insert.run(entryId, line.accountId, line.debit ?? 0, line.credit ?? 0, line.memo ?? "", line.supplierId ?? null, line.customerId ?? null, line.foreign ?? null);
   }
   return entryId;
 }

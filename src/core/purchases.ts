@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { type Currency, CURRENCIES as CURRENCY_TABLE, ONE, type Rate, assertRate, toEgp } from "./currency";
 import { assertIsoDate } from "./dates";
 import { BusinessError } from "./errors";
 import { type BasisPoints, type Quantity, vatRate } from "./items";
@@ -6,9 +7,9 @@ import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from 
 import { receiveSerials, serialsFor } from "./serials";
 import { type SerialLine, type UnitLine, accountByRole, activeWarehouse, assertQuantity, insertMovement, toBaseQuantity } from "./stock";
 
-/** The currencies a supplier can bill in. Only EGP can be posted until exchange rates arrive (#30). */
-export type Currency = "EGP" | "USD" | "EUR" | "CNY";
-export const CURRENCIES: readonly Currency[] = ["EGP", "USD", "EUR", "CNY"];
+export type { Currency, Rate } from "./currency";
+/** The currencies a supplier can bill in, by ISO code. */
+export const CURRENCIES: readonly Currency[] = CURRENCY_TABLE.map((c) => c.code);
 export type Supplier = { id: number; name: string; phone: string; taxRegistrationNumber: string; currency: Currency; active: boolean };
 export type SupplierInput = { name: string; phone: string; taxRegistrationNumber: string; currency?: Currency };
 export type SupplierChanges = Partial<SupplierInput>;
@@ -21,6 +22,9 @@ export type PurchaseInvoiceInput = {
   warehouseId: number;
   /** The supplier's own invoice number. */
   reference: string;
+  /** EGP per unit of the supplier's currency, in millionths; required when they bill in another currency. */
+  rate?: Rate;
+  /** In the supplier's currency: prices and amounts in its minor units. */
   lines: PurchaseLineInput[];
 };
 export type PurchaseLine = PurchaseLineInput & { net: Piastres; vatRate: BasisPoints; vat: Piastres };
@@ -32,9 +36,14 @@ export type PurchaseInvoice = {
   supplierId: number;
   warehouseId: number;
   reference: string;
+  currency: Currency;
+  rate: Rate;
+  /** In the invoice's currency. */
   net: Piastres;
   vat: Piastres;
   total: Piastres;
+  /** What the invoice put on the supplier's account in EGP. */
+  totalEgp: Piastres;
   postedBy: string;
   lines: PostedPurchaseLine[];
 };
@@ -119,12 +128,34 @@ export function supplierBalance(db: Database.Database, id: number): Piastres {
   return row.owed;
 }
 
-/** A supplier that can take a new invoice, payment or note: active, and billing in EGP. */
+/** What the business owes the supplier in their own currency, and what that stands at in EGP in the books. */
+export type SupplierAccount = { currency: Currency; owed: number; owedEgp: Piastres };
+
+export function supplierAccount(db: Database.Database, id: number): SupplierAccount {
+  const supplier = findSupplier(db, id);
+  const row = db
+    .prepare(
+      `SELECT COALESCE(SUM(CASE WHEN credit > 0 THEN COALESCE(foreign_amount, credit) ELSE -COALESCE(foreign_amount, debit) END), 0) AS owed,
+              COALESCE(SUM(credit) - SUM(debit), 0) AS owedEgp
+         FROM ledger_lines WHERE supplier_id = ?`,
+    )
+    .get(id) as { owed: number; owedEgp: number };
+  return { currency: supplier.currency, owed: row.owed + 0, owedEgp: row.owedEgp + 0 };
+}
+
+/** A supplier that can take a new invoice, payment or note. */
 export function assertPostable(supplier: Supplier): void {
   if (!supplier.active) throw new BusinessError("supplier_inactive", `Supplier ${supplier.name} is stopped`);
-  if (supplier.currency !== "EGP") {
-    throw new BusinessError("currency_not_supported", `Supplier ${supplier.name} bills in ${supplier.currency}; foreign currency is not posted yet`);
+}
+
+/** The rate a supplier's document posts at: the one typed for a foreign currency, none for EGP. */
+export function documentRate(supplier: Supplier, rate: Rate | undefined): Rate {
+  if (supplier.currency !== "EGP" && rate === undefined) {
+    throw new BusinessError("rate_invalid", `Supplier ${supplier.name} bills in ${supplier.currency}; the document needs an exchange rate`);
   }
+  const posted = rate ?? ONE;
+  assertRate(supplier.currency, posted);
+  return posted;
 }
 
 export function vatRegistered(db: Database.Database): boolean {
@@ -132,14 +163,24 @@ export function vatRegistered(db: Database.Database): boolean {
     .vat_registered === 1;
 }
 
-export type PricedPurchase = { lines: PurchaseLine[]; net: Piastres; vat: Piastres; total: Piastres };
+/** Amounts in the invoice's currency, and the total in EGP at the invoice's rate. */
+export type PricedPurchase = { lines: PurchaseLine[]; net: Piastres; vat: Piastres; total: Piastres; totalEgp: Piastres };
+/** The currency an invoice is in and its rate; EGP at one when left out. */
+export type PurchaseMoney = { currency: Currency; rate: Rate };
 
-/** Prices invoice lines without posting: net per line, and VAT rounded half-up on each line. */
-export function pricePurchase(db: Database.Database, date: IsoDate, lines: PurchaseLineInput[]): PricedPurchase & {
-  lines: (PurchaseLine & { baseQuantity: Quantity })[];
-} {
+/**
+ * Prices invoice lines without posting: net per line, and VAT rounded half-up on each line.
+ * A foreign supplier charges no Egyptian VAT: VAT on imports is paid at customs (#31).
+ */
+export function pricePurchase(
+  db: Database.Database,
+  date: IsoDate,
+  lines: PurchaseLineInput[],
+  money: PurchaseMoney = { currency: "EGP", rate: ONE },
+): PricedPurchase & { lines: (PurchaseLine & { baseQuantity: Quantity; netEgp: Piastres; vatEgp: Piastres })[]; netEgp: Piastres; vatEgp: Piastres } {
   assertIsoDate(date);
-  const registered = vatRegistered(db);
+  assertRate(money.currency, money.rate);
+  const registered = vatRegistered(db) && money.currency === "EGP";
   const taxCodeOf = db.prepare("SELECT tax_code_id AS id FROM items WHERE id = ?");
   const priced = lines.map((line) => {
     assertQuantity(line.quantity);
@@ -150,11 +191,15 @@ export function pricePurchase(db: Database.Database, date: IsoDate, lines: Purch
     const taxCode = taxCodeOf.get(line.itemId) as { id: number };
     const net = Math.round((line.quantity * line.unitPrice) / ONE_UNIT);
     const rate = vatRate(db, taxCode.id, date, registered);
-    return { ...line, baseQuantity, net, vatRate: rate, vat: Math.round((net * rate) / WHOLE) };
+    const vat = Math.round((net * rate) / WHOLE);
+    return { ...line, baseQuantity, net, vatRate: rate, vat, netEgp: toEgp(net, money.rate), vatEgp: toEgp(vat, money.rate) };
   });
-  const net = priced.reduce((t, l) => t + l.net, 0);
-  const vat = priced.reduce((t, l) => t + l.vat, 0);
-  return { lines: priced, net, vat, total: net + vat };
+  const sum = (pick: (l: (typeof priced)[number]) => number) => priced.reduce((t, l) => t + pick(l), 0);
+  const net = sum((l) => l.net);
+  const vat = sum((l) => l.vat);
+  const netEgp = sum((l) => l.netEgp);
+  const vatEgp = sum((l) => l.vatEgp);
+  return { lines: priced, net, vat, total: net + vat, netEgp, vatEgp, totalEgp: netEgp + vatEgp };
 }
 
 /** Posts a supplier's invoice: stock in at net cost, input VAT, and the total owed to the supplier. */
@@ -164,13 +209,19 @@ export function postPurchaseInvoice(db: Database.Database, input: PurchaseInvoic
   assertPostable(supplier);
   activeWarehouse(db, input.warehouseId);
   if (input.lines.length === 0) throw new BusinessError("invoice_needs_lines", "An invoice needs at least one line");
-  const { lines, net, vat } = pricePurchase(db, input.date, input.lines);
-  if (net + vat === 0) throw new BusinessError("invoice_total_zero", "The invoice total is zero");
+  const rate = documentRate(supplier, input.rate);
+  const { lines, total, netEgp, vatEgp } = pricePurchase(db, input.date, input.lines, { currency: supplier.currency, rate });
+  if (netEgp + vatEgp === 0) throw new BusinessError("invoice_total_zero", "The invoice total is zero");
 
   const journal: JournalLine[] = [];
-  if (net > 0) journal.push({ accountId: accountByRole(db, "stock"), debit: net });
-  if (vat > 0) journal.push({ accountId: accountByRole(db, "input_vat"), debit: vat });
-  journal.push({ accountId: accountByRole(db, "payables"), credit: net + vat, supplierId: supplier.id });
+  if (netEgp > 0) journal.push({ accountId: accountByRole(db, "stock"), debit: netEgp });
+  if (vatEgp > 0) journal.push({ accountId: accountByRole(db, "input_vat"), debit: vatEgp });
+  journal.push({
+    accountId: accountByRole(db, "payables"),
+    credit: netEgp + vatEgp,
+    supplierId: supplier.id,
+    ...(supplier.currency === "EGP" ? {} : { foreign: total }),
+  });
   const reference = input.reference.trim();
   const entryId = postJournalEntry(
     db,
@@ -180,9 +231,10 @@ export function postPurchaseInvoice(db: Database.Database, input: PurchaseInvoic
   const id = Number(
     db
       .prepare(
-        "INSERT INTO purchase_invoices (date, supplier_id, warehouse_id, reference, entry_id, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+        `INSERT INTO purchase_invoices (date, supplier_id, warehouse_id, reference, currency, rate, entry_id, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(input.date, supplier.id, input.warehouseId, reference, entryId, userId).lastInsertRowid,
+      .run(input.date, supplier.id, input.warehouseId, reference, supplier.currency, rate, entryId, userId).lastInsertRowid,
   );
   const insertLine = db.prepare(
     `INSERT INTO purchase_invoice_lines (invoice_id, item_id, unit, quantity, unit_price, net, vat_rate, vat)
@@ -198,7 +250,7 @@ export function postPurchaseInvoice(db: Database.Database, input: PurchaseInvoic
       itemId: l.itemId,
       warehouseId: input.warehouseId,
       quantity: l.baseQuantity,
-      value: l.net,
+      value: l.netEgp,
       source: "purchase",
       sourceId: id,
     });
@@ -212,7 +264,9 @@ type InvoiceRow = Omit<PurchaseInvoice, "net" | "vat" | "total" | "lines">;
 export function listPurchaseInvoices(db: Database.Database): PurchaseInvoice[] {
   const invoices = db
     .prepare(
-      `SELECT p.id, p.date, p.supplier_id AS supplierId, p.warehouse_id AS warehouseId, p.reference, u.name AS postedBy
+      `SELECT p.id, p.date, p.supplier_id AS supplierId, p.warehouse_id AS warehouseId, p.reference, p.currency, p.rate,
+              (SELECT SUM(x.credit) FROM ledger_lines x WHERE x.entry_id = p.entry_id AND x.supplier_id IS NOT NULL) AS totalEgp,
+              u.name AS postedBy
          FROM purchase_invoices p JOIN users u ON u.id = p.user_id
         ORDER BY p.date DESC, p.id DESC`,
     )

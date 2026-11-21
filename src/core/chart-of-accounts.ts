@@ -25,7 +25,9 @@ export type AccountRole =
   | "cash_over"
   | "cost_of_goods_sold"
   | "stock_loss"
-  | "cash_short";
+  | "cash_short"
+  | "exchange_gain"
+  | "exchange_loss";
 
 type TemplateAccount = { code: string; name: string; type: AccountType; role?: AccountRole };
 
@@ -54,8 +56,10 @@ export const RETAIL_CHART_OF_ACCOUNTS: readonly TemplateAccount[] = [
   { code: "4100", name: "المبيعات", type: "income", role: "sales" },
   { code: "4200", name: "أرباح جرد المخزون", type: "income", role: "stock_gain" },
   { code: "4300", name: "زيادة نقدية الدرج", type: "income", role: "cash_over" },
+  { code: "4400", name: "أرباح فروق العملة", type: "income", role: "exchange_gain" },
   { code: "5100", name: "تكلفة البضاعة المباعة", type: "expense", role: "cost_of_goods_sold" },
   { code: "5200", name: "خسائر وإعدام مخزون", type: "expense", role: "stock_loss" },
+  { code: "5300", name: "خسائر فروق العملة", type: "expense", role: "exchange_loss" },
   { code: "6100", name: "الإيجار", type: "expense" },
   { code: "6200", name: "الكهرباء والمياه", type: "expense" },
   { code: "6300", name: "الأجور والمرتبات", type: "expense" },

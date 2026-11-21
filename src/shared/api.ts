@@ -75,6 +75,7 @@ export const BUSINESS_METHODS = [
   "deactivateSupplier",
   "reactivateSupplier",
   "supplierBalance",
+  "supplierAccount",
   "pricePurchase",
   "postPurchaseInvoice",
   "purchaseInvoices",

@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { toEgp } from "./currency";
 import { assertIsoDate } from "./dates";
 import { BusinessError } from "./errors";
 import type { Quantity } from "./items";
@@ -41,8 +42,8 @@ const ONE_UNIT = 1000;
 export function postDebitNote(db: Database.Database, input: DebitNoteInput, userId: number): { id: number; number: number; total: Piastres } {
   assertIsoDate(input.date);
   const invoice = db
-    .prepare("SELECT id, supplier_id AS supplierId, warehouse_id AS warehouseId, reference FROM purchase_invoices WHERE id = ?")
-    .get(input.purchaseInvoiceId) as { id: number; supplierId: number; warehouseId: number; reference: string } | undefined;
+    .prepare("SELECT id, supplier_id AS supplierId, warehouse_id AS warehouseId, reference, currency, rate FROM purchase_invoices WHERE id = ?")
+    .get(input.purchaseInvoiceId) as { id: number; supplierId: number; warehouseId: number; reference: string; currency: string; rate: number } | undefined;
   if (!invoice) throw new BusinessError("invoice_not_found", `No purchase invoice with id ${input.purchaseInvoiceId}`);
   const supplier = findSupplier(db, invoice.supplierId);
   if (input.lines.length === 0) throw new BusinessError("invoice_needs_lines", "A debit note needs at least one line");
@@ -69,16 +70,21 @@ export function postDebitNote(db: Database.Database, input: DebitNoteInput, user
     taken.set(lineId, take(before, quantity, share));
     const [net, vat] = share as [number, number];
     const base = Math.round((quantity * line.size) / ONE_UNIT);
-    return { line, quantity, base, net, vat, serials: serialsFor(db, line.itemId, base, given) };
+    const netEgp = toEgp(net, invoice.rate);
+    return { line, quantity, base, net, vat, netEgp, vatEgp: toEgp(vat, invoice.rate), serials: serialsFor(db, line.itemId, base, given) };
   });
+  // Amounts on the note are in the invoice's currency; the books take them at the invoice's rate.
   const net = backs.reduce((t, b) => t + b.net, 0);
   const vat = backs.reduce((t, b) => t + b.vat, 0);
+  const netEgp = backs.reduce((t, b) => t + b.netEgp, 0);
+  const vatEgp = backs.reduce((t, b) => t + b.vatEgp, 0);
   const number = nextNumber(db, "debit_notes");
 
   const journal: JournalLine[] = [];
-  if (net + vat > 0) journal.push({ accountId: accountByRole(db, "payables"), debit: net + vat, supplierId: supplier.id });
-  if (net > 0) journal.push({ accountId: accountByRole(db, "stock"), credit: net });
-  if (vat > 0) journal.push({ accountId: accountByRole(db, "input_vat"), credit: vat });
+  const foreign = invoice.currency === "EGP" ? {} : { foreign: net + vat };
+  if (netEgp + vatEgp > 0) journal.push({ accountId: accountByRole(db, "payables"), debit: netEgp + vatEgp, supplierId: supplier.id, ...foreign });
+  if (netEgp > 0) journal.push({ accountId: accountByRole(db, "stock"), credit: netEgp });
+  if (vatEgp > 0) journal.push({ accountId: accountByRole(db, "input_vat"), credit: vatEgp });
   const memo = `إشعار مدين رقم ${number} - مرتجع إلى ${supplier.name}${invoice.reference ? ` فاتورة ${invoice.reference}` : ""}`;
   const entryId = postJournalEntry(db, { date: input.date, memo, lines: journal }, "debit_note");
   const id = Number(
@@ -90,7 +96,7 @@ export function postDebitNote(db: Database.Database, input: DebitNoteInput, user
   for (const b of backs) {
     const lineId = Number(insertLine.run(id, b.line.id, b.quantity, b.net, b.vat).lastInsertRowid);
     issueSerials(db, b.line.itemId, b.serials, { date: input.date, warehouseId: invoice.warehouseId, source: "debit_note", sourceId: id, lineId });
-    insertMovement(db, { date: input.date, itemId: b.line.itemId, warehouseId: invoice.warehouseId, quantity: -b.base, value: -b.net, source: "debit_note", sourceId: id });
+    insertMovement(db, { date: input.date, itemId: b.line.itemId, warehouseId: invoice.warehouseId, quantity: -b.base, value: -b.netEgp, source: "debit_note", sourceId: id });
   }
   return { id, number, total: net + vat };
 }
