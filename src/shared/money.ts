@@ -1,13 +1,14 @@
 import type { Piastres } from "../core/ledger";
+import { inDigits } from "./digits";
 
 const ARABIC_INDIC = /[٠-٩]/g;
 
-/** Shows piastres as pounds with two decimals and thousands separators: 18642075 → "186,420.75". */
+/** Shows piastres as pounds with two decimals and thousands separators: 18642075 → "186,420.75" (or "١٨٦٬٤٢٠٫٧٥"). */
 export function formatMoney(amount: Piastres): string {
   const sign = amount < 0 ? "-" : "";
   const abs = Math.abs(amount);
   const pounds = Math.floor(abs / 100).toLocaleString("en-US");
-  return `${sign}${pounds}.${String(abs % 100).padStart(2, "0")}`;
+  return inDigits(`${sign}${pounds}.${String(abs % 100).padStart(2, "0")}`);
 }
 
 /**

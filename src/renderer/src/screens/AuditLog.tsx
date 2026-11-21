@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import type { AuditEntry } from "../../../core/users";
 import { business } from "../api";
-import { ar } from "../strings";
+import { ar, locale } from "../strings";
 
-const when = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
+const when = { format: (d: Date) => d.toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" }) };
 
 /** Who changed what and when, newest first. */
 export function AuditLog() {

@@ -1,19 +1,21 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { NO_PRINTER, THEMES, type Connection, type PrinterSettings, type ServerStatus, type ThemeId } from "../../../shared/api";
+import { DEFAULT_PREFERENCES, NO_PRINTER, THEMES, type Connection, type Preferences, type PrinterSettings, type ServerStatus, type ThemeId } from "../../../shared/api";
 import type { BackupStatus } from "../../../core/backup";
 import type { BusinessSettings } from "../../../shared/api";
 import { business, errorText } from "../api";
-import { ar } from "../strings";
+import { ar, locale } from "../strings";
 
 /** Appearance settings: the theme picker from the approved design. */
 export function Settings({
   theme,
   onTheme,
+  onLanguage,
   isManager,
   onRestored,
 }: {
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
+  onLanguage: (p: Pick<Preferences, "screenLanguage" | "digits">) => void;
   isManager: boolean;
   onRestored: (settings: BusinessSettings) => void;
 }) {
@@ -64,10 +66,63 @@ export function Settings({
           </button>
         ))}
       </section>
+      <LanguageSetup onLanguage={onLanguage} />
       <PrinterSetup />
       <ServerSetup />
       {isManager && <BackupSetup onRestored={onRestored} />}
     </>
+  );
+}
+
+type LanguagePrefs = Pick<Preferences, "screenLanguage" | "documentLanguage" | "digits">;
+
+/** Screen language, document language and digits: each saved at once, for this PC. */
+function LanguageSetup({ onLanguage }: { onLanguage: (p: Pick<Preferences, "screenLanguage" | "digits">) => void }) {
+  const [prefs, setPrefs] = useState<LanguagePrefs>(DEFAULT_PREFERENCES);
+  useEffect(() => {
+    void window.api.preferences().then(setPrefs);
+  }, []);
+
+  function change(next: Partial<LanguagePrefs>) {
+    const all = { ...prefs, ...next };
+    setPrefs(all);
+    void window.api.setPreferences(next).then(() => {
+      if (next.screenLanguage || next.digits) onLanguage(all);
+    });
+  }
+
+  const languages = [
+    { value: "ar", label: "العربية" },
+    { value: "en", label: "English" },
+  ] as const;
+  const group = (label: string, value: string, options: readonly { value: string; label: string }[], pick: (v: string) => void) => (
+    <div className="field">
+      <span>{label}</span>
+      <div role="radiogroup" aria-label={label} className="pills">
+        {options.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={value === o.value} className="pill" onClick={() => pick(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="card printer-card" aria-label={ar.settings.language}>
+      <div className="stack">
+        <h2>{ar.settings.language}</h2>
+        <span className="muted">{ar.settings.languageHint}</span>
+      </div>
+      {group(ar.settings.screenLanguage, prefs.screenLanguage, languages, (v) => change({ screenLanguage: v as LanguagePrefs["screenLanguage"] }))}
+      {group(ar.settings.documentLanguage, prefs.documentLanguage, languages, (v) => change({ documentLanguage: v as LanguagePrefs["documentLanguage"] }))}
+      {group(
+        ar.settings.digits,
+        prefs.digits,
+        (["western", "arabic"] as const).map((d) => ({ value: d, label: ar.settings.digitStyles[d] })),
+        (v) => change({ digits: v as LanguagePrefs["digits"] }),
+      )}
+    </section>
   );
 }
 
@@ -116,7 +171,7 @@ function BackupSetup({ onRestored }: { onRestored: (settings: BusinessSettings) 
   }
 
   if (!local || !status) return null;
-  const when = (iso: string) => new Date(iso).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" });
+  const when = (iso: string) => new Date(iso).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" });
   return (
     <section className="card printer-card" aria-label={ar.backup.title}>
       <div className="stack">

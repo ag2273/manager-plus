@@ -32,3 +32,16 @@ describe("amounts in Arabic words", () => {
     expect(amountInWords(250_000_050)).toBe("فقط مليونان وخمسمائة ألف جنيه مصري وخمسون قرش لا غير");
   });
 });
+
+describe("amounts in English words", () => {
+  test.each([
+    [12_100, "Only one hundred twenty-one Egyptian pounds"],
+    [100, "Only one Egyptian pound"],
+    [0, "Only zero Egyptian pounds"],
+    [5, "Only five piastres"],
+    [123_456_789, "Only one million two hundred thirty-four thousand five hundred sixty-seven Egyptian pounds and eighty-nine piastres"],
+    [100_000_100_000, "Only one billion one thousand Egyptian pounds"],
+  ])("%i piastres", (piastres, words) => {
+    expect(amountInWords(piastres, "en")).toBe(words);
+  });
+});

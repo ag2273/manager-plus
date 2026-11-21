@@ -8,6 +8,7 @@ import { BusinessError } from "../core/errors";
 import {
   BUSINESS_METHODS,
   CHANNELS,
+  DEFAULT_PREFERENCES,
   NO_PRINTER,
   THEMES,
   type BusinessMethod,
@@ -32,9 +33,11 @@ import { ConnectError, RemoteBusiness } from "../server/client";
 import { advertise, discover } from "../server/discovery";
 import { type RunningServer, startServer } from "../server/server";
 import { DEFAULT_PORT } from "../server/protocol";
-import { documentHtml, returnDocument, saleDocument, testDocument } from "../shared/receipt";
+import { documentHtml, returnDocument, saleDocument, testDocument, zReportDocument } from "../shared/receipt";
+import type { ZReport } from "../core/shifts";
 import { listPrinters, printA4, printHtml } from "./printer";
-import { a4Html, creditNoteA4, deliveryNoteA4, invoiceA4, quotationA4, statementA4 } from "../shared/a4";
+import { a4Html, creditNoteA4, deliveryNoteA4, invoiceA4, quotationA4, statementA4, type A4Document } from "../shared/a4";
+import { setDigitStyle } from "../shared/digits";
 import { type ReportTable, reportA4, reportSheet } from "../shared/report-tables";
 import { xlsx } from "../shared/xlsx";
 import { importTemplate } from "../shared/import-template";
@@ -230,16 +233,28 @@ function cleanPrinter(value: unknown): PrinterSettings {
   return NO_PRINTER;
 }
 
+const language = (v: unknown) => (v === "en" ? "en" : "ar");
+
 function readPreferences(): Preferences {
   try {
     const saved = JSON.parse(readFileSync(preferencesPath(), "utf8")) as Partial<Preferences>;
     return {
       theme: saved.theme && THEMES.includes(saved.theme) ? saved.theme : "calm",
       printer: cleanPrinter(saved.printer),
+      screenLanguage: language(saved.screenLanguage),
+      documentLanguage: language(saved.documentLanguage),
+      digits: saved.digits === "arabic" ? "arabic" : "western",
     };
   } catch {
-    return { theme: "calm", printer: NO_PRINTER };
+    return DEFAULT_PREFERENCES;
   }
+}
+
+/** Prints and PDFs follow this PC's document language and digit style. */
+function documentPreferences(): "ar" | "en" {
+  const { documentLanguage, digits } = readPreferences();
+  setDigitStyle(digits);
+  return documentLanguage;
 }
 
 ipcMain.handle(CHANNELS.preferences, () => readPreferences());
@@ -247,6 +262,9 @@ ipcMain.handle(CHANNELS.setPreferences, (_event, changes: Partial<Preferences>) 
   const next = { ...readPreferences() };
   if (changes.theme && THEMES.includes(changes.theme)) next.theme = changes.theme;
   if (changes.printer) next.printer = cleanPrinter(changes.printer);
+  if (changes.screenLanguage) next.screenLanguage = language(changes.screenLanguage);
+  if (changes.documentLanguage) next.documentLanguage = language(changes.documentLanguage);
+  if (changes.digits) next.digits = changes.digits === "arabic" ? "arabic" : "western";
   writeFileSync(preferencesPath(), JSON.stringify(next));
 });
 
@@ -255,12 +273,15 @@ ipcMain.handle(CHANNELS.printers, () => listPrinters());
 ipcMain.handle(CHANNELS.print, async (_event, request: PrintRequest): Promise<Result<null>> => {
   const printer = readPreferences().printer;
   const footer = printer.kind === "none" ? "" : printer.footer;
+  const lang = documentPreferences();
   let document;
   try {
     const settings = await need<BusinessSettings>("settings");
-    if (request.kind === "sale") document = saleDocument(await need<Receipt>("findReceipt", request.number), settings, { footer, copy: request.copy });
-    else if (request.kind === "return") document = returnDocument(await need<SaleReturn>("findReturn", request.number), settings, { footer, copy: request.copy });
-    else document = testDocument(settings, footer);
+    if (request.kind === "sale") document = saleDocument(await need<Receipt>("findReceipt", request.number), settings, { footer, copy: request.copy }, lang);
+    else if (request.kind === "return")
+      document = returnDocument(await need<SaleReturn>("findReturn", request.number), settings, { footer, copy: request.copy }, lang);
+    else if (request.kind === "z") document = zReportDocument(await need<ZReport>("zReport", request.shiftId), settings, lang);
+    else document = testDocument(settings, footer, lang);
   } catch (error) {
     if (error instanceof Failed) return error.result;
     throw error;
@@ -349,24 +370,23 @@ ipcMain.handle(CHANNELS.restoreBackup, async (_event, given: string | null) => {
 
 ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Result<{ saved: string | null }>> => {
   let page: { html: string; name: string };
+  const lang = documentPreferences();
   try {
     const settings = await need<BusinessSettings>("settings");
+    const customer = async (id: number) => (await need<Customer[]>("customers")).find((c) => c.id === id)!;
+    const named = (doc: A4Document, number: number | string) => ({ html: a4Html(doc), name: `${doc.title} ${number}` });
     if (request.kind === "invoice") {
       const invoice = await need<SalesInvoice>("findSalesInvoice", request.number);
-      const customer = (await need<Customer[]>("customers")).find((c) => c.id === invoice.customerId)!;
-      page = { html: a4Html(invoiceA4(invoice, settings, customer)), name: `فاتورة ${invoice.number}` };
+      page = named(invoiceA4(invoice, settings, await customer(invoice.customerId), lang), invoice.number);
     } else if (request.kind === "creditNote") {
       const note = await need<CreditNote>("findCreditNote", request.number);
-      const customer = (await need<Customer[]>("customers")).find((c) => c.id === note.customerId)!;
-      page = { html: a4Html(creditNoteA4(note, settings, customer)), name: `إشعار دائن ${note.number}` };
+      page = named(creditNoteA4(note, settings, await customer(note.customerId), lang), note.number);
     } else if (request.kind === "deliveryNote") {
       const invoice = await need<SalesInvoice>("findSalesInvoice", request.number);
-      const customer = (await need<Customer[]>("customers")).find((c) => c.id === invoice.customerId)!;
-      page = { html: a4Html(deliveryNoteA4(invoice, settings, customer)), name: `إذن تسليم ${invoice.number}` };
+      page = named(deliveryNoteA4(invoice, settings, await customer(invoice.customerId), lang), invoice.number);
     } else if (request.kind === "quotation") {
       const quotation = await need<Quotation>("findQuotation", request.number, new Date().toLocaleDateString("en-CA"));
-      const customer = (await need<Customer[]>("customers")).find((c) => c.id === quotation.customerId)!;
-      page = { html: a4Html(quotationA4(quotation, settings, customer)), name: `عرض سعر ${quotation.number}` };
+      page = named(quotationA4(quotation, settings, await customer(quotation.customerId), lang), quotation.number);
     } else if (request.kind === "report") {
       page = { html: a4Html(reportA4(request.table, settings)), name: `${request.table.title} ${request.table.meta.map((m) => m.value).join(" ")}` };
     } else {
@@ -376,7 +396,7 @@ ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Res
           ? (await need<Customer[]>("customers")).find((c) => c.id === request.id)!
           : (await need<Supplier[]>("suppliers")).find((x) => x.id === request.id)!;
       const details = { kind: request.party, address: "address" in party ? party.address : "", taxRegistrationNumber: party.taxRegistrationNumber };
-      page = { html: a4Html(statementA4(st, settings, details)), name: `كشف حساب ${st.name} ${st.to}` };
+      page = named(statementA4(st, settings, details, lang), `${st.name} ${st.to}`);
     }
   } catch (error) {
     if (error instanceof Failed) return error.result;

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { Business } from "../core/business";
-import { documentHtml, returnDocument, saleDocument } from "./receipt";
+import { setDigitStyle } from "./digits";
+import { documentHtml, returnDocument, saleDocument, zReportDocument } from "./receipt";
 
 const manager = { name: "أيمن", password: "كلمة سر قوية" };
 const shop = { name: "بقالة النور", address: "الدقي، الجيزة", taxRegistrationNumber: "123456789", vatRegistered: true, fiscalYearStartMonth: 1 };
@@ -9,7 +10,7 @@ function sampleBusiness() {
   const business = Business.create(":memory:", shop, manager);
   const main = business.warehouses()[0]!.id;
   const standard = business.taxCodes().find((c) => c.kind === "standard")!.id;
-  const rice = business.addItem({ nameAr: "أرز مصري 1 كجم", baseUnit: "كيس", barcode: "11", salePrice: 3_800, taxCodeId: standard });
+  const rice = business.addItem({ nameAr: "أرز مصري 1 كجم", nameEn: "Egyptian rice 1 kg", baseUnit: "كيس", barcode: "11", salePrice: 3_800, taxCodeId: standard });
   const tea = business.addItem({ nameAr: "شاي ناعم 250 جم", baseUnit: "علبة", barcode: "59", salePrice: 4_750, taxCodeId: standard });
   business.openShift(0);
   business.postSale({
@@ -54,6 +55,46 @@ describe("printed receipts", () => {
     expect(copy).toContain(`<div class="center copy">نسخة</div>`);
     expect(ret.reference).toBe("من إيصال بيع رقم 1");
     await expect(documentHtml({ ...ret, when: "2026-11-20 20:15" })).toMatchFileSnapshot("__golden__/return-receipt.html");
+  });
+
+  test("the sale receipt in English", async () => {
+    const business = sampleBusiness();
+    const doc = saleDocument(fixed(business.findReceipt(1)), business.settings(), { footer: "Thank you for your visit", copy: true }, "en");
+
+    expect(doc.totals.map((t) => t.label)).toEqual(["Total before discount", "Discount", "Total", "Of which VAT", "Cash", "Change"]);
+    // An item without an English name keeps its Arabic one.
+    expect(doc.lines.map((l) => l.name)).toEqual(["Egyptian rice 1 kg", "شاي ناعم 250 جم"]);
+    await expect(documentHtml({ ...doc, when: "2026-11-20 20:15" })).toMatchFileSnapshot("__golden__/sale-receipt-en.html");
+  });
+
+  test("the Z report prints in Arabic and in English", async () => {
+    const business = sampleBusiness();
+    const shift = business.currentShift()!;
+    business.closeShift({ date: "2026-11-20", countedCash: 12_000 });
+    const report = business.zReport(shift.id);
+    const stable = { ...report, shift: { ...report.shift, openedAt: "2026-11-20T07:00:00.000Z", closedAt: "2026-11-20T19:00:00.000Z" } };
+
+    const arabic = zReportDocument(stable, business.settings());
+    expect(arabic.totals.at(-1)).toEqual({ label: "الفرق (زيادة + / عجز −)", value: "-1.00", strong: true });
+    await expect(documentHtml({ ...arabic, reference: "2026-11-20 09:00 → 2026-11-20 21:00", when: "2026-11-20 21:00" })).toMatchFileSnapshot(
+      "__golden__/z-report.html",
+    );
+    const english = zReportDocument(stable, business.settings(), "en");
+    expect(english.totals[1]).toEqual({ label: "Total sales", value: "121.00" });
+    await expect(documentHtml({ ...english, reference: "2026-11-20 09:00 → 2026-11-20 21:00", when: "2026-11-20 21:00" })).toMatchFileSnapshot(
+      "__golden__/z-report-en.html",
+    );
+  });
+
+  test("Arabic-Indic digits reach the printed receipt", () => {
+    const business = sampleBusiness();
+    setDigitStyle("arabic");
+    try {
+      const doc = saleDocument(business.findReceipt(1), business.settings(), { footer: "", copy: false });
+      expect(doc.totals.find((t) => t.strong)!.value).toBe("١٢١٫٠٠");
+    } finally {
+      setDigitStyle("western");
+    }
   });
 
   test("text from the business is escaped", () => {

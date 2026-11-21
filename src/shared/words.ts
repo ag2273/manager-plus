@@ -50,12 +50,44 @@ export function numberInWords(n: number): string {
   return groups.join(" و");
 }
 
-/** Piastres as "فقط … جنيه مصري و… قرش لا غير". */
-export function amountInWords(piastres: number): string {
+const EN_ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const EN_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const EN_SCALES = ["", " thousand", " million", " billion"];
+
+/** 1–999 in English words: "one hundred twenty-one". */
+function englishBelowThousand(n: number): string {
+  const parts: string[] = [];
+  const hundreds = Math.floor(n / 100);
+  const rest = n % 100;
+  if (hundreds > 0) parts.push(`${EN_ONES[hundreds]} hundred`);
+  if (rest > 0 && rest < 20) parts.push(EN_ONES[rest]!);
+  else if (rest >= 20) parts.push(rest % 10 > 0 ? `${EN_TENS[Math.floor(rest / 10)]}-${EN_ONES[rest % 10]}` : EN_TENS[Math.floor(rest / 10)]!);
+  return parts.join(" ");
+}
+
+/** A whole number from 0 up to 999,999,999,999 in English words. */
+export function englishNumberInWords(n: number): string {
+  if (!Number.isSafeInteger(n) || n < 0 || n >= 1e12) throw new RangeError(`Cannot write ${n} in words`);
+  if (n === 0) return "zero";
+  const groups: string[] = [];
+  for (let scale = 0, rest = n; rest > 0; scale++, rest = Math.floor(rest / 1000)) {
+    const group = rest % 1000;
+    if (group > 0) groups.unshift(englishBelowThousand(group) + EN_SCALES[scale]);
+  }
+  return groups.join(" ");
+}
+
+/** Piastres as "فقط … جنيه مصري و… قرش لا غير", or "Only … Egyptian pounds and … piastres" in English. */
+export function amountInWords(piastres: number, lang: "ar" | "en" = "ar"): string {
   if (!Number.isSafeInteger(piastres) || piastres < 0) throw new RangeError(`Cannot write ${piastres} in words`);
   const pounds = Math.floor(piastres / 100);
   const rest = piastres % 100;
   const parts: string[] = [];
+  if (lang === "en") {
+    if (pounds > 0 || rest === 0) parts.push(`${englishNumberInWords(pounds)} Egyptian ${pounds === 1 ? "pound" : "pounds"}`);
+    if (rest > 0) parts.push(`${englishNumberInWords(rest)} ${rest === 1 ? "piastre" : "piastres"}`);
+    return `Only ${parts.join(" and ")}`;
+  }
   if (pounds > 0 || rest === 0) parts.push(`${numberInWords(pounds)} جنيه مصري`);
   if (rest > 0) parts.push(`${numberInWords(rest)} قرش`);
   return `فقط ${parts.join(" و")} لا غير`;

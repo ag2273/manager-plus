@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Role } from "../../core/users";
-import type { BusinessSettings, FileStatus, ThemeId, User } from "../../shared/api";
+import type { BusinessSettings, FileStatus, Preferences, ThemeId, User } from "../../shared/api";
 import { Accounts } from "./screens/Accounts";
 import { AuditLog } from "./screens/AuditLog";
 import { Home } from "./screens/Home";
@@ -16,7 +16,8 @@ import { SalesInvoices } from "./screens/SalesInvoices";
 import { Till } from "./screens/Till";
 import { Warehouses } from "./screens/Warehouses";
 import { Welcome } from "./screens/Welcome";
-import { ar } from "./strings";
+import { setDigitStyle } from "../../shared/digits";
+import { ar, locale, setScreenLanguage } from "./strings";
 import { SERVER_BACK, SERVER_LOST, business } from "./api";
 
 type Screen =
@@ -41,7 +42,7 @@ const ALL: Role[] = ["manager", "accountant", "cashier", "storekeeper"];
  * command itself; this only hides what a role cannot use. Entries without a
  * screen yet are shown but disabled.
  */
-const NAV: { label: string; screen?: Screen; roles: Role[] }[] = [
+const nav = (): { label: string; screen?: Screen; roles: Role[] }[] => [
   { label: ar.nav.home, screen: "home", roles: ALL },
   { label: ar.nav.till, screen: "till", roles: ["manager", "cashier"] },
   { label: ar.nav.items, screen: "items", roles: ALL },
@@ -68,7 +69,7 @@ function FileWarning() {
     void window.api.fileStatus().then(setStatus);
   }, []);
   if (!status?.openElsewhere) return null;
-  const since = new Date(status.openElsewhere.at).toLocaleString("ar-EG", { timeStyle: "short", dateStyle: "short" });
+  const since = new Date(status.openElsewhere.at).toLocaleString(locale(), { timeStyle: "short", dateStyle: "short" });
   return (
     <div role="alert" className="error">
       {ar.backup.openElsewhere(status.openElsewhere.host, since)} {status.syncFolder && ar.backup.inSyncFolder(status.syncFolder)}
@@ -81,6 +82,7 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const [theme, setTheme] = useState<ThemeId>("calm");
+  const [languageKey, setLanguageKey] = useState("ar-western");
   const [serverLost, setServerLost] = useState(false);
 
   // A client PC whose server went away says so on every screen and keeps trying.
@@ -102,12 +104,22 @@ export function App() {
   }, [serverLost]);
 
   useEffect(() => {
-    void window.api.preferences().then((p) => setTheme(p.theme));
+    void window.api.preferences().then((p) => {
+      setTheme(p.theme);
+      chooseLanguage(p);
+    });
   }, []);
 
   useEffect(() => {
     document.documentElement.dataset["theme"] = theme;
   }, [theme]);
+
+  /** Applies the screen language and digits; every screen reads them on render, so the shell re-renders under a new key. */
+  function chooseLanguage(p: Pick<Preferences, "screenLanguage" | "digits">) {
+    setScreenLanguage(p.screenLanguage);
+    setDigitStyle(p.digits);
+    setLanguageKey(`${p.screenLanguage}-${p.digits}`);
+  }
 
   function chooseTheme(next: ThemeId) {
     setTheme(next);
@@ -127,10 +139,11 @@ export function App() {
     setUser(null);
   }
 
-  if (!open) return <Welcome onOpen={opened} />;
+  if (!open) return <Welcome key={languageKey} onOpen={opened} />;
   if (!user)
     return (
       <SignIn
+        key={languageKey}
         settings={open}
         onSignedIn={(u) => {
           setUser(u);
@@ -141,13 +154,13 @@ export function App() {
     );
 
   return (
-    <div className="shell">
+    <div className="shell" key={languageKey}>
       <nav aria-label={ar.nav.label} className="sidebar">
         <strong className="brand" dir="ltr">
           {ar.appName}
         </strong>
         <span className="muted business-name">{open.name}</span>
-        {NAV.filter((item) => item.roles.includes(user.role)).map((item) =>
+        {nav().filter((item) => item.roles.includes(user.role)).map((item) =>
           item.screen ? (
             <button
               key={item.label}
@@ -209,6 +222,7 @@ export function App() {
           <Settings
             theme={theme}
             onTheme={chooseTheme}
+            onLanguage={chooseLanguage}
             isManager={user.role === "manager"}
             onRestored={(settings) => {
               setOpen(settings);

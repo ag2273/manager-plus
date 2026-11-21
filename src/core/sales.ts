@@ -89,7 +89,7 @@ export type Receipt = {
   customerId: number | null;
   soldBy: string;
   eta: { uuid: string; previousUuid: string; status: string };
-  lines: (SaleLine & { lineId: number; nameAr: string; cost: Piastres; returned: Quantity; serials: string[]; warrantyEnds: IsoDate | null })[];
+  lines: (SaleLine & { lineId: number; nameAr: string; nameEn: string; cost: Piastres; returned: Quantity; serials: string[]; warrantyEnds: IsoDate | null })[];
 };
 
 const ONE_UNIT = 1000;
@@ -309,7 +309,7 @@ const SELECT_RECEIPTS = `
 
 function toReceipts(db: Database.Database, rows: ReceiptRow[]): Receipt[] {
   const lines = db.prepare(
-    `SELECT l.id AS lineId, l.item_id AS itemId, i.name_ar AS nameAr, l.unit, l.quantity, l.unit_price AS unitPrice,
+    `SELECT l.id AS lineId, l.item_id AS itemId, i.name_ar AS nameAr, i.name_en AS nameEn, l.unit, l.quantity, l.unit_price AS unitPrice,
             l.gross, l.discount, l.gross - l.discount AS amount, l.net, l.vat_rate AS vatRate, l.vat, l.cost,
             COALESCE((SELECT SUM(x.quantity) FROM sales_return_lines x WHERE x.receipt_line_id = l.id), 0) AS returned
        FROM sales_receipt_lines l JOIN items i ON i.id = l.item_id

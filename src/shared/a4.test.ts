@@ -9,7 +9,7 @@ function sample() {
   const business = Business.create(":memory:", shop, manager);
   const main = business.warehouses()[0]!.id;
   const standard = business.taxCodes().find((c) => c.kind === "standard")!.id;
-  const router = business.addItem({ nameAr: "راوتر واي فاي 6", baseUnit: "قطعة", salePrice: 150_000, taxCodeId: standard });
+  const router = business.addItem({ nameAr: "راوتر واي فاي 6", nameEn: "Wi-Fi 6 router", baseUnit: "قطعة", salePrice: 150_000, taxCodeId: standard });
   const customer = business.addCustomer({ name: "شركة الأمل للتجارة", phone: "", taxRegistrationNumber: "987654321", address: "مدينة نصر، القاهرة" });
   const posted = business.postSalesInvoice({
     date: "2026-11-20",
@@ -31,6 +31,18 @@ describe("A4 documents", () => {
     expect(doc.words).toBe("فقط ألفان وستمائة واثنان وعشرون جنيه مصري لا غير");
     expect(doc.rows[0]).toEqual(["1", "راوتر واي فاي 6", "قطعة", "2", "1,200.00", "100.00", "2,300.00", "322.00 (14%)", "2,622.00"]);
     await expect(a4Html(doc)).toMatchFileSnapshot("__golden__/sales-invoice.html");
+  });
+
+  test("the same invoice in English reads left to right, with English labels, names and words", async () => {
+    const { business, customer } = sample();
+    const doc = invoiceA4(business.findSalesInvoice(1), business.settings(), customer, "en");
+
+    expect(doc.title).toBe("Tax invoice");
+    expect(doc.words).toBe("Only two thousand six hundred twenty-two Egyptian pounds");
+    expect(doc.rows[0]).toEqual(["1", "Wi-Fi 6 router", "قطعة", "2", "1,200.00", "100.00", "2,300.00", "322.00 (14%)", "2,622.00"]);
+    const html = a4Html(doc);
+    expect(html).toContain('<html lang="en" dir="ltr">');
+    await expect(html).toMatchFileSnapshot("__golden__/sales-invoice-en.html");
   });
 
   test("a credit note points to its invoice", () => {

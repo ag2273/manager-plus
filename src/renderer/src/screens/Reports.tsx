@@ -17,7 +17,7 @@ import {
   vatReturnTable,
 } from "../../../shared/report-tables";
 import { business, errorText, today } from "../api";
-import { ar } from "../strings";
+import { ar, currentLanguage } from "../strings";
 
 type Tab = "pnl" | "balanceSheet" | "ledger" | "byItem" | "byDay" | "byMethod" | "stock" | "vat";
 const TABS: Tab[] = ["pnl", "balanceSheet", "ledger", "byItem", "byDay", "byMethod", "stock", "vat"];
@@ -81,8 +81,11 @@ function ReportView({ table, onRow }: { table: ReportTable; onRow?: (index: numb
 
 /** PDF, print and Excel for the report on screen, in Arabic or English. */
 function ExportBar({ built }: { built: Built }) {
-  const [lang, setLang] = useState<Lang>("ar");
+  const [lang, setLang] = useState<Lang>(currentLanguage());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    void window.api.preferences().then((p) => setLang(p.documentLanguage));
+  }, []);
   async function pdf(output: "print" | "pdf") {
     const result = await window.api.printA4({ kind: "report", table: built.table(lang), output });
     if (!result.ok) setMessage({ ok: false, text: errorText(result)! });
@@ -391,7 +394,7 @@ export function Reports({ vatRegistered }: { vatRegistered: boolean }) {
         <>
           <ExportBar key={tab} built={built} />
           {entry && <EntryCard entry={entry} onClose={() => setEntry(null)} />}
-          <ReportView table={built.table("ar")} onRow={onRow} />
+          <ReportView table={built.table(currentLanguage())} onRow={onRow} />
           {box && built.vat && (
             <VatDocuments
               box={box}
