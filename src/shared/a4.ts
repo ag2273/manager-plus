@@ -10,6 +10,8 @@ import { amountInWords } from "./words";
 
 /** An A4 page: an invoice, a credit note or a statement, already formatted. */
 export type A4Document = {
+  /** Arabic (right to left) unless set to English. */
+  lang?: "ar" | "en";
   shop: { name: string; address: string; taxRegistrationNumber: string };
   title: string;
   /** Number, date, reference and the like, shown beside the title. */
@@ -197,6 +199,7 @@ const escape = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;",
 
 /** The page as HTML for Chromium to print or save as PDF. */
 export function a4Html(doc: A4Document, fontCss = ""): string {
+  const en = doc.lang === "en";
   const meta = doc.meta.map((m) => `<div><span class="muted">${escape(m.label)}:</span> <b dir="auto">${escape(m.value)}</b></div>`).join("\n");
   const party = doc.party
     ? `<section class="party"><div class="muted">${escape(doc.party.label)}</div><div class="name">${escape(doc.party.name)}</div>
@@ -211,7 +214,7 @@ ${doc.party.taxRegistrationNumber ? `<div>رقم التسجيل الضريبي: 
     .map((t) => `<tr${t.strong ? ' class="strong"' : ""}><th>${escape(t.label)}</th><td class="num" dir="ltr">${escape(t.value)}</td></tr>`)
     .join("\n");
   return `<!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
+<html lang="${en ? "en" : "ar"}" dir="${en ? "ltr" : "rtl"}"><head><meta charset="utf-8"><style>
 ${fontCss}
 @page { size: A4; margin: 14mm 12mm; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -233,12 +236,19 @@ table { width: 100%; border-collapse: collapse; }
 .totals .strong th, .totals .strong td { font-size: 13pt; font-weight: 700; border-top: 2px solid #111; border-bottom: none; }
 .words { margin-top: 12px; font-weight: 600; }
 .notes { margin-top: 12px; white-space: pre-line; }
-footer { margin-top: 40px; display: flex; justify-content: space-between; color: #555; }
+footer { margin-top: 40px; display: flex; justify-content: space-between; color: #555; }${
+    en
+      ? `
+body { font-family: "Segoe UI", Tahoma, sans-serif; }
+h1, .meta, .num { text-align: right !important; }
+.lines th, .lines td, .totals th, .totals td { text-align: left; }`
+      : ""
+  }
 </style></head><body>
 <header>
 <div class="shop"><div class="name">${escape(doc.shop.name)}</div>
 ${doc.shop.address ? `<div>${escape(doc.shop.address)}</div>` : ""}
-${doc.shop.taxRegistrationNumber ? `<div>رقم التسجيل الضريبي: <span dir="ltr">${escape(doc.shop.taxRegistrationNumber)}</span></div>` : ""}</div>
+${doc.shop.taxRegistrationNumber ? `<div>${en ? "Tax registration no." : "رقم التسجيل الضريبي"}: <span dir="ltr">${escape(doc.shop.taxRegistrationNumber)}</span></div>` : ""}</div>
 <div><h1>${escape(doc.title)}</h1><div class="meta">${meta}</div></div>
 </header>
 ${party}
@@ -248,6 +258,6 @@ ${rows}
 <table class="totals">${totals}</table>
 ${doc.words ? `<div class="words">${escape(doc.words)}</div>` : ""}
 ${doc.notes ? `<div class="notes">${escape(doc.notes)}</div>` : ""}
-<footer><span>التوقيع: ....................</span><span>الختم</span></footer>
+<footer><span>${en ? "Signature" : "التوقيع"}: ....................</span><span>${en ? "Stamp" : "الختم"}</span></footer>
 </body></html>`;
 }

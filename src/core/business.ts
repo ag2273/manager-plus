@@ -76,6 +76,28 @@ import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
 import {
+  type BalanceSheet,
+  type Dashboard,
+  type DaySalesRow,
+  type EntryDetail,
+  type GeneralLedger,
+  type ItemSalesRow,
+  type MethodSalesRow,
+  type ProfitAndLoss,
+  type SalesDocument,
+  type StockReport,
+  balanceSheet,
+  dashboard,
+  generalLedger,
+  journalEntry,
+  profitAndLoss,
+  salesByDay,
+  salesByItem,
+  salesByPaymentMethod,
+  salesDocuments,
+  stockAt,
+} from "./reports";
+import {
   type ItemMovement,
   type LowStockRow,
   type StockCount,
@@ -824,6 +846,55 @@ export class Business {
   /** A credit note by its printed number. */
   findCreditNote(number: number): CreditNote {
     return this.read("findCreditNote", () => findCreditNote(this.db, number));
+  }
+
+  // Reports
+
+  profitAndLoss(from: IsoDate, to: IsoDate): ProfitAndLoss {
+    return this.read("profitAndLoss", () => profitAndLoss(this.db, from, to));
+  }
+
+  balanceSheet(asOf: IsoDate): BalanceSheet {
+    return this.read("balanceSheet", () => balanceSheet(this.db, asOf));
+  }
+
+  /** An account's postings between two dates, with the balance brought forward and a running balance. */
+  generalLedger(accountId: number, from: IsoDate, to: IsoDate): GeneralLedger {
+    return this.read("generalLedger", () => generalLedger(this.db, accountId, from, to));
+  }
+
+  /** One journal entry and its lines: where every figure drills down to. */
+  journalEntry(entryId: number): EntryDetail {
+    return this.read("journalEntry", () => journalEntry(this.db, entryId));
+  }
+
+  /** Quantity, net sales, cost and gross profit per item, after returns and credit notes. */
+  salesByItem(from: IsoDate, to: IsoDate): ItemSalesRow[] {
+    return this.read("salesByItem", () => salesByItem(this.db, from, to));
+  }
+
+  salesByDay(from: IsoDate, to: IsoDate): DaySalesRow[] {
+    return this.read("salesByDay", () => salesByDay(this.db, from, to));
+  }
+
+  salesByPaymentMethod(from: IsoDate, to: IsoDate): MethodSalesRow[] {
+    return this.read("salesByPaymentMethod", () => salesByPaymentMethod(this.db, from, to));
+  }
+
+  /** Till sales, invoices, returns and credit notes in the period, newest first. */
+  salesDocuments(from: IsoDate, to: IsoDate): SalesDocument[] {
+    return this.read("salesDocuments", () => salesDocuments(this.db, from, to));
+  }
+
+  /** Every item's quantity and value at the end of a date. */
+  stockAt(asOf: IsoDate): StockReport {
+    return this.read("stockAt", () => stockAt(this.db, asOf));
+  }
+
+  /** Today's figures for the home screen. */
+  dashboard(date: IsoDate): Dashboard {
+    const user = this.allow("dashboard");
+    return this.read("dashboard", () => dashboard(this.db, date, user.id));
   }
 
   // Stock counts, write-offs, low stock and movement history

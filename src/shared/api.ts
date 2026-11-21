@@ -1,3 +1,4 @@
+import type { ReportTable } from "./report-tables";
 import type { Business, BusinessSettings } from "../core/business";
 import type { Credentials, User } from "../core/users";
 
@@ -32,6 +33,16 @@ export const BUSINESS_METHODS = [
   "vatRate",
   "withholdingCategories",
   "moneyAccounts",
+  "profitAndLoss",
+  "balanceSheet",
+  "generalLedger",
+  "journalEntry",
+  "salesByItem",
+  "salesByDay",
+  "salesByPaymentMethod",
+  "salesDocuments",
+  "stockAt",
+  "dashboard",
   "postStockCount",
   "stockCounts",
   "writeOffStock",
@@ -159,6 +170,7 @@ export type A4Request = (
   | { kind: "quotation"; number: number }
   | { kind: "deliveryNote"; number: number }
   | { kind: "statement"; party: "customer" | "supplier"; id: number; from: string; to: string }
+  | { kind: "report"; table: ReportTable }
 ) & { output: "pdf" | "print" };
 
 /** What to print: a sale or return by its number, or a sample. */
@@ -192,6 +204,8 @@ export interface DesktopApi {
   print(request: PrintRequest): Promise<Result<null>>;
   /** Prints an A4 document through the system print dialog, or saves it as a PDF; `saved` is the PDF's path. */
   printA4(request: A4Request): Promise<Result<{ saved: string | null }>>;
+  /** Saves a report as an Excel file; `saved` is its path, or null when cancelled. */
+  exportExcel(table: ReportTable): Promise<Result<{ saved: string | null }>>;
   /** Servers announcing themselves on the local network. */
   discoverServers(): Promise<FoundServer[]>;
   /** The server this PC last connected to, for a one-click reconnect. */
@@ -218,6 +232,7 @@ export const CHANNELS = {
   printers: "printer:list",
   print: "printer:print",
   printA4: "printer:a4",
+  exportExcel: "export:excel",
   discoverServers: "network:discover",
   lastServer: "network:last",
   connectServer: "network:connect",

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" dir="ltr"><head><meta charset="utf-8"><style>
+
+@page { size: A4; margin: 14mm 12mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "IBM Plex Sans Arabic", Tahoma, "Segoe UI", sans-serif; font-size: 11pt; line-height: 1.5; color: #111; background: #fff; }
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; border-bottom: 2px solid #111; padding-bottom: 10px; }
+.shop .name { font-size: 16pt; font-weight: 700; }
+h1 { font-size: 18pt; font-weight: 700; text-align: left; }
+.meta { text-align: left; margin-top: 4px; }
+.muted { color: #555; }
+.party { margin: 14px 0; padding: 8px 12px; border: 1px solid #bbb; border-radius: 4px; }
+.party .name { font-weight: 700; font-size: 12pt; }
+table { width: 100%; border-collapse: collapse; }
+.lines th, .lines td { border: 1px solid #999; padding: 4px 6px; text-align: right; vertical-align: top; white-space: pre-line; }
+.lines th { background: #eee; font-weight: 600; }
+.num { text-align: left !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lines tr { break-inside: avoid; }
+.totals { width: 45%; margin-top: 12px; margin-inline-start: auto; }
+.totals th, .totals td { padding: 3px 6px; text-align: right; border-bottom: 1px solid #ddd; }
+.totals .strong th, .totals .strong td { font-size: 13pt; font-weight: 700; border-top: 2px solid #111; border-bottom: none; }
+.words { margin-top: 12px; font-weight: 600; }
+.notes { margin-top: 12px; white-space: pre-line; }
+footer { margin-top: 40px; display: flex; justify-content: space-between; color: #555; }
+body { font-family: "Segoe UI", Tahoma, sans-serif; }
+h1, .meta, .num { text-align: right !important; }
+.lines th, .lines td, .totals th, .totals td { text-align: left; }
+</style></head><body>
+<header>
+<div class="shop"><div class="name">شركة النور للكمبيوتر</div>
+<div>الدقي، الجيزة</div>
+<div>Tax registration no.: <span dir="ltr">123456789</span></div></div>
+<div><h1>Profit and loss</h1><div class="meta"><div><span class="muted">From:</span> <b dir="auto">2026-03-01</b></div>
+<div><span class="muted">To:</span> <b dir="auto">2026-03-31</b></div></div></div>
+</header>
+
+<table class="lines"><thead><tr><th>Code</th><th>Account</th><th class="num">Amount</th></tr></thead><tbody>
+<tr><td></td><td>Income</td><td class="num" dir="ltr"></td></tr>
+<tr><td></td><td>Expenses</td><td class="num" dir="ltr"></td></tr>
+<tr><td>6100</td><td>الإيجار</td><td class="num" dir="ltr">500.00</td></tr>
+</tbody></table>
+<table class="totals"><tr><th>Total income</th><td class="num" dir="ltr">0.00</td></tr>
+<tr><th>Total expenses</th><td class="num" dir="ltr">500.00</td></tr>
+<tr class="strong"><th>Net profit</th><td class="num" dir="ltr">-500.00</td></tr></table>
+
+
+<footer><span>Signature: ....................</span><span>Stamp</span></footer>
+</body></html>

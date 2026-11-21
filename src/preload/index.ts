@@ -13,6 +13,7 @@ const api: DesktopApi = {
   printers: () => ipcRenderer.invoke(CHANNELS.printers),
   print: (request) => ipcRenderer.invoke(CHANNELS.print, request),
   printA4: (request) => ipcRenderer.invoke(CHANNELS.printA4, request),
+  exportExcel: (table) => ipcRenderer.invoke(CHANNELS.exportExcel, table),
   discoverServers: () => ipcRenderer.invoke(CHANNELS.discoverServers),
   lastServer: () => ipcRenderer.invoke(CHANNELS.lastServer),
   connectServer: (host, port) => ipcRenderer.invoke(CHANNELS.connectServer, host, port),
