@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import type { Credentials } from "../../../core/users";
 import type { Account } from "../../../core/ledger";
 import type { Shift, ZReport } from "../../../core/shifts";
 import type { Item } from "../../../core/items";
@@ -9,6 +10,7 @@ import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { APPROVAL_ERRORS, CreditApprovalPrompt } from "./CreditApproval";
 
 type Tender = "cash" | "card" | "wallet" | "split" | "credit";
 const TENDERS: Tender[] = ["cash", "card", "wallet", "split", "credit"];
@@ -65,6 +67,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
   const [wallet, setWallet] = useState("");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState<number | "">("");
+  const [creditOver, setCreditOver] = useState<number | null>(null);
   const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<(CashSaleResult & { names: string[] }) | null>(null);
@@ -292,7 +295,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
     }
   }
 
-  async function complete() {
+  async function complete(creditApproval?: Credentials) {
     const cart = toSaleLines(lines);
     const discount = parseDiscount(receiptDiscount);
     if (warehouseId === "" || cart === null || cart.length === 0 || discount === null || !priced) return;
@@ -311,9 +314,13 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
       payments: paid,
       ...(tender === "credit" && customerId !== "" ? { customerId } : {}),
       ...(discount ? { discount } : {}),
+      ...(creditApproval ? { creditApproval } : {}),
       lines: cart,
     });
-    setError(errorText(result));
+    const over = !result.ok && result.code === "credit_limit_exceeded" ? (result.amount ?? 0) : null;
+    // A wrong manager sign-in keeps the prompt open with the error under it.
+    if (!(creditApproval && !result.ok && APPROVAL_ERRORS.includes(result.code))) setCreditOver(over);
+    setError(over === null ? errorText(result) : null);
     if (result.ok) {
       const names = result.value.belowZero.map((id) => lines.find((l) => l.itemId === id)?.name ?? "");
       setLast({ ...result.value, names });
@@ -469,6 +476,9 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
                 </li>
               ))}
             </ul>
+          )}
+          {creditOver !== null && (
+            <CreditApprovalPrompt over={creditOver} onApprove={(approval) => void complete(approval)} onCancel={() => setCreditOver(null)} />
           )}
           {error && (
             <div role="alert" className="error">

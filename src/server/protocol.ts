@@ -18,4 +18,4 @@ export type Hello = { app: "manager-plus"; protocol: 1; settings: BusinessSettin
 export type SignedIn = { user: User; token: string };
 
 /** One line from server to client, answering the request with the same id. */
-export type Reply = { id: number; ok: true; value: unknown } | { id: number; ok: false; code: string; message: string };
+export type Reply = { id: number; ok: true; value: unknown } | { id: number; ok: false; code: string; message: string; amount?: number };

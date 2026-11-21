@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
-import { findCustomer } from "./customers";
+import { type CreditApproval, checkCreditLimit, findCustomer } from "./customers";
+import { findUser } from "./users";
 import { assertIsoDate } from "./dates";
 import { BusinessError } from "./errors";
 import { type BasisPoints, type Quantity, vatRate } from "./items";
@@ -32,6 +33,8 @@ export type SalesInvoiceInput = {
   lines: InvoiceLineInput[];
   /** The quotation this invoice comes from; it is marked converted. */
   quotationId?: number;
+  /** A manager's sign-in when the invoice takes the customer past their credit limit. */
+  creditApproval?: CreditApproval;
 };
 export type SalesInvoiceResult = { id: number; number: number; total: Piastres; belowZero: number[] };
 export type SalesInvoice = {
@@ -116,6 +119,7 @@ export function postSalesInvoice(db: Database.Database, input: SalesInvoiceInput
   if (input.lines.length === 0) throw new BusinessError("invoice_needs_lines", "An invoice needs at least one line");
   const priced = priceInvoice(db, input.date, input.lines);
   if (priced.total === 0) throw new BusinessError("invoice_total_zero", "The invoice total is zero");
+  checkCreditLimit(db, customer, priced.total, input.creditApproval, { document: "postSalesInvoice", requestedBy: findUser(db, userId).name });
 
   const taken = new Map<number, { quantity: Quantity; value: Piastres }>();
   const outs = priced.lines.map((line, index) => {

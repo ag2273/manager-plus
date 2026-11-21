@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { BusinessError } from "./errors";
 import type { Piastres } from "./ledger";
+import { type Credentials, authenticate, writeAudit } from "./users";
 import { assertWithholdingCategory } from "./withholding";
 
 /** Which shelf price a customer's quotations and invoices start from. */
@@ -121,3 +122,34 @@ export function customerBalance(db: Database.Database, id: number): Piastres {
   return row.owed;
 }
 
+
+/** A manager's sign-in, given on a document that takes a customer past their credit limit. */
+export type CreditApproval = Credentials;
+
+/**
+ * Refuses a document that would put `adding` more on the customer's account past their credit
+ * limit, with the amount over, unless a manager signs in on it. The approval goes to the audit
+ * log under the manager's name, with who asked and for which command.
+ */
+export function checkCreditLimit(
+  db: Database.Database,
+  customer: Customer,
+  adding: Piastres,
+  approval: CreditApproval | undefined,
+  request: { document: string; requestedBy: string },
+): void {
+  if (customer.creditLimit === null || adding <= 0) return;
+  const over = customerBalance(db, customer.id) + adding - customer.creditLimit;
+  if (over <= 0) return;
+  if (!approval) {
+    throw new BusinessError("credit_limit_exceeded", `${customer.name} would go ${over} past their credit limit`, over);
+  }
+  const approver = authenticate(db, approval);
+  if (approver.role !== "manager") throw new BusinessError("approval_not_manager", `${approver.name} is not a manager`);
+  writeAudit(db, {
+    userId: approver.id,
+    action: "approveCreditLimit",
+    entityId: customer.id,
+    detail: JSON.stringify({ over, limit: customer.creditLimit, adding, ...request }),
+  });
+}

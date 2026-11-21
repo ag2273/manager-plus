@@ -85,7 +85,9 @@ function attempt<T>(work: () => T): Result<T> {
   try {
     return { ok: true, value: work() };
   } catch (error) {
-    if (error instanceof BusinessError) return { ok: false, code: error.code, message: error.message };
+    if (error instanceof BusinessError) {
+      return { ok: false, code: error.code, message: error.message, ...(error.amount === undefined ? {} : { amount: error.amount }) };
+    }
     console.error(error);
     return { ok: false, code: "unexpected", message: String(error) };
   }

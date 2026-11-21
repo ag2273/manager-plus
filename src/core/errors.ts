@@ -85,6 +85,8 @@ export type BusinessErrorCode =
   | "cost_kind_invalid"
   | "payee_not_egp"
   | "invoice_in_shipment"
+  | "credit_limit_exceeded"
+  | "approval_not_manager"
   | "withholding_category_not_found"
   | "withholding_invalid"
   | "withholding_not_egp"
@@ -105,6 +107,8 @@ export class BusinessError extends Error {
   constructor(
     readonly code: BusinessErrorCode,
     message: string,
+    /** An amount the screen shows with the message, such as how far past a credit limit a sale goes. */
+    readonly amount?: number,
   ) {
     super(message);
     this.name = "BusinessError";

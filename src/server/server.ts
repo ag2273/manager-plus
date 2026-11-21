@@ -15,7 +15,9 @@ function answer(id: number, work: () => unknown): Reply {
   try {
     return { id, ok: true, value: work() ?? null };
   } catch (error) {
-    if (error instanceof BusinessError) return { id, ok: false, code: error.code, message: error.message };
+    if (error instanceof BusinessError) {
+      return { id, ok: false, code: error.code, message: error.message, ...(error.amount === undefined ? {} : { amount: error.amount }) };
+    }
     console.error(error);
     return { id, ok: false, code: "unexpected", message: String(error) };
   }
