@@ -87,6 +87,8 @@ export type BusinessErrorCode =
   | "invoice_in_shipment"
   | "credit_limit_exceeded"
   | "period_locked"
+  | "count_needs_lines"
+  | "reason_required"
   | "line_not_found"
   | "entry_not_found"
   | "entry_not_voidable"

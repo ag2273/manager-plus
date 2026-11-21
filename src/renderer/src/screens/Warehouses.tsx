@@ -5,9 +5,10 @@ import type { Result } from "../../../shared/api";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { CountForm, LowStockView, MovementsView, WriteOffForm } from "./Inventory";
 import { SerialsField, splitSerials } from "./Serials";
 
-type Tab = "list" | "transfer" | "history";
+type Tab = "list" | "transfer" | "history" | "count" | "writeOff" | "low" | "movements";
 
 /** Warehouses on this site, moving stock between them, and past transfers. */
 export function Warehouses({ canChange }: { canChange: boolean }) {
@@ -23,7 +24,7 @@ export function Warehouses({ canChange }: { canChange: boolean }) {
     void reload();
   }, [reload]);
 
-  const tabs: Tab[] = canChange ? ["list", "transfer", "history"] : ["history"];
+  const tabs: Tab[] = canChange ? ["list", "transfer", "history", "count", "writeOff", "low", "movements"] : ["history", "low", "movements"];
 
   return (
     <>
@@ -43,6 +44,10 @@ export function Warehouses({ canChange }: { canChange: boolean }) {
       {tab === "list" && <WarehouseList warehouses={warehouses} onChange={reload} />}
       {tab === "transfer" && <TransferForm warehouses={warehouses.filter((w) => w.active)} />}
       {tab === "history" && <TransferHistory warehouses={warehouses} />}
+      {tab === "count" && <CountForm warehouses={warehouses.filter((w) => w.active)} />}
+      {tab === "writeOff" && <WriteOffForm warehouses={warehouses.filter((w) => w.active)} />}
+      {tab === "low" && <LowStockView warehouses={warehouses} canChange={canChange} />}
+      {tab === "movements" && <MovementsView warehouses={warehouses} />}
     </>
   );
 }

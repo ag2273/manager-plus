@@ -21,6 +21,7 @@ import {
 } from "./ledger";
 import {
   type BasisPoints,
+  type Quantity,
   type Item,
   type ItemChanges,
   type ItemInput,
@@ -74,6 +75,23 @@ import {
 import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
+import {
+  type ItemMovement,
+  type LowStockRow,
+  type StockCount,
+  type StockCountInput,
+  type WriteOff,
+  type WriteOffInput,
+  itemMovements,
+  lastMovementId,
+  listStockCounts,
+  listWriteOffs,
+  lowStock,
+  postStockCount,
+  repriceBackdated,
+  setItemMinimum,
+  writeOffStock,
+} from "./inventory";
 import {
   type AccountLine,
   type Expense,
@@ -345,7 +363,10 @@ export class Business {
   private write<T>(method: string, detail: unknown, work: () => T, entityId?: number): T {
     const user = this.allow(method);
     return this.db.transaction(() => {
+      const since = lastMovementId(this.db);
       const result = work();
+      // Anything moved on a date before movements already there reprices the issues after it.
+      repriceBackdated(this.db, since);
       writeAudit(this.db, {
         userId: user.id,
         action: method,
@@ -803,6 +824,43 @@ export class Business {
   /** A credit note by its printed number. */
   findCreditNote(number: number): CreditNote {
     return this.read("findCreditNote", () => findCreditNote(this.db, number));
+  }
+
+  // Stock counts, write-offs, low stock and movement history
+
+  /** Posts a stock count for one warehouse; differences go to Stock gain or Stock loss at average cost. */
+  postStockCount(count: StockCountInput): number {
+    const user = this.allow("postStockCount");
+    return this.write("postStockCount", count, () => postStockCount(this.db, count, user.id));
+  }
+
+  stockCounts(): StockCount[] {
+    return this.read("stockCounts", () => listStockCounts(this.db));
+  }
+
+  /** Damaged or expired stock taken out of a warehouse with a reason. */
+  writeOffStock(writeOff: WriteOffInput): number {
+    const user = this.allow("writeOffStock");
+    return this.write("writeOffStock", writeOff, () => writeOffStock(this.db, writeOff, user.id));
+  }
+
+  writeOffs(): WriteOff[] {
+    return this.read("writeOffs", () => listWriteOffs(this.db));
+  }
+
+  /** The quantity (base thousandths) below which the item is low on stock; null for none. */
+  setItemMinimum(itemId: number, minimum: Quantity | null): void {
+    this.write("setItemMinimum", { minimum }, () => setItemMinimum(this.db, itemId, minimum), itemId);
+  }
+
+  /** Items below their minimum, in total or in one warehouse. */
+  lowStock(warehouseId?: number): LowStockRow[] {
+    return this.read("lowStock", () => lowStock(this.db, warehouseId));
+  }
+
+  /** An item's stock movements with a running balance, in all warehouses or one. */
+  itemMovements(itemId: number, warehouseId?: number): ItemMovement[] {
+    return this.read("itemMovements", () => itemMovements(this.db, itemId, warehouseId));
   }
 
   // Money accounts, expenses, transfers, reconciliation and the lock date
