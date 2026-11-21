@@ -187,6 +187,12 @@ export type BusinessSettings = {
   fiscalYearStartMonth: number;
 };
 
+/** A document's audit detail: a manager's credit approval is logged by name, never with the password. */
+function withoutPassword<T extends { creditApproval?: { name: string } }>(input: T): Omit<T, "creditApproval"> & { creditApprovedBy?: string } {
+  const { creditApproval, ...rest } = input;
+  return creditApproval ? { ...rest, creditApprovedBy: creditApproval.name } : rest;
+}
+
 /**
  * The one entry point to a business's books. Every business rule lives behind
  * this facade; screens only call its commands and queries.
@@ -572,7 +578,7 @@ export class Business {
   /** Sells at the till, paid by any mix of cash, card and wallet, with any rest on a customer's account. */
   postSale(sale: SaleInput): SaleResult {
     const user = this.allow("postSale");
-    return this.write("postSale", sale, () => postSale(this.db, sale, user.id));
+    return this.write("postSale", withoutPassword(sale), () => postSale(this.db, sale, user.id));
   }
 
   // Customers
@@ -754,7 +760,7 @@ export class Business {
   /** Posts a tax invoice to a customer's account. */
   postSalesInvoice(invoice: SalesInvoiceInput): SalesInvoiceResult {
     const user = this.allow("postSalesInvoice");
-    return this.write("postSalesInvoice", invoice, () => postSalesInvoice(this.db, invoice, user.id));
+    return this.write("postSalesInvoice", withoutPassword(invoice), () => postSalesInvoice(this.db, invoice, user.id));
   }
 
   /** Sales invoices, newest first. */

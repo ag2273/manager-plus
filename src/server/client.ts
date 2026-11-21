@@ -100,7 +100,11 @@ function open(host: string, port: number, pinned: string | null): Promise<{ link
   });
 }
 
-const toResult = <T>(reply: Reply): Result<T> => (reply.ok ? { ok: true, value: reply.value as T } : { ok: false, code: reply.code, message: reply.message });
+function toResult<T>(reply: Reply): Result<T> {
+  if (reply.ok) return { ok: true, value: reply.value as T };
+  const { code, message, amount } = reply;
+  return { ok: false, code, message, ...(amount === undefined ? {} : { amount }) };
+}
 
 /**
  * A business served by another PC. Calls return the same `Result` as the local

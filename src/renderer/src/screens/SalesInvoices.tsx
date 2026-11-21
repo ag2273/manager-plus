@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Customer } from "../../../core/customers";
-import type { InvoiceLineInput, PricedInvoice, SalesInvoice } from "../../../core/invoices";
+import type { InvoiceLineInput, PricedInvoice, SalesInvoice, SalesInvoiceInput } from "../../../core/invoices";
 import type { Quotation } from "../../../core/quotations";
 import type { Item } from "../../../core/items";
 import type { Warehouse } from "../../../core/stock";
@@ -9,6 +9,7 @@ import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 import { SerialsField, splitSerials } from "./Serials";
+import { APPROVAL_ERRORS, CreditApprovalPrompt } from "./CreditApproval";
 import { useA4 } from "./Parties";
 
 type Tab = "invoice" | "invoices" | "quotation" | "quotations";
@@ -120,6 +121,7 @@ function InvoiceForm({
   const [lines, setLines] = useState<DraftLine[]>(from ? draftOf(from) : [emptyLine()]);
   const [priced, setPriced] = useState<{ rows: Record<number, PricedInvoice["lines"][number]>; totals: PricedInvoice } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ invoice: SalesInvoiceInput; over: number } | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
   useEffect(() => {
@@ -200,7 +202,7 @@ function InvoiceForm({
       }
       return;
     }
-    const result = await business.postSalesInvoice({
+    await post({
       date,
       customerId,
       warehouseId: warehouseId === "" ? 0 : warehouseId,
@@ -209,7 +211,14 @@ function InvoiceForm({
       lines: out,
       ...(quotationId === null ? {} : { quotationId }),
     });
-    setError(errorText(result));
+  }
+
+  async function post(invoice: SalesInvoiceInput) {
+    const result = await business.postSalesInvoice(invoice);
+    const over = !result.ok && result.code === "credit_limit_exceeded" ? (result.amount ?? 0) : null;
+    // A wrong manager sign-in keeps the prompt open with the error under it.
+    if (!(pending && !result.ok && APPROVAL_ERRORS.includes(result.code))) setPending(over === null ? null : { invoice, over });
+    setError(over === null ? errorText(result) : null);
     if (result.ok) {
       setQuotationId(null);
       setDone(`${ar.invoices.posted(result.value.number, formatMoney(result.value.total))}${result.value.belowZero.length > 0 ? ` · ${ar.invoices.belowZero}` : ""}`);
@@ -222,6 +231,13 @@ function InvoiceForm({
   return (
     <form className="card" onSubmit={submit} aria-label={quotation ? ar.quotations.new : ar.invoices.tabs.invoice}>
       {quotationId !== null && from && <p className="muted small">{ar.quotations.fromQuotation(from.number)}</p>}
+      {pending && (
+        <CreditApprovalPrompt
+          over={pending.over}
+          onApprove={(creditApproval) => void post({ ...pending.invoice, creditApproval })}
+          onCancel={() => setPending(null)}
+        />
+      )}
       {error && (
         <div role="alert" className="error">
           {error}

@@ -5,7 +5,8 @@ import { type BasisPoints, type Quantity, vatRate } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
 import { vatRegistered } from "./purchases";
 import { requireOpenShift } from "./shifts";
-import { findCustomer } from "./customers";
+import { type CreditApproval, checkCreditLimit, findCustomer } from "./customers";
+import { findUser } from "./users";
 import { issueSerials, serialsFor, serialsOnLine, warrantyEnd } from "./serials";
 import {
   type SerialLine,
@@ -56,6 +57,8 @@ export type SaleInput = {
   discount?: Discount;
   /** Needed when part of the total is left on credit. */
   customerId?: number;
+  /** A manager's sign-in when the credit takes the customer past their limit. */
+  creditApproval?: CreditApproval;
 };
 export type CashSaleInput = { date: IsoDate; warehouseId: number; lines: SaleLineInput[]; cashReceived: Piastres };
 export type SaleResult = CashSaleResult;
@@ -204,6 +207,7 @@ export function postSale(db: Database.Database, input: SaleInput, userId: number
   if (customerId !== undefined) {
     const customer = findCustomer(db, customerId);
     if (!customer.active) throw new BusinessError("customer_inactive", `Customer ${customer.name} is stopped`);
+    checkCreditLimit(db, customer, onCredit, input.creditApproval, { document: "postSale", requestedBy: findUser(db, userId).name });
   }
 
   // Cost each line in order, so two lines of the same item draw down stock one after the other.
