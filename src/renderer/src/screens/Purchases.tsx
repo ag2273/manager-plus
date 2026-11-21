@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Item } from "../../../core/items";
-import { CURRENCIES, type Currency, type PricedPurchase, type PurchaseInvoice, type PurchaseLineInput, type Supplier } from "../../../core/purchases";
+import { CURRENCIES, type Currency, type PricedPurchase, type PurchaseInvoice, type PurchaseLineInput, type Supplier, type SupplierAccount } from "../../../core/purchases";
 import type { Warehouse } from "../../../core/stock";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
@@ -9,6 +9,7 @@ import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 import { AgingView, PaymentForm, StatementView } from "./Parties";
 import { SerialsField, splitSerials } from "./Serials";
+import { formatRate, parseRate } from "../../../shared/rate";
 
 type Tab = "invoice" | "invoices" | "suppliers" | "payment" | "statement" | "aging";
 
@@ -45,7 +46,7 @@ export function Purchases({ canSeeBalances }: { canSeeBalances: boolean }) {
       {tab === "invoice" && <InvoiceForm suppliers={suppliers.filter((s) => s.active)} />}
       {tab === "invoices" && <InvoiceList suppliers={suppliers} />}
       {tab === "suppliers" && <SupplierList suppliers={suppliers} onChange={reload} canSeeBalances={canSeeBalances} />}
-      {tab === "payment" && <PaymentForm kind="supplier" parties={suppliers.filter((s) => s.currency === "EGP")} />}
+      {tab === "payment" && <PaymentForm kind="supplier" parties={suppliers} />}
       {tab === "statement" && <StatementView kind="supplier" parties={suppliers} />}
       {tab === "aging" && <AgingView kind="supplier" />}
     </>
@@ -76,7 +77,11 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [date, setDate] = useState(today());
   const [reference, setReference] = useState("");
+  const [rateText, setRateText] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
+  const supplier = suppliers.find((s) => s.id === supplierId);
+  const foreign = supplier !== undefined && supplier.currency !== "EGP";
+  const rate = foreign ? parseRate(rateText) : null;
   const [priced, setPriced] = useState<{ rows: Record<number, PricedPurchase["lines"][number]>; totals: PricedPurchase } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -98,8 +103,13 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
       setPriced(null);
       return;
     }
+    if (foreign && rate === null) {
+      setPriced(null);
+      return;
+    }
     let stale = false;
-    void business.pricePurchase(date, complete.map((c) => c.line)).then((r) => {
+    const money = foreign && rate !== null ? { currency: supplier.currency, rate } : undefined;
+    void business.pricePurchase(date, complete.map((c) => c.line), money).then((r) => {
       if (stale) return;
       if (!r.ok) {
         setPriced(null);
@@ -114,7 +124,7 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
     return () => {
       stale = true;
     };
-  }, [date, lines]);
+  }, [date, lines, foreign, rate, supplier?.currency]);
 
   function setLine(index: number, change: Partial<DraftLine>) {
     setLines(lines.map((l, i) => (i === index ? { ...l, ...change } : l)));
@@ -146,7 +156,18 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
       setError(ar.errors["warehouse_not_found"]!);
       return;
     }
-    const result: Result<number> = await business.postPurchaseInvoice({ date, supplierId, warehouseId, reference, lines: out });
+    if (foreign && rate === null) {
+      setError(ar.errors["rate_invalid"]!);
+      return;
+    }
+    const result: Result<number> = await business.postPurchaseInvoice({
+      date,
+      supplierId,
+      warehouseId,
+      reference,
+      lines: out,
+      ...(foreign && rate !== null ? { rate } : {}),
+    });
     setError(errorText(result));
     if (result.ok) {
       setDone(ar.purchases.posted);
@@ -197,7 +218,18 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
           {ar.purchases.reference}
           <input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} />
         </label>
+        {foreign && (
+          <label className="field narrow">
+            {ar.purchases.rate(supplier.currency)}
+            <input dir="ltr" inputMode="decimal" placeholder="48.50" value={rateText} onChange={(e) => setRateText(e.target.value)} />
+          </label>
+        )}
       </div>
+      {foreign && (
+        <p className="muted small">
+          {ar.purchases.inCurrency(supplier.currency)} · {ar.purchases.noVatForeign}
+        </p>
+      )}
       <table className="lines">
         <thead>
           <tr>
@@ -270,9 +302,20 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
                 <strong>{ar.purchases.totalWithVat}</strong>
               </td>
               <td colSpan={2} className="num">
-                <strong>{formatMoney(priced.totals.total)}</strong>
+                <strong>
+                  {foreign && `${supplier.currency} `}
+                  {formatMoney(priced.totals.total)}
+                </strong>
               </td>
             </tr>
+            {foreign && (
+              <tr>
+                <td colSpan={4}>{ar.purchases.totalInEgp}</td>
+                <td colSpan={2} className="num">
+                  {formatMoney(priced.totals.totalEgp)}
+                </td>
+              </tr>
+            )}
           </tfoot>
         )}
       </table>
@@ -335,7 +378,15 @@ function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
                 <td>{inv.lines.length}</td>
                 <td className="num">{formatMoney(inv.net)}</td>
                 <td className="num">{formatMoney(inv.vat)}</td>
-                <td className="num">{formatMoney(inv.total)}</td>
+                <td className="num">
+                  {inv.currency !== "EGP" && `${inv.currency} `}
+                  {formatMoney(inv.total)}
+                  {inv.currency !== "EGP" && (
+                    <div className="muted small">
+                      {formatMoney(inv.totalEgp)} @ {formatRate(inv.rate)}
+                    </div>
+                  )}
+                </td>
                 <td className="muted">{inv.postedBy}</td>
                 <td>
                   <button type="button" className="btn btn-small" aria-expanded={open === inv.id} onClick={() => setOpen(open === inv.id ? null : inv.id)}>
@@ -480,13 +531,13 @@ function SupplierList({
 }) {
   const [draft, setDraft] = useState<SupplierDraft>(emptySupplier);
   const [editing, setEditing] = useState<(SupplierDraft & { id: number }) | null>(null);
-  const [balances, setBalances] = useState<Record<number, number>>({});
+  const [balances, setBalances] = useState<Record<number, SupplierAccount>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canSeeBalances) return;
-    void Promise.all(suppliers.map((s) => business.supplierBalance(s.id))).then((results) => {
-      const next: Record<number, number> = {};
+    void Promise.all(suppliers.map((s) => business.supplierAccount(s.id))).then((results) => {
+      const next: Record<number, SupplierAccount> = {};
       results.forEach((r, i) => {
         if (r.ok) next[suppliers[i]!.id] = r.value;
       });
@@ -618,7 +669,7 @@ function SupplierList({
                       {s.taxRegistrationNumber}
                     </td>
                     <td className="muted">{s.currency}</td>
-                    {canSeeBalances && <td className="num">{balances[s.id] !== undefined && formatMoney(balances[s.id]!)}</td>}
+                    {canSeeBalances && <td className="num">{balances[s.id] !== undefined && <Owed account={balances[s.id]!} />}</td>}
                     <td>
                       <div className="actions">
                         <button
@@ -647,6 +698,17 @@ function SupplierList({
           </table>
         )}
       </section>
+    </>
+  );
+}
+
+/** A supplier's balance: in EGP, or in their currency with what the books carry it at in EGP. */
+function Owed({ account }: { account: SupplierAccount }) {
+  if (account.currency === "EGP") return <>{formatMoney(account.owed)}</>;
+  return (
+    <>
+      {account.currency} {formatMoney(account.owed)}
+      <div className="muted small">{formatMoney(account.owedEgp)} ج.م</div>
     </>
   );
 }

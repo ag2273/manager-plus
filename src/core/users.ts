@@ -192,6 +192,7 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   deactivateSupplier: ["manager", "accountant"],
   reactivateSupplier: ["manager", "accountant"],
   supplierBalance: ["manager", "accountant"],
+  supplierAccount: ["manager", "accountant"],
   stockValue: ["manager", "accountant", "storekeeper"],
   openShift: ["manager", "cashier"],
   currentShift: ["manager", "cashier"],

@@ -75,7 +75,7 @@ export type BusinessErrorCode =
   | "price_level_invalid"
   | "credit_limit_invalid"
   | "currency_invalid"
-  | "currency_not_supported"
+  | "rate_invalid"
   | "supplier_currency_locked"
   | "invoice_not_found"
   | "amount_invalid"

@@ -116,7 +116,7 @@ export function statementA4(
   const balance = (n: number) => (n === 0 ? "0.00" : `${formatMoney(Math.abs(n))} ${n > 0 ? "" : "(دائن)"}`.trim());
   return {
     shop: shopOf(settings),
-    title: party.kind === "customer" ? "كشف حساب عميل" : "كشف حساب مورد",
+    title: `${party.kind === "customer" ? "كشف حساب عميل" : "كشف حساب مورد"}${st.currency === "EGP" ? "" : ` (${st.currency})`}`,
     meta: [
       { label: "من", value: st.from },
       { label: "إلى", value: st.to },
