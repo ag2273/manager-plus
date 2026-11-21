@@ -76,6 +76,7 @@ import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
 import { type VatReturn, vatReturn } from "./vat-return";
+import { type ImportInput, type ImportReport, importData } from "./import";
 import {
   type BalanceSheet,
   type Dashboard,
@@ -553,6 +554,19 @@ export class Business {
   }
 
   /** Stock held on the day the business starts using the app, at its cost. */
+  /** A dry run of an import: every row is tried and nothing is saved. */
+  checkImport(input: ImportInput): ImportReport {
+    this.allow("importData");
+    return importData(this.db, input, true);
+  }
+
+  /** Imports items, opening stock and opening balances; refuses with nothing saved if any row fails. */
+  importData(input: ImportInput): ImportReport {
+    if (this.checkImport(input).problems.length > 0) throw new BusinessError("import_invalid", "Some rows can't be imported");
+    const summary = { date: input.date, warehouseId: input.warehouseId, sheets: input.sheets.map((s) => ({ name: s.name, rows: s.rows.length })) };
+    return this.write("importData", summary, () => importData(this.db, input, false));
+  }
+
   postOpeningStock(date: IsoDate, warehouseId: number, lines: OpeningStockLine[]): number {
     return this.write("postOpeningStock", { date, warehouseId, lines }, () =>
       postOpeningStock(this.db, date, warehouseId, lines),

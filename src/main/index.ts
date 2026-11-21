@@ -37,6 +37,10 @@ import { listPrinters, printA4, printHtml } from "./printer";
 import { a4Html, creditNoteA4, deliveryNoteA4, invoiceA4, quotationA4, statementA4 } from "../shared/a4";
 import { type ReportTable, reportA4, reportSheet } from "../shared/report-tables";
 import { xlsx } from "../shared/xlsx";
+import { importTemplate } from "../shared/import-template";
+import { decodeCsv, parseCsv, readXlsx } from "../shared/spreadsheet-read";
+import { inflateRawSync } from "node:zlib";
+import { basename } from "node:path";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
@@ -239,6 +243,35 @@ ipcMain.handle(CHANNELS.exportExcel, async (_event, table: ReportTable): Promise
   if (choice.canceled || !choice.filePath) return { ok: true, value: { saved: null } };
   writeFileSync(choice.filePath, xlsx(reportSheet(table)));
   return { ok: true, value: { saved: choice.filePath } };
+});
+
+ipcMain.handle(CHANNELS.saveImportTemplate, async (_event, lang: "ar" | "en"): Promise<Result<{ saved: string | null }>> => {
+  const options = {
+    defaultPath: lang === "ar" ? "نموذج استيراد الأصناف والأرصدة.xlsx" : "Items and balances import template.xlsx",
+    filters: [{ name: "Excel", extensions: ["xlsx"] }],
+  };
+  const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+  if (choice.canceled || !choice.filePath) return { ok: true, value: { saved: null } };
+  writeFileSync(choice.filePath, importTemplate(lang));
+  return { ok: true, value: { saved: choice.filePath } };
+});
+
+ipcMain.handle(CHANNELS.openSpreadsheet, async (): Promise<Result<{ name: string; sheets: { name: string; rows: string[][] }[] } | null>> => {
+  const options = { properties: ["openFile" as const], filters: [{ name: "Excel / CSV", extensions: ["xlsx", "csv"] }] };
+  const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+  const path = choice.filePaths[0];
+  if (choice.canceled || !path) return { ok: true, value: null };
+  try {
+    const bytes = new Uint8Array(readFileSync(path));
+    const name = basename(path);
+    const sheets = /\.csv$/i.test(path)
+      ? [{ name, rows: parseCsv(decodeCsv(bytes)) }]
+      : readXlsx(bytes, (data) => new Uint8Array(inflateRawSync(data)));
+    return { ok: true, value: { name, sheets } };
+  } catch (error) {
+    console.error(error);
+    return { ok: false, code: "spreadsheet_unreadable", message: String(error) };
+  }
 });
 
 ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Result<{ saved: string | null }>> => {
