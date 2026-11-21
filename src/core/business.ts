@@ -75,6 +75,7 @@ import {
 import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
+import { type VatReturn, vatReturn } from "./vat-return";
 import {
   type BalanceSheet,
   type Dashboard,
@@ -889,6 +890,11 @@ export class Business {
   /** Every item's quantity and value at the end of a date. */
   stockAt(asOf: IsoDate): StockReport {
     return this.read("stockAt", () => stockAt(this.db, asOf));
+  }
+
+  /** Output and input VAT by tax kind for a month or quarter, with the documents behind each figure. */
+  vatReturn(from: IsoDate, to: IsoDate): VatReturn {
+    return this.read("vatReturn", () => vatReturn(this.db, from, to));
   }
 
   /** Today's figures for the home screen. */

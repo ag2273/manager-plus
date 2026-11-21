@@ -102,6 +102,7 @@ export type BusinessErrorCode =
   | "amount_invalid"
   | "allocation_invalid"
   | "date_range_invalid"
+  | "not_vat_registered"
   | "serials_required"
   | "serials_not_expected"
   | "serial_in_stock"
