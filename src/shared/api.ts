@@ -80,6 +80,8 @@ export const BUSINESS_METHODS = [
   "postPurchaseInvoice",
   "purchaseInvoices",
   "postDebitNote",
+  "postImportShipment",
+  "importShipments",
   "debitNotes",
   "priceInvoice",
   "postSalesInvoice",

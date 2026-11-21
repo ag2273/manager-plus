@@ -73,6 +73,7 @@ import {
 } from "./invoices";
 import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
+import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
 import {
   type Aging,
   type OpenDocument,
@@ -696,6 +697,17 @@ export class Business {
   postDebitNote(note: DebitNoteInput): { id: number; number: number; total: Piastres } {
     const user = this.allow("postDebitNote");
     return this.write("postDebitNote", note, () => postDebitNote(this.db, note, user.id));
+  }
+
+  /** Spreads an import shipment's customs, freight and other costs into its items' cost. */
+  postImportShipment(shipment: ImportShipmentInput): number {
+    const user = this.allow("postImportShipment");
+    return this.write("postImportShipment", shipment, () => postImportShipment(this.db, shipment, user.id));
+  }
+
+  /** Import shipments, newest first, with each item's landed unit cost. */
+  importShipments(): ImportShipment[] {
+    return this.read("importShipments", () => listImportShipments(this.db));
   }
 
   /** Debit notes, newest first. */

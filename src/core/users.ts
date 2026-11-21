@@ -220,6 +220,8 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   postPurchaseInvoice: ["manager", "accountant", "storekeeper"],
   purchaseInvoices: ["manager", "accountant", "storekeeper"],
   postDebitNote: ["manager", "accountant", "storekeeper"],
+  postImportShipment: ["manager", "accountant"],
+  importShipments: ["manager", "accountant"],
   debitNotes: ["manager", "accountant", "storekeeper"],
   priceInvoice: ["manager", "accountant"],
   postSalesInvoice: ["manager", "accountant"],

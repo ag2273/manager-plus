@@ -9,15 +9,16 @@ import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 import { AgingView, PaymentForm, StatementView } from "./Parties";
 import { SerialsField, splitSerials } from "./Serials";
+import { Shipments } from "./Shipments";
 import { formatRate, parseRate } from "../../../shared/rate";
 
-type Tab = "invoice" | "invoices" | "suppliers" | "payment" | "statement" | "aging";
+type Tab = "invoice" | "invoices" | "shipments" | "suppliers" | "payment" | "statement" | "aging";
 
 /** Supplier invoices into a warehouse, past invoices, and the supplier list. */
 export function Purchases({ canSeeBalances }: { canSeeBalances: boolean }) {
   const [tab, setTab] = useState<Tab>("invoice");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const tabs: Tab[] = canSeeBalances ? ["invoice", "invoices", "suppliers", "payment", "statement", "aging"] : ["invoice", "invoices", "suppliers"];
+  const tabs: Tab[] = canSeeBalances ? ["invoice", "invoices", "shipments", "suppliers", "payment", "statement", "aging"] : ["invoice", "invoices", "suppliers"];
 
   const reload = useCallback(async () => {
     const result = await business.suppliers();
@@ -45,6 +46,7 @@ export function Purchases({ canSeeBalances }: { canSeeBalances: boolean }) {
       </div>
       {tab === "invoice" && <InvoiceForm suppliers={suppliers.filter((s) => s.active)} />}
       {tab === "invoices" && <InvoiceList suppliers={suppliers} />}
+      {tab === "shipments" && <Shipments suppliers={suppliers} />}
       {tab === "suppliers" && <SupplierList suppliers={suppliers} onChange={reload} canSeeBalances={canSeeBalances} />}
       {tab === "payment" && <PaymentForm kind="supplier" parties={suppliers} />}
       {tab === "statement" && <StatementView kind="supplier" parties={suppliers} />}
