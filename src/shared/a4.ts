@@ -1,6 +1,7 @@
 import type { BusinessSettings } from "../core/business";
 import type { Customer } from "../core/customers";
 import type { CreditNote, SalesInvoice } from "../core/invoices";
+import type { Quotation } from "../core/quotations";
 import type { Statement } from "../core/settlements";
 import { formatMoney } from "./money";
 import { serialNote } from "./serials";
@@ -103,6 +104,65 @@ export function creditNoteA4(note: CreditNote, settings: BusinessSettings, custo
     totals,
     words: amountInWords(note.total),
     notes: note.reason,
+  };
+}
+
+/** A price offer: the invoice's columns, the validity date, and no ledger effect. */
+export function quotationA4(q: Quotation, settings: BusinessSettings, customer: Customer): A4Document {
+  const meta = [
+    { label: "رقم العرض", value: String(q.number) },
+    { label: "التاريخ", value: q.date },
+    { label: "ساري حتى", value: q.validUntil },
+  ];
+  if (q.reference) meta.push({ label: "مرجع العميل", value: q.reference });
+  const totals: A4Document["totals"] = [];
+  if (q.discount > 0) {
+    totals.push({ label: "الإجمالي قبل الخصم", value: formatMoney(q.gross) });
+    totals.push({ label: "الخصم", value: formatMoney(q.discount) });
+  }
+  totals.push({ label: "الصافي قبل الضريبة", value: formatMoney(q.net) });
+  if (settings.vatRegistered) totals.push({ label: "ضريبة القيمة المضافة", value: formatMoney(q.vat) });
+  totals.push({ label: "الإجمالي", value: formatMoney(q.total), strong: true });
+  return {
+    shop: shopOf(settings),
+    title: "عرض سعر",
+    meta,
+    party: buyer(customer, "السادة"),
+    columns: LINE_COLUMNS,
+    rows: q.lines.map((l, i) => [
+      String(i + 1),
+      l.nameAr,
+      l.unitName,
+      formatQuantity(l.quantity),
+      formatMoney(l.unitPrice),
+      l.discount > 0 ? formatMoney(l.discount) : "",
+      formatMoney(l.net),
+      settings.vatRegistered ? `${formatMoney(l.vat)} (${rate(l.vatRate)})` : "",
+      formatMoney(l.net + l.vat),
+    ]),
+    totals,
+    words: amountInWords(q.total),
+    notes: q.notes,
+  };
+}
+
+/** What goes out with the goods: items, quantities and serials, without prices. */
+export function deliveryNoteA4(invoice: SalesInvoice, settings: BusinessSettings, customer: Customer): A4Document {
+  const meta = [
+    { label: "رقم الفاتورة", value: String(invoice.number) },
+    { label: "التاريخ", value: invoice.date },
+  ];
+  if (invoice.reference) meta.push({ label: "مرجع العميل", value: invoice.reference });
+  return {
+    shop: shopOf(settings),
+    title: "إذن تسليم",
+    meta,
+    party: buyer(customer, "المستلم"),
+    columns: [LINE_COLUMNS[0]!, LINE_COLUMNS[1]!, LINE_COLUMNS[2]!, LINE_COLUMNS[3]!],
+    rows: invoice.lines.map((l, i) => [String(i + 1), l.nameAr + serialNote(l), l.unitName, formatQuantity(l.quantity)]),
+    totals: [],
+    words: "",
+    notes: [invoice.notes, "استلمت البضاعة الموضحة أعلاه بحالة جيدة.\nاسم المستلم: ....................   التاريخ: ..........."].filter(Boolean).join("\n\n"),
   };
 }
 

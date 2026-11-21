@@ -23,6 +23,7 @@ import {
 import type { Customer } from "../core/customers";
 import type { Supplier } from "../core/purchases";
 import type { CreditNote, SalesInvoice } from "../core/invoices";
+import type { Quotation } from "../core/quotations";
 import type { Statement } from "../core/settlements";
 import type { Receipt } from "../core/sales";
 import type { SaleReturn } from "../core/returns";
@@ -33,7 +34,7 @@ import { type RunningServer, startServer } from "../server/server";
 import { DEFAULT_PORT } from "../server/protocol";
 import { documentHtml, returnDocument, saleDocument, testDocument } from "../shared/receipt";
 import { listPrinters, printA4, printHtml } from "./printer";
-import { a4Html, creditNoteA4, invoiceA4, statementA4 } from "../shared/a4";
+import { a4Html, creditNoteA4, deliveryNoteA4, invoiceA4, quotationA4, statementA4 } from "../shared/a4";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
@@ -239,6 +240,14 @@ ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Res
       const note = await need<CreditNote>("findCreditNote", request.number);
       const customer = (await need<Customer[]>("customers")).find((c) => c.id === note.customerId)!;
       page = { html: a4Html(creditNoteA4(note, settings, customer)), name: `إشعار دائن ${note.number}` };
+    } else if (request.kind === "deliveryNote") {
+      const invoice = await need<SalesInvoice>("findSalesInvoice", request.number);
+      const customer = (await need<Customer[]>("customers")).find((c) => c.id === invoice.customerId)!;
+      page = { html: a4Html(deliveryNoteA4(invoice, settings, customer)), name: `إذن تسليم ${invoice.number}` };
+    } else if (request.kind === "quotation") {
+      const quotation = await need<Quotation>("findQuotation", request.number, new Date().toLocaleDateString("en-CA"));
+      const customer = (await need<Customer[]>("customers")).find((c) => c.id === quotation.customerId)!;
+      page = { html: a4Html(quotationA4(quotation, settings, customer)), name: `عرض سعر ${quotation.number}` };
     } else {
       const st = await need<Statement>("statement", request.party, request.id, request.from, request.to);
       const party =

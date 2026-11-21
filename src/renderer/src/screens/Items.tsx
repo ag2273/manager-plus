@@ -172,6 +172,7 @@ type Draft = {
   baseUnit: string;
   barcode: string;
   salePrice: string;
+  wholesalePrice: string;
   taxCodeId: number;
   egsCode: string;
   hasPack: boolean;
@@ -179,7 +180,14 @@ type Draft = {
   packSize: string;
   packBarcode: string;
   packPrice: string;
+  packWholesale: string;
 };
+
+/** A typed price, or null for a blank field, or "bad" when it is not money. */
+function optionalMoney(text: string): number | null | "bad" {
+  if (text.trim() === "") return null;
+  return parseMoney(text) ?? "bad";
+}
 
 function toDraft(item: Item | null, taxCodes: TaxCode[]): Draft {
   return {
@@ -189,6 +197,7 @@ function toDraft(item: Item | null, taxCodes: TaxCode[]): Draft {
     baseUnit: item?.baseUnit ?? "قطعة",
     barcode: item?.barcode ?? "",
     salePrice: item ? formatMoney(item.salePrice) : "",
+    wholesalePrice: item?.wholesalePrice != null ? formatMoney(item.wholesalePrice) : "",
     taxCodeId: item?.taxCodeId ?? taxCodes[0]?.id ?? 0,
     egsCode: item?.egsCode ?? "",
     hasPack: item?.pack != null,
@@ -196,6 +205,7 @@ function toDraft(item: Item | null, taxCodes: TaxCode[]): Draft {
     packSize: item?.pack ? formatQuantity(item.pack.size) : "",
     packBarcode: item?.pack?.barcode ?? "",
     packPrice: item?.pack ? formatMoney(item.pack.salePrice) : "",
+    packWholesale: item?.pack?.wholesalePrice != null ? formatMoney(item.pack.wholesalePrice) : "",
   };
 }
 
@@ -217,17 +227,22 @@ function ItemForm({
   function toInput(): ItemInput | string {
     const salePrice = parseMoney(draft.salePrice);
     if (salePrice === null) return ar.errors["price_invalid"]!;
+    const wholesalePrice = optionalMoney(draft.wholesalePrice);
+    if (wholesalePrice === "bad") return ar.errors["price_invalid"]!;
     let pack: ItemInput["pack"] = null;
     if (draft.hasPack) {
       const size = parseQuantity(draft.packSize);
       const packPrice = parseMoney(draft.packPrice);
       if (size === null) return ar.errors["pack_size_invalid"]!;
       if (packPrice === null) return ar.errors["price_invalid"]!;
+      const packWholesale = optionalMoney(draft.packWholesale);
+      if (packWholesale === "bad") return ar.errors["price_invalid"]!;
       pack = {
         name: draft.packName,
         size,
         barcode: draft.packBarcode,
         salePrice: packPrice,
+        wholesalePrice: packWholesale,
       };
     }
     return {
@@ -237,6 +252,7 @@ function ItemForm({
       baseUnit: draft.baseUnit,
       barcode: draft.barcode,
       salePrice,
+      wholesalePrice,
       taxCodeId: draft.taxCodeId,
       egsCode: draft.egsCode,
       pack,
@@ -332,6 +348,16 @@ function ItemForm({
           />
         </label>
         <label className="field narrow">
+          {ar.items.wholesalePrice}
+          <input
+            dir="ltr"
+            inputMode="decimal"
+            placeholder={ar.items.wholesaleHint}
+            value={draft.wholesalePrice}
+            onChange={(e) => set({ wholesalePrice: e.target.value })}
+          />
+        </label>
+        <label className="field narrow">
           {ar.items.taxCode}
           <select
             value={draft.taxCodeId}
@@ -394,6 +420,16 @@ function ItemForm({
               inputMode="decimal"
               value={draft.packPrice}
               onChange={(e) => set({ packPrice: e.target.value })}
+            />
+          </label>
+          <label className="field narrow">
+            {ar.items.packWholesale}
+            <input
+              dir="ltr"
+              inputMode="decimal"
+              placeholder={ar.items.wholesaleHint}
+              value={draft.packWholesale}
+              onChange={(e) => set({ packWholesale: e.target.value })}
             />
           </label>
         </div>
