@@ -74,6 +74,7 @@ import {
 import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
+import { type Quotation, type QuotationInput, findQuotation, listPrice, listQuotations, saveQuotation } from "./quotations";
 import {
   type Aging,
   type OpenDocument,
@@ -708,6 +709,26 @@ export class Business {
   /** Import shipments, newest first, with each item's landed unit cost. */
   importShipments(): ImportShipment[] {
     return this.read("importShipments", () => listImportShipments(this.db));
+  }
+
+  /** The VAT-exclusive price of one unit for a customer's price level (retail with no customer). */
+  listPrice(customerId: number | null, itemId: number, unit: "base" | "pack", date: IsoDate): Piastres {
+    return this.read("listPrice", () => listPrice(this.db, customerId, itemId, unit, date));
+  }
+
+  /** Saves a quotation for a customer; it posts nothing and moves no stock. */
+  saveQuotation(quotation: QuotationInput): { id: number; number: number } {
+    const user = this.allow("saveQuotation");
+    return this.write("saveQuotation", quotation, () => saveQuotation(this.db, quotation, user.id));
+  }
+
+  /** Quotations, newest first, with their status (open, expired, converted) on `today`. */
+  quotations(today: IsoDate): Quotation[] {
+    return this.read("quotations", () => listQuotations(this.db, today));
+  }
+
+  findQuotation(number: number, today: IsoDate): Quotation {
+    return this.read("findQuotation", () => findQuotation(this.db, number, today));
   }
 
   /** Debit notes, newest first. */

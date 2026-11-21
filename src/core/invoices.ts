@@ -5,6 +5,7 @@ import { BusinessError } from "./errors";
 import { type BasisPoints, type Quantity, vatRate } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
 import { vatRegistered } from "./purchases";
+import { convertQuotation } from "./quotations";
 import { type Taken, nextNumber, shareOf, take } from "./shares";
 import { issueSerials, returnSerials, serialsFor, serialsOnLine, warrantyEnd } from "./serials";
 import { type SerialLine, type UnitLine, accountByRole, activeWarehouse, assertQuantity, costOfIssue, insertMovement, toBaseQuantity } from "./stock";
@@ -29,6 +30,8 @@ export type SalesInvoiceInput = {
   reference: string;
   notes: string;
   lines: InvoiceLineInput[];
+  /** The quotation this invoice comes from; it is marked converted. */
+  quotationId?: number;
 };
 export type SalesInvoiceResult = { id: number; number: number; total: Piastres; belowZero: number[] };
 export type SalesInvoice = {
@@ -142,6 +145,7 @@ export function postSalesInvoice(db: Database.Database, input: SalesInvoiceInput
       )
       .run(number, input.date, customer.id, input.warehouseId, input.reference.trim(), input.notes.trim(), entryId, userId).lastInsertRowid,
   );
+  if (input.quotationId !== undefined) convertQuotation(db, input.quotationId, customer.id, id);
   const insertLine = db.prepare(
     `INSERT INTO sales_invoice_lines (invoice_id, item_id, unit, quantity, unit_price, discount, net, vat_rate, vat, cost)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

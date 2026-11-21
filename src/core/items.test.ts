@@ -94,6 +94,7 @@ describe("items", () => {
         baseUnit: "قطعة",
         barcode: "6221000000035",
         salePrice: 5_700,
+        wholesalePrice: null,
         taxCodeId: taxCode(business, "standard").id,
         egsCode: "EG-123-456",
         pack: null,
@@ -117,6 +118,7 @@ describe("items", () => {
       size: 12_000,
       barcode: "16221000000035",
       salePrice: 64_800,
+      wholesalePrice: null,
     });
   });
 

@@ -81,6 +81,10 @@ export const BUSINESS_METHODS = [
   "purchaseInvoices",
   "postDebitNote",
   "postImportShipment",
+  "saveQuotation",
+  "quotations",
+  "findQuotation",
+  "listPrice",
   "importShipments",
   "debitNotes",
   "priceInvoice",
@@ -130,6 +134,8 @@ export type Connection = { mode: "none" } | { mode: "local"; path: string } | { 
 export type A4Request = (
   | { kind: "invoice"; number: number }
   | { kind: "creditNote"; number: number }
+  | { kind: "quotation"; number: number }
+  | { kind: "deliveryNote"; number: number }
   | { kind: "statement"; party: "customer" | "supplier"; id: number; from: string; to: string }
 ) & { output: "pdf" | "print" };
 

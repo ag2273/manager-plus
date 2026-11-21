@@ -11,7 +11,7 @@ export type BasisPoints = number;
 export type TaxCodeKind = "standard" | "zero_rated" | "exempt";
 export type TaxCode = { id: number; kind: TaxCodeKind; name: string; rates: { from: IsoDate; rate: BasisPoints }[] };
 
-export type PackUnit = { name: string; size: Quantity; barcode: string | null; salePrice: Piastres };
+export type PackUnit = { name: string; size: Quantity; barcode: string | null; salePrice: Piastres; wholesalePrice: Piastres | null };
 export type Item = {
   id: number;
   nameAr: string;
@@ -21,6 +21,8 @@ export type Item = {
   barcode: string | null;
   /** VAT-inclusive price of one base unit. */
   salePrice: Piastres;
+  /** VAT-inclusive price for wholesale customers; the retail price when not set. */
+  wholesalePrice: Piastres | null;
   taxCodeId: number;
   egsCode: string;
   pack: PackUnit | null;
@@ -30,7 +32,7 @@ export type Item = {
   active: boolean;
 };
 
-export type PackUnitInput = { name: string; size: Quantity; barcode?: string; salePrice: Piastres };
+export type PackUnitInput = { name: string; size: Quantity; barcode?: string; salePrice: Piastres; wholesalePrice?: Piastres | null };
 export type ItemInput = {
   nameAr: string;
   nameEn?: string;
@@ -38,6 +40,7 @@ export type ItemInput = {
   baseUnit: string;
   barcode?: string;
   salePrice: Piastres;
+  wholesalePrice?: Piastres | null;
   taxCodeId: number;
   egsCode?: string;
   pack?: PackUnitInput | null;
@@ -109,6 +112,8 @@ type ItemRow = {
   base_name: string;
   base_barcode: string | null;
   base_price: number;
+  base_wholesale: number | null;
+  pack_wholesale: number | null;
   pack_name: string | null;
   pack_size: number | null;
   pack_barcode: string | null;
@@ -117,7 +122,7 @@ type ItemRow = {
 
 const SELECT_ITEMS = `
   SELECT i.id, i.name_ar, i.name_en, i.code, i.tax_code_id, i.egs_code, i.active, i.serialised, i.warranty_months,
-         b.name AS base_name, b.barcode AS base_barcode, b.sale_price AS base_price,
+         b.name AS base_name, b.barcode AS base_barcode, b.sale_price AS base_price, b.wholesale_price AS base_wholesale, p.wholesale_price AS pack_wholesale,
          p.name AS pack_name, p.size AS pack_size, p.barcode AS pack_barcode, p.sale_price AS pack_price
     FROM items i
     JOIN item_units b ON b.item_id = i.id AND b.kind = 'base'
@@ -132,12 +137,13 @@ function toItem(r: ItemRow): Item {
     baseUnit: r.base_name,
     barcode: r.base_barcode,
     salePrice: r.base_price,
+    wholesalePrice: r.base_wholesale,
     taxCodeId: r.tax_code_id,
     egsCode: r.egs_code,
     pack:
       r.pack_name === null
         ? null
-        : { name: r.pack_name, size: r.pack_size ?? 0, barcode: r.pack_barcode, salePrice: r.pack_price ?? 0 },
+        : { name: r.pack_name, size: r.pack_size ?? 0, barcode: r.pack_barcode, salePrice: r.pack_price ?? 0, wholesalePrice: r.pack_wholesale },
     serialised: r.serialised === 1,
     warrantyMonths: r.warranty_months,
     active: r.active === 1,
@@ -188,10 +194,17 @@ type CleanItem = {
   baseUnit: string;
   barcode: string | null;
   salePrice: Piastres;
+  wholesalePrice: Piastres | null;
   taxCodeId: number;
   egsCode: string;
   pack: PackUnit | null;
 };
+
+function optionalPrice(price: Piastres | null | undefined): Piastres | null {
+  if (price === null || price === undefined) return null;
+  assertPrice(price);
+  return price;
+}
 
 function cleanItem(db: Database.Database, input: ItemInput): CleanItem {
   const nameAr = required(input.nameAr, "Arabic name", "item_name_required");
@@ -205,7 +218,13 @@ function cleanItem(db: Database.Database, input: ItemInput): CleanItem {
       throw new BusinessError("pack_size_invalid", `Pack size ${input.pack.size} is not a positive whole quantity`);
     }
     assertPrice(input.pack.salePrice);
-    pack = { name, size: input.pack.size, barcode: blankToNull(input.pack.barcode), salePrice: input.pack.salePrice };
+    pack = {
+      name,
+      size: input.pack.size,
+      barcode: blankToNull(input.pack.barcode),
+      salePrice: input.pack.salePrice,
+      wholesalePrice: optionalPrice(input.pack.wholesalePrice),
+    };
   }
   const clean = {
     nameAr,
@@ -214,6 +233,7 @@ function cleanItem(db: Database.Database, input: ItemInput): CleanItem {
     baseUnit,
     barcode: blankToNull(input.barcode),
     salePrice: input.salePrice,
+    wholesalePrice: optionalPrice(input.wholesalePrice),
     taxCodeId: input.taxCodeId,
     egsCode: input.egsCode?.trim() ?? "",
     pack,
@@ -239,10 +259,10 @@ function assertFree(db: Database.Database, item: CleanItem, itemId: number | nul
 function writeUnits(db: Database.Database, itemId: number, item: CleanItem): void {
   db.prepare("DELETE FROM item_units WHERE item_id = ?").run(itemId);
   const insert = db.prepare(
-    "INSERT INTO item_units (item_id, kind, name, size, barcode, sale_price) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO item_units (item_id, kind, name, size, barcode, sale_price, wholesale_price) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
-  insert.run(itemId, "base", item.baseUnit, ONE_BASE_UNIT, item.barcode, item.salePrice);
-  if (item.pack) insert.run(itemId, "pack", item.pack.name, item.pack.size, item.pack.barcode, item.pack.salePrice);
+  insert.run(itemId, "base", item.baseUnit, ONE_BASE_UNIT, item.barcode, item.salePrice, item.wholesalePrice);
+  if (item.pack) insert.run(itemId, "pack", item.pack.name, item.pack.size, item.pack.barcode, item.pack.salePrice, item.pack.wholesalePrice);
 }
 
 export function addItem(db: Database.Database, input: ItemInput): number {
@@ -272,6 +292,7 @@ export function updateItem(db: Database.Database, id: number, changes: ItemChang
     baseUnit: current.baseUnit,
     barcode: current.barcode ?? "",
     salePrice: current.salePrice,
+    wholesalePrice: current.wholesalePrice,
     taxCodeId: current.taxCodeId,
     egsCode: current.egsCode,
     pack: current.pack && { ...current.pack, barcode: current.pack.barcode ?? "" },

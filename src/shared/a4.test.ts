@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Business } from "../core/business";
-import { a4Html, creditNoteA4, invoiceA4, statementA4 } from "./a4";
+import { a4Html, creditNoteA4, deliveryNoteA4, invoiceA4, quotationA4, statementA4 } from "./a4";
 
 const manager = { name: "أيمن", password: "كلمة سر قوية" };
 const shop = { name: "شركة النور للكمبيوتر", address: "الدقي، الجيزة", taxRegistrationNumber: "123456789", vatRegistered: true, fiscalYearStartMonth: 1 };
@@ -61,5 +61,31 @@ describe("A4 documents", () => {
     const { business, customer } = sample();
     const html = a4Html(invoiceA4(business.findSalesInvoice(1), business.settings(), { ...customer, name: "<b>x</b>" }));
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
+  });
+});
+
+describe("quotations and delivery notes", () => {
+  test("a quotation shows its validity, and a delivery note shows quantities without prices", () => {
+    const { business, customer } = sample();
+    const router = business.items()[0]!.id;
+    business.saveQuotation({
+      date: "2026-11-20",
+      validUntil: "2026-11-30",
+      customerId: customer.id,
+      reference: "RFQ-3",
+      notes: "",
+      lines: [{ itemId: router, unit: "base", quantity: 3_000, unitPrice: 120_000 }],
+    });
+    const quote = quotationA4(business.findQuotation(1, "2026-11-20"), business.settings(), customer);
+    expect(quote.title).toBe("عرض سعر");
+    expect(quote.meta).toContainEqual({ label: "ساري حتى", value: "2026-11-30" });
+    expect(quote.totals.at(-1)).toEqual({ label: "الإجمالي", value: "4,104.00", strong: true });
+
+    const note = deliveryNoteA4(business.findSalesInvoice(1), business.settings(), customer);
+    expect(note.title).toBe("إذن تسليم");
+    expect(note.columns.map((c) => c.label)).toEqual(["م", "الصنف", "الوحدة", "الكمية"]);
+    expect(note.rows).toEqual([["1", "راوتر واي فاي 6", "قطعة", "2"]]);
+    expect(note.totals).toEqual([]);
+    expect(a4Html(note)).not.toContain("1,200.00");
   });
 });

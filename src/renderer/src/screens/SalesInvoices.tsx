@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Customer } from "../../../core/customers";
 import type { InvoiceLineInput, PricedInvoice, SalesInvoice } from "../../../core/invoices";
+import type { Quotation } from "../../../core/quotations";
 import type { Item } from "../../../core/items";
 import type { Warehouse } from "../../../core/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
@@ -10,13 +11,14 @@ import { ar } from "../strings";
 import { SerialsField, splitSerials } from "./Serials";
 import { useA4 } from "./Parties";
 
-type Tab = "invoice" | "invoices";
-const TABS: Tab[] = ["invoice", "invoices"];
+type Tab = "invoice" | "invoices" | "quotation" | "quotations";
+const TABS: Tab[] = ["invoice", "invoices", "quotation", "quotations"];
 
 /** A4 tax invoices to customers on account, and credit notes against them. */
 export function SalesInvoices() {
   const [tab, setTab] = useState<Tab>("invoice");
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [from, setFrom] = useState<Quotation | null>(null);
 
   useEffect(() => {
     void business.customers().then((r) => r.ok && setCustomers(r.value));
@@ -32,13 +34,34 @@ export function SalesInvoices() {
       </header>
       <div role="tablist" aria-label={ar.invoices.title} className="pills">
         {TABS.map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={t === tab} className="pill" onClick={() => setTab(t)}>
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={t === tab}
+            className="pill"
+            onClick={() => {
+              setFrom(null);
+              setTab(t);
+            }}
+          >
             {ar.invoices.tabs[t]}
           </button>
         ))}
       </div>
-      {tab === "invoice" && <InvoiceForm customers={customers.filter((c) => c.active)} onPosted={() => setTab("invoices")} />}
+      {tab === "invoice" && (
+        <InvoiceForm key={from?.id ?? "new"} customers={customers.filter((c) => c.active)} from={from} onPosted={() => setTab("invoices")} />
+      )}
       {tab === "invoices" && <InvoiceList />}
+      {tab === "quotation" && <InvoiceForm kind="quotation" customers={customers.filter((c) => c.active)} onPosted={() => setTab("quotations")} />}
+      {tab === "quotations" && (
+        <QuotationList
+          onConvert={(q) => {
+            setFrom(q);
+            setTab("invoice");
+          }}
+        />
+      )}
     </>
   );
 }
@@ -58,15 +81,43 @@ function toLine(l: DraftLine): InvoiceLineInput | null | "bad" {
   return { itemId: l.itemId, unit: l.unit, quantity, unitPrice, discount, ...(serials.length > 0 ? { serials } : {}) };
 }
 
-function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted: () => void }) {
+const draftOf = (q: Quotation): DraftLine[] =>
+  q.lines.map((l) => ({
+    itemId: l.itemId,
+    unit: l.unit,
+    quantity: formatQuantity(l.quantity),
+    unitPrice: formatMoney(l.unitPrice).replace(/,/g, ""),
+    discount: l.discount > 0 ? formatMoney(l.discount).replace(/,/g, "") : "",
+    serials: "",
+  }));
+const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toLocaleDateString("en-CA");
+
+/**
+ * The invoice form, also used for quotations. A quotation has a validity date instead of a
+ * warehouse and no serials; an invoice can start from a quotation's lines.
+ */
+function InvoiceForm({
+  customers,
+  onPosted,
+  kind = "invoice",
+  from = null,
+}: {
+  customers: Customer[];
+  onPosted: () => void;
+  kind?: "invoice" | "quotation";
+  from?: Quotation | null;
+}) {
+  const quotation = kind === "quotation";
   const [items, setItems] = useState<Item[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [customerId, setCustomerId] = useState<number | "">("");
+  const [customerId, setCustomerId] = useState<number | "">(from?.customerId ?? "");
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [date, setDate] = useState(today());
-  const [reference, setReference] = useState("");
-  const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
+  const [validUntil, setValidUntil] = useState(inDays(14));
+  const [reference, setReference] = useState(from?.reference ?? "");
+  const [notes, setNotes] = useState(from?.notes ?? "");
+  const [quotationId, setQuotationId] = useState<number | null>(from?.id ?? null);
+  const [lines, setLines] = useState<DraftLine[]>(from ? draftOf(from) : [emptyLine()]);
   const [priced, setPriced] = useState<{ rows: Record<number, PricedInvoice["lines"][number]>; totals: PricedInvoice } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -111,7 +162,15 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
   }, [date, lines]);
 
   function setLine(index: number, change: Partial<DraftLine>) {
-    setLines(lines.map((l, i) => (i === index ? { ...l, ...change } : l)));
+    setLines((current) => current.map((l, i) => (i === index ? { ...l, ...change } : l)));
+  }
+
+  /** Fills the price from the customer's price level when an item or unit is picked. */
+  async function pick(index: number, change: Pick<DraftLine, "itemId" | "unit">) {
+    setLine(index, change);
+    if (change.itemId === "") return;
+    const r = await business.listPrice(customerId === "" ? null : customerId, change.itemId, change.unit, date);
+    if (r.ok) setLine(index, { unitPrice: formatMoney(r.value).replace(/,/g, "") });
   }
 
   async function submit(event: FormEvent) {
@@ -130,9 +189,29 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
       setError(ar.errors["customer_not_found"]!);
       return;
     }
-    const result = await business.postSalesInvoice({ date, customerId, warehouseId: warehouseId === "" ? 0 : warehouseId, reference, notes, lines: out });
+    if (quotation) {
+      const saved = await business.saveQuotation({ date, validUntil, customerId, reference, notes, lines: out.map((l) => ({ itemId: l.itemId, unit: l.unit, quantity: l.quantity, unitPrice: l.unitPrice, discount: l.discount ?? 0 })) });
+      setError(errorText(saved));
+      if (saved.ok) {
+        setDone(ar.quotations.saved(saved.value.number));
+        setLines([emptyLine()]);
+        setReference("");
+        setNotes("");
+      }
+      return;
+    }
+    const result = await business.postSalesInvoice({
+      date,
+      customerId,
+      warehouseId: warehouseId === "" ? 0 : warehouseId,
+      reference,
+      notes,
+      lines: out,
+      ...(quotationId === null ? {} : { quotationId }),
+    });
     setError(errorText(result));
     if (result.ok) {
+      setQuotationId(null);
       setDone(`${ar.invoices.posted(result.value.number, formatMoney(result.value.total))}${result.value.belowZero.length > 0 ? ` · ${ar.invoices.belowZero}` : ""}`);
       setLines([emptyLine()]);
       setReference("");
@@ -141,7 +220,8 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
   }
 
   return (
-    <form className="card" onSubmit={submit} aria-label={ar.invoices.tabs.invoice}>
+    <form className="card" onSubmit={submit} aria-label={quotation ? ar.quotations.new : ar.invoices.tabs.invoice}>
+      {quotationId !== null && from && <p className="muted small">{ar.quotations.fromQuotation(from.number)}</p>}
       {error && (
         <div role="alert" className="error">
           {error}
@@ -151,7 +231,7 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
         <div role="status" className="ok">
           {done}{" "}
           <button type="button" className="link" onClick={onPosted}>
-            {ar.invoices.tabs.invoices}
+            {quotation ? ar.invoices.tabs.quotations : ar.invoices.tabs.invoices}
           </button>
         </div>
       )}
@@ -167,16 +247,23 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
             ))}
           </select>
         </label>
-        <label className="field narrow">
-          {ar.invoices.warehouse}
-          <select value={warehouseId} onChange={(e) => setWarehouseId(Number(e.target.value))}>
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {quotation ? (
+          <label className="field narrow">
+            {ar.quotations.validUntil}
+            <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+          </label>
+        ) : (
+          <label className="field narrow">
+            {ar.invoices.warehouse}
+            <select value={warehouseId} onChange={(e) => setWarehouseId(Number(e.target.value))}>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field narrow">
           {ar.invoices.date}
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -208,7 +295,7 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
                   <select
                     aria-label={ar.invoices.item}
                     value={l.itemId}
-                    onChange={(e) => setLine(i, { itemId: e.target.value === "" ? "" : Number(e.target.value), unit: "base" })}
+                    onChange={(e) => void pick(i, { itemId: e.target.value === "" ? "" : Number(e.target.value), unit: "base" })}
                   >
                     <option value="">{ar.invoices.pickItem}</option>
                     {items.map((it) => (
@@ -219,7 +306,7 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
                   </select>
                 </td>
                 <td>
-                  <select aria-label={ar.invoices.unit} value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value as "base" | "pack" })}>
+                  <select aria-label={ar.invoices.unit} value={l.unit} onChange={(e) => void pick(i, { itemId: l.itemId, unit: e.target.value as "base" | "pack" })}>
                     <option value="base">{item?.baseUnit ?? "—"}</option>
                     {item?.pack && (
                       <option value="pack">
@@ -240,7 +327,7 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
                 <td className="num">{row && formatMoney(row.net)}</td>
                 <td className="num muted">{row && formatMoney(row.vat)}</td>
               </tr>,
-              item?.serialised && (
+              !quotation && item?.serialised && (
                 <tr key={`${i}-serials`}>
                   <td colSpan={7}>
                     <SerialsField name={item.nameAr} value={l.serials} onChange={(serials, count) => setLine(i, { serials, unit: "base", quantity: String(count) })} />
@@ -279,7 +366,7 @@ function InvoiceForm({ customers, onPosted }: { customers: Customer[]; onPosted:
       </label>
       <div className="row">
         <button type="submit" className="btn btn-primary">
-          {ar.invoices.post}
+          {quotation ? ar.quotations.save : ar.invoices.post}
         </button>
       </div>
     </form>
@@ -362,6 +449,9 @@ function InvoiceRow({
             </button>
             <button type="button" className="btn btn-small" onClick={() => void send({ kind: "invoice", number: invoice.number, output: "pdf" })}>
               {ar.parties.pdf}
+            </button>
+            <button type="button" className="btn btn-small" onClick={() => void send({ kind: "deliveryNote", number: invoice.number, output: "print" })}>
+              {ar.quotations.deliveryNote}
             </button>
             <button type="button" className="btn btn-small" aria-expanded={open} onClick={onToggle}>
               {open ? ar.invoices.hide : ar.invoices.details}
@@ -500,5 +590,73 @@ function CreditNoteForm({ invoice, onChange, send }: { invoice: SalesInvoice; on
         </div>
       )}
     </form>
+  );
+}
+
+/** Quotations with their status; an open one can be printed or turned into an invoice. */
+function QuotationList({ onConvert }: { onConvert: (q: Quotation) => void }) {
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const { send, message } = useA4();
+
+  useEffect(() => {
+    void business.quotations(today()).then((r) => r.ok && setQuotations(r.value));
+  }, []);
+
+  return (
+    <section className="table-card" aria-label={ar.invoices.tabs.quotations}>
+      {message && (
+        <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
+          {message.text}
+        </div>
+      )}
+      {quotations.length === 0 ? (
+        <p className="muted empty">{ar.quotations.none}</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th className="col-type">{ar.quotations.number}</th>
+              <th className="col-type">{ar.invoices.date}</th>
+              <th>{ar.invoices.customer}</th>
+              <th className="col-type">{ar.quotations.validUntil}</th>
+              <th className="col-money">{ar.invoices.totalWithVat}</th>
+              <th className="col-type">{ar.quotations.status}</th>
+              <th className="col-actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {quotations.map((q) => (
+              <tr key={q.id}>
+                <td>{q.number}</td>
+                <td className="muted">{q.date}</td>
+                <td>{q.customerName}</td>
+                <td className="muted">{q.validUntil}</td>
+                <td className="num">{formatMoney(q.total)}</td>
+                <td>
+                  <span className={`chip${q.status === "open" ? "" : " chip-warn"}`}>
+                    {q.status === "converted" && q.invoiceNumber !== null ? ar.quotations.convertedTo(q.invoiceNumber) : ar.quotations.statuses[q.status]}
+                  </span>
+                </td>
+                <td>
+                  <div className="actions">
+                    <button type="button" className="btn btn-small" onClick={() => void send({ kind: "quotation", number: q.number, output: "print" })}>
+                      {ar.parties.print}
+                    </button>
+                    <button type="button" className="btn btn-small" onClick={() => void send({ kind: "quotation", number: q.number, output: "pdf" })}>
+                      {ar.parties.pdf}
+                    </button>
+                    {q.status !== "converted" && (
+                      <button type="button" className="btn btn-small btn-primary" onClick={() => onConvert(q)}>
+                        {ar.quotations.convert}
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
