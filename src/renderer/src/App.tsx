@@ -5,6 +5,7 @@ import { Accounts } from "./screens/Accounts";
 import { AuditLog } from "./screens/AuditLog";
 import { Home } from "./screens/Home";
 import { Items } from "./screens/Items";
+import { Money } from "./screens/Money";
 import { Settings } from "./screens/Settings";
 import { SignIn } from "./screens/SignIn";
 import { Users } from "./screens/Users";
@@ -25,6 +26,7 @@ type Screen =
   | "purchases"
   | "customers"
   | "salesInvoices"
+  | "money"
   | "accounts"
   | "users"
   | "audit"
@@ -45,7 +47,7 @@ const NAV: { label: string; screen?: Screen; roles: Role[] }[] = [
   { label: ar.nav.purchases, screen: "purchases", roles: ["manager", "accountant", "storekeeper"] },
   { label: ar.nav.salesInvoices, screen: "salesInvoices", roles: ["manager", "accountant"] },
   { label: ar.nav.customers, screen: "customers", roles: ["manager", "accountant", "cashier"] },
-  { label: ar.nav.money, roles: ["manager", "accountant"] },
+  { label: ar.nav.money, screen: "money", roles: ["manager", "accountant"] },
   {
     label: ar.nav.accounts,
     screen: "accounts",
@@ -180,6 +182,7 @@ export function App() {
         {screen === "customers" && <Customers keepsBooks={user.role === "manager" || user.role === "accountant"} />}
         {screen === "salesInvoices" && <SalesInvoices />}
         {screen === "warehouses" && <Warehouses canChange={user.role === "manager" || user.role === "storekeeper"} />}
+        {screen === "money" && <Money />}
         {screen === "accounts" && <Accounts />}
         {screen === "users" && <Users me={user} />}
         {screen === "audit" && <AuditLog />}
