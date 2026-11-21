@@ -1,0 +1,29 @@
+{
+  "from": "2026-03-01",
+  "to": "2026-03-31",
+  "income": [
+    {
+      "accountId": 20,
+      "code": "4100",
+      "name": "المبيعات",
+      "amount": 400000
+    }
+  ],
+  "expenses": [
+    {
+      "accountId": 24,
+      "code": "5100",
+      "name": "تكلفة البضاعة المباعة",
+      "amount": 240000
+    },
+    {
+      "accountId": 27,
+      "code": "6100",
+      "name": "الإيجار",
+      "amount": 50000
+    }
+  ],
+  "totalIncome": 400000,
+  "totalExpenses": 290000,
+  "netProfit": 110000
+}

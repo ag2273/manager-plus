@@ -1,0 +1,60 @@
+{
+  "asOf": "2026-03-31",
+  "assets": [
+    {
+      "accountId": 1,
+      "code": "1100",
+      "name": "نقدية الدرج",
+      "amount": 228000
+    },
+    {
+      "accountId": 2,
+      "code": "1110",
+      "name": "الخزينة الرئيسية",
+      "amount": 950000
+    },
+    {
+      "accountId": 6,
+      "code": "1200",
+      "name": "العملاء",
+      "amount": 228000
+    },
+    {
+      "accountId": 7,
+      "code": "1300",
+      "name": "المخزون",
+      "amount": 360000
+    },
+    {
+      "accountId": 8,
+      "code": "1400",
+      "name": "ضريبة القيمة المضافة على المشتريات",
+      "amount": 84000
+    }
+  ],
+  "liabilities": [
+    {
+      "accountId": 11,
+      "code": "2100",
+      "name": "الموردون",
+      "amount": 684000
+    },
+    {
+      "accountId": 12,
+      "code": "2200",
+      "name": "ضريبة القيمة المضافة على المبيعات",
+      "amount": 56000
+    }
+  ],
+  "equity": [
+    {
+      "accountId": 16,
+      "code": "3100",
+      "name": "رأس المال",
+      "amount": 1000000
+    }
+  ],
+  "profit": 110000,
+  "totalAssets": 1850000,
+  "totalLiabilitiesAndEquity": 1850000
+}

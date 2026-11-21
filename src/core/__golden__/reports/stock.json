@@ -1,0 +1,12 @@
+{
+  "asOf": "2026-03-31",
+  "rows": [
+    {
+      "itemId": 1,
+      "nameAr": "راوتر",
+      "quantity": 6000,
+      "value": 360000
+    }
+  ],
+  "totalValue": 360000
+}

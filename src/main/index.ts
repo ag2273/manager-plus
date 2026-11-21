@@ -35,6 +35,8 @@ import { DEFAULT_PORT } from "../server/protocol";
 import { documentHtml, returnDocument, saleDocument, testDocument } from "../shared/receipt";
 import { listPrinters, printA4, printHtml } from "./printer";
 import { a4Html, creditNoteA4, deliveryNoteA4, invoiceA4, quotationA4, statementA4 } from "../shared/a4";
+import { type ReportTable, reportA4, reportSheet } from "../shared/report-tables";
+import { xlsx } from "../shared/xlsx";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
@@ -230,6 +232,15 @@ ipcMain.handle(CHANNELS.print, async (_event, request: PrintRequest): Promise<Re
   }
 });
 
+ipcMain.handle(CHANNELS.exportExcel, async (_event, table: ReportTable): Promise<Result<{ saved: string | null }>> => {
+  const name = `${table.title} ${table.meta.map((m) => m.value).join(" ")}`.replace(/[\\/:*?"<>|]/g, "-");
+  const options = { defaultPath: `${name}.xlsx`, filters: [{ name: "Excel", extensions: ["xlsx"] }] };
+  const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+  if (choice.canceled || !choice.filePath) return { ok: true, value: { saved: null } };
+  writeFileSync(choice.filePath, xlsx(reportSheet(table)));
+  return { ok: true, value: { saved: choice.filePath } };
+});
+
 ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Result<{ saved: string | null }>> => {
   let page: { html: string; name: string };
   try {
@@ -250,6 +261,8 @@ ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Res
       const quotation = await need<Quotation>("findQuotation", request.number, new Date().toLocaleDateString("en-CA"));
       const customer = (await need<Customer[]>("customers")).find((c) => c.id === quotation.customerId)!;
       page = { html: a4Html(quotationA4(quotation, settings, customer)), name: `عرض سعر ${quotation.number}` };
+    } else if (request.kind === "report") {
+      page = { html: a4Html(reportA4(request.table, settings)), name: `${request.table.title} ${request.table.meta.map((m) => m.value).join(" ")}` };
     } else {
       const st = await need<Statement>("statement", request.party, request.id, request.from, request.to);
       const party =
