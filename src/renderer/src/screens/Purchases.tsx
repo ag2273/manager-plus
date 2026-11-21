@@ -7,6 +7,7 @@ import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { WithholdingSelect, useWithholdingCategories } from "./Withholding";
 import { AgingView, PaymentForm, StatementView } from "./Parties";
 import { SerialsField, splitSerials } from "./Serials";
 import { Shipments } from "./Shipments";
@@ -519,8 +520,8 @@ function DebitNoteForm({ invoice, onChange }: { invoice: PurchaseInvoice; onChan
   );
 }
 
-type SupplierDraft = { name: string; phone: string; taxRegistrationNumber: string; currency: Currency };
-const emptySupplier: SupplierDraft = { name: "", phone: "", taxRegistrationNumber: "", currency: "EGP" };
+type SupplierDraft = { name: string; phone: string; taxRegistrationNumber: string; currency: Currency; withholdingCategoryId: number | null };
+const emptySupplier: SupplierDraft = { name: "", phone: "", taxRegistrationNumber: "", currency: "EGP", withholdingCategoryId: null };
 
 function SupplierList({
   suppliers,
@@ -534,6 +535,8 @@ function SupplierList({
   const [draft, setDraft] = useState<SupplierDraft>(emptySupplier);
   const [editing, setEditing] = useState<(SupplierDraft & { id: number }) | null>(null);
   const [balances, setBalances] = useState<Record<number, SupplierAccount>>({});
+  const [categories] = useWithholdingCategories();
+  const categoryName = (id: number | null) => categories.find((c) => c.id === id)?.name ?? "";
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -593,6 +596,10 @@ function SupplierList({
             ))}
           </select>
         </label>
+        <label className="field narrow">
+          {ar.withholding.category}
+          <WithholdingSelect categories={categories} value={draft.withholdingCategoryId} onChange={(id) => setDraft({ ...draft, withholdingCategoryId: id })} />
+        </label>
         <button type="submit" className="btn btn-primary">
           {ar.purchases.addSupplier}
         </button>
@@ -608,6 +615,7 @@ function SupplierList({
                 <th className="col-type">{ar.purchases.phone}</th>
                 <th className="col-type">{ar.purchases.taxRegistrationNumber}</th>
                 <th className="col-type">{ar.purchases.currency}</th>
+                <th className="col-type">{ar.withholding.category}</th>
                 {canSeeBalances && <th className="col-money">{ar.purchases.balance}</th>}
                 <th className="col-actions" />
               </tr>
@@ -638,6 +646,13 @@ function SupplierList({
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      <WithholdingSelect
+                        categories={categories}
+                        value={editing.withholdingCategoryId}
+                        onChange={(id) => setEditing({ ...editing, withholdingCategoryId: id })}
+                      />
                     </td>
                     {canSeeBalances && <td />}
                     <td>
@@ -671,13 +686,23 @@ function SupplierList({
                       {s.taxRegistrationNumber}
                     </td>
                     <td className="muted">{s.currency}</td>
+                    <td className="muted">{categoryName(s.withholdingCategoryId)}</td>
                     {canSeeBalances && <td className="num">{balances[s.id] !== undefined && <Owed account={balances[s.id]!} />}</td>}
                     <td>
                       <div className="actions">
                         <button
                           type="button"
                           className="btn btn-small"
-                          onClick={() => setEditing({ id: s.id, name: s.name, phone: s.phone, taxRegistrationNumber: s.taxRegistrationNumber, currency: s.currency })}
+                          onClick={() =>
+                            setEditing({
+                              id: s.id,
+                              name: s.name,
+                              phone: s.phone,
+                              taxRegistrationNumber: s.taxRegistrationNumber,
+                              currency: s.currency,
+                              withholdingCategoryId: s.withholdingCategoryId,
+                            })
+                          }
                         >
                           {ar.edit}
                         </button>

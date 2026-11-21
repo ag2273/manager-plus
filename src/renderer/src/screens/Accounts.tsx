@@ -11,9 +11,10 @@ import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { WithholdingView } from "./Withholding";
 
-type Tab = "chart" | "journal" | "opening" | "trial";
-const TABS: Tab[] = ["chart", "journal", "opening", "trial"];
+type Tab = "chart" | "journal" | "opening" | "trial" | "withholding";
+const TABS: Tab[] = ["chart", "journal", "opening", "trial", "withholding"];
 const TYPES: AccountType[] = [
   "asset",
   "liability",
@@ -64,6 +65,7 @@ export function Accounts() {
       {tab === "journal" && <EntryForm accounts={accounts} mode="journal" />}
       {tab === "opening" && <EntryForm accounts={accounts} mode="opening" />}
       {tab === "trial" && <TrialBalanceView />}
+      {tab === "withholding" && <WithholdingView />}
     </>
   );
 }

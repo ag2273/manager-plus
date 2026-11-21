@@ -6,9 +6,10 @@ import { formatMoney, parseMoney } from "../../../shared/money";
 import { parseRate } from "../../../shared/rate";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { WithholdingSelect, useWithholdingCategories } from "./Withholding";
 
 /** A customer or supplier as the payment, statement and aging views need them. */
-export type Party = { id: number; name: string; active: boolean; currency?: string };
+export type Party = { id: number; name: string; active: boolean; currency?: string; withholdingCategoryId?: number | null };
 
 const MONEY_ROLES = ["cash_drawer", "main_cash", "bank", "wallet"];
 const startOfYear = () => `${today().slice(0, 4)}-01-01`;
@@ -40,6 +41,10 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
   const [rateText, setRateText] = useState("");
   const currency = parties.find((p) => p.id === partyId)?.currency ?? "EGP";
   const foreign = currency !== "EGP";
+  const [categories] = useWithholdingCategories();
+  const [withholdingId, setWithholdingId] = useState<number | null>(null);
+  const [baseText, setBaseText] = useState("");
+  const [tax, setTax] = useState<number | null>(null);
   const [documents, setDocuments] = useState<OpenDocument[]>([]);
   const [split, setSplit] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +58,16 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
       setAccountId((current) => (current === "" ? (money.find((a) => a.role === "main_cash")?.id ?? money[0]?.id ?? "") : current));
     });
   }, []);
+
+  const base = parseMoney(baseText);
+  useEffect(() => {
+    let stale = false;
+    if (withholdingId === null || base === null || base === 0) setTax(null);
+    else void business.withholdingTax(withholdingId, date, base).then((r) => !stale && setTax(r.ok ? r.value : null));
+    return () => {
+      stale = true;
+    };
+  }, [withholdingId, base, date]);
 
   async function loadDocuments(id: number | "") {
     setSplit({});
@@ -92,6 +107,10 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
       setError(ar.errors["rate_invalid"]!);
       return;
     }
+    if (withholdingId !== null && !foreign && (base === null || base === 0)) {
+      setError(ar.errors["withholding_invalid"]!);
+      return;
+    }
     const input = {
       date,
       partyId,
@@ -100,6 +119,7 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
       reference,
       allocations,
       ...(foreign && rate !== null ? { rate } : {}),
+      ...(withholdingId !== null && !foreign && base !== null ? { withholding: { categoryId: withholdingId, base } } : {}),
     };
     const result: Result<{ number: number }> =
       kind === "customer" ? await business.receiveCustomerPayment(input) : await business.paySupplier(input);
@@ -108,6 +128,7 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
       setDone(kind === "customer" ? ar.parties.received(result.value.number) : ar.parties.paid(result.value.number));
       setAmount("");
       setReference("");
+      setBaseText("");
       await loadDocuments(partyId);
     }
   }
@@ -131,6 +152,7 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
           value={partyId}
           onChange={(id) => {
             setPartyId(id);
+            setWithholdingId(parties.find((p) => p.id === id)?.withholdingCategoryId ?? null);
             void loadDocuments(id);
           }}
         />
@@ -165,6 +187,26 @@ export function PaymentForm({ kind, parties }: { kind: PartyKind; parties: Party
           <input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} />
         </label>
       </div>
+      {!foreign && (
+        <div className="row">
+          <label className="field">
+            {ar.withholding.category}
+            <WithholdingSelect categories={categories} value={withholdingId} onChange={setWithholdingId} />
+          </label>
+          {withholdingId !== null && (
+            <>
+              <label className="field narrow">
+                {ar.withholding.base}
+                <input dir="ltr" inputMode="decimal" value={baseText} onChange={(e) => setBaseText(e.target.value)} />
+              </label>
+              <span className="muted small">
+                {tax !== null && `${ar.withholding.tax(formatMoney(tax))} · `}
+                {ar.withholding.hint}
+              </span>
+            </>
+          )}
+        </div>
+      )}
       {partyId !== "" && (
         <section aria-label={ar.parties.allocate}>
           <h2 className="small">{ar.parties.allocate}</h2>

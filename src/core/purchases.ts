@@ -6,12 +6,22 @@ import { type BasisPoints, type Quantity, vatRate } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
 import { receiveSerials, serialsFor } from "./serials";
 import { type SerialLine, type UnitLine, accountByRole, activeWarehouse, assertQuantity, insertMovement, toBaseQuantity } from "./stock";
+import { assertWithholdingCategory } from "./withholding";
 
 export type { Currency, Rate } from "./currency";
 /** The currencies a supplier can bill in, by ISO code. */
 export const CURRENCIES: readonly Currency[] = CURRENCY_TABLE.map((c) => c.code);
-export type Supplier = { id: number; name: string; phone: string; taxRegistrationNumber: string; currency: Currency; active: boolean };
-export type SupplierInput = { name: string; phone: string; taxRegistrationNumber: string; currency?: Currency };
+export type Supplier = {
+  id: number;
+  name: string;
+  phone: string;
+  taxRegistrationNumber: string;
+  currency: Currency;
+  /** The withholding tax category the business usually deducts under when paying them; null is none. */
+  withholdingCategoryId: number | null;
+  active: boolean;
+};
+export type SupplierInput = { name: string; phone: string; taxRegistrationNumber: string; currency?: Currency; withholdingCategoryId?: number | null };
 export type SupplierChanges = Partial<SupplierInput>;
 
 /** A purchase line: quantity in thousandths of the chosen unit, price per one of that unit, VAT-exclusive. */
@@ -51,14 +61,15 @@ export type PurchaseInvoice = {
 const ONE_UNIT = 1000;
 const WHOLE = 10_000;
 
-type SupplierRow = { id: number; name: string; phone: string; tax_registration_number: string; currency: Currency; active: number };
-const SUPPLIER_COLUMNS = "id, name, phone, tax_registration_number, currency, active";
+type SupplierRow = { id: number; name: string; phone: string; tax_registration_number: string; currency: Currency; withholding_category_id: number | null; active: number };
+const SUPPLIER_COLUMNS = "id, name, phone, tax_registration_number, currency, withholding_category_id, active";
 const toSupplier = (r: SupplierRow): Supplier => ({
   id: r.id,
   name: r.name,
   phone: r.phone,
   taxRegistrationNumber: r.tax_registration_number,
   currency: r.currency,
+  withholdingCategoryId: r.withholding_category_id,
   active: r.active === 1,
 });
 
@@ -87,15 +98,17 @@ function cleanSupplier(db: Database.Database, input: SupplierInput, exceptId: nu
   }
   const currency = input.currency ?? "EGP";
   if (!CURRENCIES.includes(currency)) throw new BusinessError("currency_invalid", `Unknown currency ${currency}`);
-  return { name, phone: input.phone.trim(), taxRegistrationNumber, currency };
+  const withholdingCategoryId = input.withholdingCategoryId ?? null;
+  assertWithholdingCategory(db, withholdingCategoryId);
+  return { name, phone: input.phone.trim(), taxRegistrationNumber, currency, withholdingCategoryId };
 }
 
 export function addSupplier(db: Database.Database, input: SupplierInput): number {
   const s = cleanSupplier(db, input, null);
   return Number(
     db
-      .prepare("INSERT INTO suppliers (name, phone, tax_registration_number, currency) VALUES (?, ?, ?, ?)")
-      .run(s.name, s.phone, s.taxRegistrationNumber, s.currency).lastInsertRowid,
+      .prepare("INSERT INTO suppliers (name, phone, tax_registration_number, currency, withholding_category_id) VALUES (?, ?, ?, ?, ?)")
+      .run(s.name, s.phone, s.taxRegistrationNumber, s.currency, s.withholdingCategoryId).lastInsertRowid,
   );
 }
 
@@ -105,11 +118,12 @@ export function updateSupplier(db: Database.Database, id: number, changes: Suppl
   if (s.currency !== current.currency && db.prepare("SELECT 1 FROM ledger_lines WHERE supplier_id = ? LIMIT 1").get(id)) {
     throw new BusinessError("supplier_currency_locked", `Supplier ${current.name} already has postings in ${current.currency}`);
   }
-  db.prepare("UPDATE suppliers SET name = ?, phone = ?, tax_registration_number = ?, currency = ? WHERE id = ?").run(
+  db.prepare("UPDATE suppliers SET name = ?, phone = ?, tax_registration_number = ?, currency = ?, withholding_category_id = ? WHERE id = ?").run(
     s.name,
     s.phone,
     s.taxRegistrationNumber,
     s.currency,
+    s.withholdingCategoryId,
     id,
   );
 }
