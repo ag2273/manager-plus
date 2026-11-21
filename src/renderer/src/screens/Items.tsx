@@ -7,11 +7,12 @@ import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText } from "../api";
 import { ar } from "../strings";
 import { SerialLookup } from "./Serials";
+import { ImportPanel } from "./Import";
 
 type Filter = "active" | "inactive";
 
 /** Item list with search, and the item form for adding or editing. */
-export function Items() {
+export function Items({ canImport }: { canImport: boolean }) {
   const [items, setItems] = useState<Item[]>([]);
   const [taxCodes, setTaxCodes] = useState<TaxCode[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -19,6 +20,7 @@ export function Items() {
   const [filter, setFilter] = useState<Filter>("active");
   const [editing, setEditing] = useState<Item | "new" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const reload = useCallback(async () => {
     const result = await business.items({
@@ -63,7 +65,13 @@ export function Items() {
         >
           {ar.items.add}
         </button>
+        {canImport && (
+          <button type="button" className="btn" onClick={() => setImporting(!importing)}>
+            {ar.import.open}
+          </button>
+        )}
       </header>
+      {importing && <ImportPanel onClose={() => setImporting(false)} onImported={reload} />}
       {notice && (
         <div role="status" className="ok">
           {notice}

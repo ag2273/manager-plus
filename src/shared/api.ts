@@ -1,4 +1,5 @@
-import type { ReportTable } from "./report-tables";
+import type { Lang, ReportTable } from "./report-tables";
+import type { ReadSheet } from "./spreadsheet-read";
 import type { Business, BusinessSettings } from "../core/business";
 import type { Credentials, User } from "../core/users";
 
@@ -77,6 +78,8 @@ export const BUSINESS_METHODS = [
   "reactivateWarehouse",
   "stockOnHand",
   "postOpeningStock",
+  "checkImport",
+  "importData",
   "transferStock",
   "transfers",
   "averageCost",
@@ -207,6 +210,10 @@ export interface DesktopApi {
   printA4(request: A4Request): Promise<Result<{ saved: string | null }>>;
   /** Saves a report as an Excel file; `saved` is its path, or null when cancelled. */
   exportExcel(table: ReportTable): Promise<Result<{ saved: string | null }>>;
+  /** Asks for an Excel or CSV file and reads its cells as text; null when cancelled. */
+  openSpreadsheet(): Promise<Result<{ name: string; sheets: ReadSheet[] } | null>>;
+  /** Saves the import template in Arabic or English; `saved` is its path, or null when cancelled. */
+  saveImportTemplate(lang: Lang): Promise<Result<{ saved: string | null }>>;
   /** Servers announcing themselves on the local network. */
   discoverServers(): Promise<FoundServer[]>;
   /** The server this PC last connected to, for a one-click reconnect. */
@@ -234,6 +241,8 @@ export const CHANNELS = {
   print: "printer:print",
   printA4: "printer:a4",
   exportExcel: "export:excel",
+  openSpreadsheet: "import:open",
+  saveImportTemplate: "import:template",
   discoverServers: "network:discover",
   lastServer: "network:last",
   connectServer: "network:connect",

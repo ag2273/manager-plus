@@ -178,7 +178,7 @@ export function App() {
             onGo={setScreen}
           />
         )}
-        {screen === "items" && <Items />}
+        {screen === "items" && <Items canImport={user.role === "manager"} />}
         {screen === "till" && <Till />}
         {screen === "purchases" && <Purchases canSeeBalances={user.role === "manager" || user.role === "accountant"} />}
         {screen === "customers" && <Customers keepsBooks={user.role === "manager" || user.role === "accountant"} />}

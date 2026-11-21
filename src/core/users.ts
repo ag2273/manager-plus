@@ -216,6 +216,7 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   reactivateWarehouse: ["manager", "storekeeper"],
   stockOnHand: ROLES,
   postOpeningStock: ["manager", "accountant"],
+  importData: ["manager"],
   transferStock: ["manager", "storekeeper"],
   transfers: ["manager", "accountant", "storekeeper"],
   averageCost: ["manager", "accountant", "storekeeper"],
