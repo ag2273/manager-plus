@@ -175,7 +175,9 @@ describe("safe upgrades", () => {
     expect(after.pragma("user_version", { simple: true })).toBe(18);
     after.exec("DROP TABLE stock_counts");
     after.close();
-    expect(reports(Business.open(path).signIn(manager.name, manager.password))).toEqual(before);
+    const reopened = Business.open(path).signIn(manager.name, manager.password);
+    expect(reports(reopened)).toEqual(before);
+    reopened.close();
   });
 });
 
