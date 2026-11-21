@@ -6,10 +6,11 @@ import { type BasisPoints, type Quantity, vatRate } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
 import { vatRegistered } from "./purchases";
 import { type Taken, nextNumber, shareOf, take } from "./shares";
-import { type UnitLine, accountByRole, activeWarehouse, assertQuantity, costOfIssue, insertMovement, toBaseQuantity } from "./stock";
+import { issueSerials, returnSerials, serialsFor, serialsOnLine, warrantyEnd } from "./serials";
+import { type SerialLine, type UnitLine, accountByRole, activeWarehouse, assertQuantity, costOfIssue, insertMovement, toBaseQuantity } from "./stock";
 
 /** An invoice line: price per one of the chosen unit and a discount in piastres, both VAT-exclusive. */
-export type InvoiceLineInput = UnitLine & { unitPrice: Piastres; discount?: Piastres };
+export type InvoiceLineInput = UnitLine & SerialLine & { unitPrice: Piastres; discount?: Piastres };
 export type InvoiceLine = UnitLine & {
   unitPrice: Piastres;
   /** Quantity × unit price. */
@@ -48,14 +49,14 @@ export type SalesInvoice = {
   /** The total of credit notes against the invoice. */
   credited: Piastres;
   creditNotes: { number: number; date: IsoDate; total: Piastres }[];
-  lines: (InvoiceLine & { lineId: number; nameAr: string; unitName: string; credited: Quantity })[];
+  lines: (InvoiceLine & { lineId: number; nameAr: string; unitName: string; credited: Quantity; serials: string[]; warrantyEnds: IsoDate | null })[];
 };
 export type CreditNoteInput = {
   date: IsoDate;
   invoiceId: number;
   reason: string;
   /** Invoice lines and how much of each comes back, in thousandths of the line's unit. */
-  lines: { lineId: number; quantity: Quantity }[];
+  lines: { lineId: number; quantity: Quantity; serials?: string[] }[];
 };
 export type CreditNote = {
   id: number;
@@ -114,12 +115,13 @@ export function postSalesInvoice(db: Database.Database, input: SalesInvoiceInput
   if (priced.total === 0) throw new BusinessError("invoice_total_zero", "The invoice total is zero");
 
   const taken = new Map<number, { quantity: Quantity; value: Piastres }>();
-  const outs = priced.lines.map((line) => {
+  const outs = priced.lines.map((line, index) => {
     const base = toBaseQuantity(db, line);
+    const serials = serialsFor(db, line.itemId, base, input.lines[index]!.serials);
     const before = taken.get(line.itemId) ?? { quantity: 0, value: 0 };
     const cost = costOfIssue(db, line.itemId, base, before);
     taken.set(line.itemId, { quantity: before.quantity + base, value: before.value + cost });
-    return { line, base, cost };
+    return { line, base, cost, serials };
   });
   const totalCost = outs.reduce((t, o) => t + o.cost, 0);
 
@@ -144,8 +146,9 @@ export function postSalesInvoice(db: Database.Database, input: SalesInvoiceInput
     `INSERT INTO sales_invoice_lines (invoice_id, item_id, unit, quantity, unit_price, discount, net, vat_rate, vat, cost)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  for (const { line: l, base, cost } of outs) {
-    insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.discount, l.net, l.vatRate, l.vat, cost);
+  for (const { line: l, base, cost, serials } of outs) {
+    const lineId = Number(insertLine.run(id, l.itemId, l.unit, l.quantity, l.unitPrice, l.discount, l.net, l.vatRate, l.vat, cost).lastInsertRowid);
+    issueSerials(db, l.itemId, serials, { date: input.date, warehouseId: input.warehouseId, source: "sales_invoice", sourceId: id, lineId });
     insertMovement(db, { date: input.date, itemId: l.itemId, warehouseId: input.warehouseId, quantity: -base, value: -cost, source: "sales_invoice", sourceId: id });
   }
   const held = db.prepare("SELECT COALESCE(SUM(quantity), 0) AS q FROM stock_movements WHERE item_id = ? AND warehouse_id = ?");
@@ -172,7 +175,10 @@ function toInvoices(db: Database.Database, rows: InvoiceRow[]): SalesInvoice[] {
        FROM credit_notes n WHERE n.invoice_id = ? ORDER BY n.number`,
   );
   return rows.map((r) => {
-    const ls = lines.all(r.id) as SalesInvoice["lines"];
+    const ls = (lines.all(r.id) as Omit<SalesInvoice["lines"][number], "serials" | "warrantyEnds">[]).map((l) => {
+      const serials = serialsOnLine(db, "sales_invoice", r.id, l.lineId);
+      return { ...l, serials, warrantyEnds: serials.length > 0 ? warrantyEnd(db, l.itemId, r.date) : null };
+    });
     const creditNotes = notes.all(r.id) as SalesInvoice["creditNotes"];
     const sum = (pick: (l: SalesInvoice["lines"][number]) => number) => ls.reduce((t, l) => t + pick(l), 0);
     const net = sum((l) => l.net);
@@ -228,7 +234,7 @@ export function postCreditNote(db: Database.Database, input: CreditNoteInput, us
        FROM credit_note_lines WHERE invoice_line_id = ?`,
   );
   const taken = new Map<number, Taken>();
-  const backs = input.lines.map(({ lineId, quantity }) => {
+  const backs = input.lines.map(({ lineId, quantity, serials: given }) => {
     assertQuantity(quantity);
     const line = invoiced.get(lineId, invoice.id) as InvoicedLine | undefined;
     if (!line) throw new BusinessError("return_line_invalid", `Line ${lineId} is not on invoice ${invoice.number}`);
@@ -240,7 +246,8 @@ export function postCreditNote(db: Database.Database, input: CreditNoteInput, us
     const share = shareOf([line.net, line.vat, line.cost], line.quantity, before, quantity);
     taken.set(lineId, take(before, quantity, share));
     const [net, vat, cost] = share as [number, number, number];
-    return { line, quantity, base: Math.round((quantity * line.size) / ONE_UNIT), net, vat, cost };
+    const base = Math.round((quantity * line.size) / ONE_UNIT);
+    return { line, quantity, base, net, vat, cost, serials: serialsFor(db, line.itemId, base, given) };
   });
   const net = backs.reduce((t, b) => t + b.net, 0);
   const vat = backs.reduce((t, b) => t + b.vat, 0);
@@ -264,7 +271,8 @@ export function postCreditNote(db: Database.Database, input: CreditNoteInput, us
   );
   const insertLine = db.prepare("INSERT INTO credit_note_lines (note_id, invoice_line_id, quantity, net, vat, cost) VALUES (?, ?, ?, ?, ?, ?)");
   for (const b of backs) {
-    insertLine.run(id, b.line.id, b.quantity, b.net, b.vat, b.cost);
+    const lineId = Number(insertLine.run(id, b.line.id, b.quantity, b.net, b.vat, b.cost).lastInsertRowid);
+    returnSerials(db, b.line.itemId, b.serials, { source: "sales_invoice", sourceId: invoice.id }, { date: input.date, warehouseId: invoice.warehouseId, source: "credit_note", sourceId: id, lineId });
     insertMovement(db, { date: input.date, itemId: b.line.itemId, warehouseId: invoice.warehouseId, quantity: b.base, value: b.cost, source: "credit_note", sourceId: id });
   }
   return { id, number, total };

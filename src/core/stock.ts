@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { assertIsoDate } from "./dates";
 import { BusinessError } from "./errors";
+import { issueSerials, receiveSerials, serialsFor } from "./serials";
 import type { Quantity } from "./items";
 import { type IsoDate, type Piastres, postJournalEntry } from "./ledger";
 
@@ -9,9 +10,11 @@ export type StockOnHand = { total: Quantity; byWarehouse: { warehouseId: number;
 
 /** A line counted in the item's base unit or its pack unit, in thousandths of that unit. */
 export type UnitLine = { itemId: number; unit: "base" | "pack"; quantity: Quantity };
-export type TransferInput = { date: IsoDate; from: number; to: number; memo: string; lines: UnitLine[] };
+/** A line of a serialised item carries one serial number per unit. */
+export type SerialLine = { serials?: string[] };
+export type TransferInput = { date: IsoDate; from: number; to: number; memo: string; lines: (UnitLine & SerialLine)[] };
 export type Transfer = { id: number; date: IsoDate; from: number; to: number; memo: string; lines: { itemId: number; quantity: Quantity }[] };
-export type OpeningStockLine = { itemId: number; quantity: Quantity; unitCost: Piastres };
+export type OpeningStockLine = { itemId: number; quantity: Quantity; unitCost: Piastres } & SerialLine;
 
 const ONE_BASE_UNIT = 1000;
 
@@ -191,6 +194,8 @@ export function postOpeningStock(db: Database.Database, date: IsoDate, warehouse
       source: "opening_stock",
       sourceId: entryId,
     });
+    const serials = serialsFor(db, line.itemId, line.quantity, line.serials);
+    receiveSerials(db, line.itemId, serials, { date, warehouseId, source: "opening_stock", sourceId: entryId, lineId: null });
   }
   return entryId;
 }
@@ -221,6 +226,12 @@ export function transferStock(db: Database.Database, input: TransferInput): numb
     insertMovement(db, { ...base, warehouseId: input.from, quantity: -quantity });
     insertMovement(db, { ...base, warehouseId: input.to, quantity });
   }
+  input.lines.forEach((line, index) => {
+    const serials = serialsFor(db, line.itemId, toBaseQuantity(db, line), line.serials);
+    const m = { date: input.date, source: "transfer", sourceId: id, lineId: index };
+    issueSerials(db, line.itemId, serials, { ...m, warehouseId: input.from });
+    receiveSerials(db, line.itemId, serials, { ...m, warehouseId: input.to });
+  });
   return id;
 }
 

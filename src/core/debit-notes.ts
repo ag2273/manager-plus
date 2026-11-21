@@ -5,6 +5,7 @@ import type { Quantity } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
 import { findSupplier } from "./purchases";
 import { type Taken, nextNumber, shareOf, take } from "./shares";
+import { issueSerials, serialsFor } from "./serials";
 import { accountByRole, assertQuantity, insertMovement } from "./stock";
 
 export type DebitNoteInput = {
@@ -12,7 +13,7 @@ export type DebitNoteInput = {
   purchaseInvoiceId: number;
   reason: string;
   /** Purchase invoice lines and how much of each goes back, in thousandths of the line's unit. */
-  lines: { lineId: number; quantity: Quantity }[];
+  lines: { lineId: number; quantity: Quantity; serials?: string[] }[];
 };
 export type DebitNote = {
   id: number;
@@ -55,7 +56,7 @@ export function postDebitNote(db: Database.Database, input: DebitNoteInput, user
     "SELECT COALESCE(SUM(quantity), 0) AS quantity, COALESCE(SUM(net), 0) AS net, COALESCE(SUM(vat), 0) AS vat FROM debit_note_lines WHERE purchase_line_id = ?",
   );
   const taken = new Map<number, Taken>();
-  const backs = input.lines.map(({ lineId, quantity }) => {
+  const backs = input.lines.map(({ lineId, quantity, serials: given }) => {
     assertQuantity(quantity);
     const line = bought.get(lineId, invoice.id) as BoughtLine | undefined;
     if (!line) throw new BusinessError("return_line_invalid", `Line ${lineId} is not on purchase invoice ${invoice.id}`);
@@ -67,7 +68,8 @@ export function postDebitNote(db: Database.Database, input: DebitNoteInput, user
     const share = shareOf([line.net, line.vat], line.quantity, before, quantity);
     taken.set(lineId, take(before, quantity, share));
     const [net, vat] = share as [number, number];
-    return { line, quantity, base: Math.round((quantity * line.size) / ONE_UNIT), net, vat };
+    const base = Math.round((quantity * line.size) / ONE_UNIT);
+    return { line, quantity, base, net, vat, serials: serialsFor(db, line.itemId, base, given) };
   });
   const net = backs.reduce((t, b) => t + b.net, 0);
   const vat = backs.reduce((t, b) => t + b.vat, 0);
@@ -86,7 +88,8 @@ export function postDebitNote(db: Database.Database, input: DebitNoteInput, user
   );
   const insertLine = db.prepare("INSERT INTO debit_note_lines (note_id, purchase_line_id, quantity, net, vat) VALUES (?, ?, ?, ?, ?)");
   for (const b of backs) {
-    insertLine.run(id, b.line.id, b.quantity, b.net, b.vat);
+    const lineId = Number(insertLine.run(id, b.line.id, b.quantity, b.net, b.vat).lastInsertRowid);
+    issueSerials(db, b.line.itemId, b.serials, { date: input.date, warehouseId: invoice.warehouseId, source: "debit_note", sourceId: id, lineId });
     insertMovement(db, { date: input.date, itemId: b.line.itemId, warehouseId: invoice.warehouseId, quantity: -b.base, value: -b.net, source: "debit_note", sourceId: id });
   }
   return { id, number, total: net + vat };

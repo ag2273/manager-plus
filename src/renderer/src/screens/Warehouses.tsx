@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Item } from "../../../core/items";
-import type { Transfer, UnitLine, Warehouse } from "../../../core/stock";
+import type { SerialLine, Transfer, UnitLine, Warehouse } from "../../../core/stock";
 import type { Result } from "../../../shared/api";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { SerialsField, splitSerials } from "./Serials";
 
 type Tab = "list" | "transfer" | "history";
 
@@ -146,8 +147,8 @@ function WarehouseList({ warehouses, onChange }: { warehouses: Warehouse[]; onCh
   );
 }
 
-type DraftLine = { itemId: number | ""; unit: "base" | "pack"; quantity: string };
-const emptyLine = (): DraftLine => ({ itemId: "", unit: "base", quantity: "" });
+type DraftLine = { itemId: number | ""; unit: "base" | "pack"; quantity: string; serials: string };
+const emptyLine = (): DraftLine => ({ itemId: "", unit: "base", quantity: "", serials: "" });
 
 function TransferForm({ warehouses }: { warehouses: Warehouse[] }) {
   const [items, setItems] = useState<Item[]>([]);
@@ -184,7 +185,7 @@ function TransferForm({ warehouses }: { warehouses: Warehouse[] }) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setDone(null);
-    const out: UnitLine[] = [];
+    const out: (UnitLine & SerialLine)[] = [];
     for (const l of lines) {
       if (l.itemId === "" && l.quantity.trim() === "") continue;
       const quantity = parseQuantity(l.quantity);
@@ -192,7 +193,8 @@ function TransferForm({ warehouses }: { warehouses: Warehouse[] }) {
         setError(ar.errors["quantity_invalid"]!);
         return;
       }
-      out.push({ itemId: l.itemId, unit: l.unit, quantity });
+      const serials = splitSerials(l.serials);
+      out.push({ itemId: l.itemId, unit: l.unit, quantity, ...(serials.length > 0 ? { serials } : {}) });
     }
     if (from === "" || to === "") {
       setError(ar.errors["transfer_same_warehouse"]!);
@@ -261,7 +263,7 @@ function TransferForm({ warehouses }: { warehouses: Warehouse[] }) {
         <tbody>
           {lines.map((l, i) => {
             const item = items.find((it) => it.id === l.itemId);
-            return (
+            return [
               <tr key={i}>
                 <td>
                   <select
@@ -289,8 +291,15 @@ function TransferForm({ warehouses }: { warehouses: Warehouse[] }) {
                 <td className="num muted">
                   {l.itemId !== "" && available[l.itemId] !== undefined && `${formatQuantity(available[l.itemId]!)} ${item?.baseUnit ?? ""}`}
                 </td>
-              </tr>
-            );
+              </tr>,
+              item?.serialised && (
+                <tr key={`${i}-serials`}>
+                  <td colSpan={4}>
+                    <SerialsField name={item.nameAr} value={l.serials} onChange={(serials, count) => setLine(i, { serials, unit: "base", quantity: String(count) })} />
+                  </td>
+                </tr>
+              ),
+            ];
           })}
         </tbody>
       </table>

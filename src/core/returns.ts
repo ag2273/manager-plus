@@ -4,13 +4,14 @@ import { BusinessError } from "./errors";
 import type { Quantity } from "./items";
 import { type IsoDate, type JournalLine, type Piastres, postJournalEntry } from "./ledger";
 import { requireOpenShift } from "./shifts";
+import { returnSerials, serialsFor } from "./serials";
 import { accountByRole, assertQuantity, insertMovement } from "./stock";
 
 export type ReturnInput = {
   date: IsoDate;
   receiptId: number;
   /** Receipt lines and how much of each comes back, in thousandths of the line's unit. */
-  lines: { lineId: number; quantity: Quantity }[];
+  lines: { lineId: number; quantity: Quantity; serials?: string[] }[];
   /** Cash from the drawer, or credited to the receipt's customer. */
   refund: "cash" | "account";
 };
@@ -69,7 +70,7 @@ export function returnSale(db: Database.Database, input: ReturnInput, userId: nu
        FROM sales_return_lines WHERE receipt_line_id = ?`,
   );
   const taken = new Map<number, Taken>();
-  const backs = input.lines.map(({ lineId, quantity }) => {
+  const backs = input.lines.map(({ lineId, quantity, serials: given }) => {
     assertQuantity(quantity);
     const line = soldLine.get(lineId, receipt.id) as SoldLine | undefined;
     if (!line) throw new BusinessError("return_line_invalid", `Line ${lineId} is not on receipt ${receipt.number}`);
@@ -84,7 +85,8 @@ export function returnSale(db: Database.Database, input: ReturnInput, userId: nu
       net: before.net + values.net,
       cost: before.cost + values.cost,
     });
-    return { line, quantity, base: Math.round((quantity * line.size) / ONE_UNIT), ...values };
+    const base = Math.round((quantity * line.size) / ONE_UNIT);
+    return { line, quantity, base, ...values, serials: serialsFor(db, line.itemId, base, given) };
   });
 
   const total = backs.reduce((t, b) => t + b.amount, 0);
@@ -120,7 +122,8 @@ export function returnSale(db: Database.Database, input: ReturnInput, userId: nu
     "INSERT INTO sales_return_lines (return_id, receipt_line_id, quantity, amount, net, vat, cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
   for (const b of backs) {
-    insertLine.run(id, b.line.id, b.quantity, b.amount, b.net, b.vat, b.cost);
+    const lineId = Number(insertLine.run(id, b.line.id, b.quantity, b.amount, b.net, b.vat, b.cost).lastInsertRowid);
+    returnSerials(db, b.line.itemId, b.serials, { source: "sale", sourceId: receipt.id }, { date: input.date, warehouseId: receipt.warehouseId, source: "sale_return", sourceId: id, lineId });
     insertMovement(db, {
       date: input.date,
       itemId: b.line.itemId,

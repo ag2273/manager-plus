@@ -2,6 +2,7 @@ import type { BusinessSettings } from "../core/business";
 import type { SaleReturn } from "../core/returns";
 import type { Receipt } from "../core/sales";
 import { formatMoney } from "./money";
+import { serialNote } from "./serials";
 import { formatQuantity } from "./quantity";
 
 /** 80 mm paper at 203 dpi is 576 printable dots. */
@@ -59,7 +60,7 @@ export function saleDocument(receipt: Receipt, settings: BusinessSettings, optio
     cashier: receipt.soldBy,
     copy: options.copy,
     lines: receipt.lines.map((l) => ({
-      name: l.nameAr,
+      name: l.nameAr + serialNote(l),
       detail: `${formatQuantity(l.quantity)} × ${formatMoney(l.unitPrice)}${l.discount > 0 ? ` − ${formatMoney(l.discount)}` : ""}`,
       amount: formatMoney(l.amount),
     })),
@@ -130,7 +131,7 @@ body { font-family: "IBM Plex Sans Arabic", Tahoma, "Segoe UI", sans-serif; font
 .rule { border-top: 2px dashed #000; margin: 8px 0; }
 .row { display: flex; justify-content: space-between; gap: 12px; }
 .line { margin-bottom: 4px; }
-.name { font-weight: 600; }
+.name { font-weight: 600; white-space: pre-line; }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .strong { font-size: 30px; font-weight: 700; }
 .footer { margin-top: 10px; white-space: pre-line; }

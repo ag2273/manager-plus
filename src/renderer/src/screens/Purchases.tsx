@@ -8,6 +8,7 @@ import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 import { AgingView, PaymentForm, StatementView } from "./Parties";
+import { SerialsField, splitSerials } from "./Serials";
 
 type Tab = "invoice" | "invoices" | "suppliers" | "payment" | "statement" | "aging";
 
@@ -51,8 +52,9 @@ export function Purchases({ canSeeBalances }: { canSeeBalances: boolean }) {
   );
 }
 
-type DraftLine = { itemId: number | ""; unit: "base" | "pack"; quantity: string; unitPrice: string };
-const emptyLine = (): DraftLine => ({ itemId: "", unit: "base", quantity: "", unitPrice: "" });
+type DraftLine = { itemId: number | ""; unit: "base" | "pack"; quantity: string; unitPrice: string; serials: string };
+const emptyLine = (): DraftLine => ({ itemId: "", unit: "base", quantity: "", unitPrice: "", serials: "" });
+const withSerials = (l: DraftLine) => (splitSerials(l.serials).length > 0 ? { serials: splitSerials(l.serials) } : {});
 
 /** The lines that are filled in completely, with the index of the draft row each came from. */
 function completeLines(lines: DraftLine[]): { index: number; line: PurchaseLineInput }[] {
@@ -61,7 +63,7 @@ function completeLines(lines: DraftLine[]): { index: number; line: PurchaseLineI
     const quantity = parseQuantity(l.quantity);
     const unitPrice = parseMoney(l.unitPrice);
     if (l.itemId !== "" && quantity !== null && quantity > 0 && unitPrice !== null) {
-      out.push({ index, line: { itemId: l.itemId, unit: l.unit, quantity, unitPrice } });
+      out.push({ index, line: { itemId: l.itemId, unit: l.unit, quantity, unitPrice, ...withSerials(l) } });
     }
   });
   return out;
@@ -134,7 +136,7 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
         setError(ar.errors["price_invalid"]!);
         return;
       }
-      out.push({ itemId: l.itemId, unit: l.unit, quantity, unitPrice });
+      out.push({ itemId: l.itemId, unit: l.unit, quantity, unitPrice, ...withSerials(l) });
     }
     if (supplierId === "") {
       setError(ar.errors["supplier_not_found"]!);
@@ -211,7 +213,7 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
           {lines.map((l, i) => {
             const item = items.find((it) => it.id === l.itemId);
             const row = priced?.rows[i];
-            return (
+            return [
               <tr key={i}>
                 <td>
                   <select
@@ -245,8 +247,15 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
                 </td>
                 <td className="num">{row && formatMoney(row.net)}</td>
                 <td className="num muted">{row && formatMoney(row.vat)}</td>
-              </tr>
-            );
+              </tr>,
+              item?.serialised && (
+                <tr key={`${i}-serials`}>
+                  <td colSpan={6}>
+                    <SerialsField name={item.nameAr} value={l.serials} onChange={(serials, count) => setLine(i, { serials, unit: "base", quantity: String(count) })} />
+                  </td>
+                </tr>
+              ),
+            ];
           })}
         </tbody>
         {priced && (
@@ -351,6 +360,11 @@ function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
 
 function DebitNoteForm({ invoice, onChange }: { invoice: PurchaseInvoice; onChange: () => Promise<void> }) {
   const [quantities, setQuantities] = useState<Record<number, string>>({});
+  const [serialised, setSerialised] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    void business.items({ includeInactive: true }).then((r) => r.ok && setSerialised(new Set(r.value.filter((i) => i.serialised).map((i) => i.id))));
+  }, []);
   const [reason, setReason] = useState("");
   const [date, setDate] = useState(today());
   const [error, setError] = useState<string | null>(null);
@@ -362,12 +376,13 @@ function DebitNoteForm({ invoice, onChange }: { invoice: PurchaseInvoice; onChan
     for (const l of invoice.lines) {
       const text = quantities[l.lineId]?.trim() ?? "";
       if (text === "") continue;
-      const quantity = parseQuantity(text);
+      const serials = serialised.has(l.itemId) ? splitSerials(text) : [];
+      const quantity = serials.length > 0 ? serials.length * 1000 : parseQuantity(text);
       if (quantity === null) {
         setError(ar.errors["quantity_invalid"]!);
         return;
       }
-      if (quantity > 0) lines.push({ lineId: l.lineId, quantity });
+      if (quantity > 0) lines.push({ lineId: l.lineId, quantity, ...(serials.length > 0 ? { serials } : {}) });
     }
     const result = await business.postDebitNote({ date, purchaseInvoiceId: invoice.id, reason, lines });
     setError(errorText(result));
@@ -399,14 +414,26 @@ function DebitNoteForm({ invoice, onChange }: { invoice: PurchaseInvoice; onChan
               <td className="num">{formatMoney(l.unitPrice)}</td>
               <td className="num muted">{l.returned > 0 && formatQuantity(l.returned)}</td>
               <td>
-                <input
-                  aria-label={ar.purchases.returnQuantity(l.nameAr)}
-                  dir="ltr"
-                  inputMode="decimal"
-                  disabled={l.returned >= l.quantity}
-                  value={quantities[l.lineId] ?? ""}
-                  onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
-                />
+                {serialised.has(l.itemId) ? (
+                  <textarea
+                    aria-label={ar.purchases.returnQuantity(l.nameAr)}
+                    dir="ltr"
+                    rows={2}
+                    placeholder={ar.serials.label}
+                    disabled={l.returned >= l.quantity}
+                    value={quantities[l.lineId] ?? ""}
+                    onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
+                  />
+                ) : (
+                  <input
+                    aria-label={ar.purchases.returnQuantity(l.nameAr)}
+                    dir="ltr"
+                    inputMode="decimal"
+                    disabled={l.returned >= l.quantity}
+                    value={quantities[l.lineId] ?? ""}
+                    onChange={(e) => setQuantities({ ...quantities, [l.lineId]: e.target.value })}
+                  />
+                )}
               </td>
             </tr>
           ))}
