@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Role } from "../../core/users";
-import type { BusinessSettings, ThemeId, User } from "../../shared/api";
+import type { BusinessSettings, FileStatus, ThemeId, User } from "../../shared/api";
 import { Accounts } from "./screens/Accounts";
 import { AuditLog } from "./screens/AuditLog";
 import { Home } from "./screens/Home";
@@ -60,6 +60,21 @@ const NAV: { label: string; screen?: Screen; roles: Role[] }[] = [
   { label: ar.nav.audit, screen: "audit", roles: ["manager", "accountant"] },
   { label: ar.nav.settings, screen: "settings", roles: ALL },
 ];
+
+/** Says so when another PC had this file open, which loses work when the file sits in a sync folder. */
+function FileWarning() {
+  const [status, setStatus] = useState<FileStatus | null>(null);
+  useEffect(() => {
+    void window.api.fileStatus().then(setStatus);
+  }, []);
+  if (!status?.openElsewhere) return null;
+  const since = new Date(status.openElsewhere.at).toLocaleString("ar-EG", { timeStyle: "short", dateStyle: "short" });
+  return (
+    <div role="alert" className="error">
+      {ar.backup.openElsewhere(status.openElsewhere.host, since)} {status.syncFolder && ar.backup.inSyncFolder(status.syncFolder)}
+    </div>
+  );
+}
 
 export function App() {
   const [open, setOpen] = useState<BusinessSettings | null>(null);
@@ -171,6 +186,7 @@ export function App() {
             </button>
           </div>
         )}
+        <FileWarning />
         {screen === "home" && (
           <Home
             settings={open}
@@ -190,7 +206,15 @@ export function App() {
         {screen === "users" && <Users me={user} />}
         {screen === "audit" && <AuditLog />}
         {screen === "settings" && (
-          <Settings theme={theme} onTheme={chooseTheme} />
+          <Settings
+            theme={theme}
+            onTheme={chooseTheme}
+            isManager={user.role === "manager"}
+            onRestored={(settings) => {
+              setOpen(settings);
+              setUser(null);
+            }}
+          />
         )}
       </main>
     </div>

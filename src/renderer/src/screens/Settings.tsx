@@ -1,15 +1,21 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { NO_PRINTER, THEMES, type Connection, type PrinterSettings, type ServerStatus, type ThemeId } from "../../../shared/api";
-import { errorText } from "../api";
+import type { BackupStatus } from "../../../core/backup";
+import type { BusinessSettings } from "../../../shared/api";
+import { business, errorText } from "../api";
 import { ar } from "../strings";
 
 /** Appearance settings: the theme picker from the approved design. */
 export function Settings({
   theme,
   onTheme,
+  isManager,
+  onRestored,
 }: {
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
+  isManager: boolean;
+  onRestored: (settings: BusinessSettings) => void;
 }) {
   return (
     <>
@@ -60,7 +66,110 @@ export function Settings({
       </section>
       <PrinterSetup />
       <ServerSetup />
+      {isManager && <BackupSetup onRestored={onRestored} />}
     </>
+  );
+}
+
+/** The backup folder, backing up now, and restoring a backup; on the PC that holds the file. */
+function BackupSetup({ onRestored }: { onRestored: (settings: BusinessSettings) => void }) {
+  const [local, setLocal] = useState(false);
+  const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  async function reload() {
+    const result = await business.backupStatus();
+    if (result.ok) setStatus(result.value);
+  }
+
+  useEffect(() => {
+    void window.api.fileStatus().then((f) => {
+      setLocal(f !== null);
+      if (f) void reload();
+    });
+  }, []);
+
+  async function chooseFolder() {
+    const folder = await window.api.chooseFolder();
+    if (!folder) return;
+    const result = await business.setBackupFolder(folder);
+    setMessage(result.ok ? null : { ok: false, text: errorText(result)! });
+    await reload();
+  }
+
+  async function backup() {
+    const result = await business.backupNow();
+    setMessage(result.ok ? { ok: true, text: ar.backup.done(result.value.name) } : { ok: false, text: errorText(result)! });
+    await reload();
+  }
+
+  async function restore(path: string | null) {
+    if (path !== null && confirming !== path) {
+      setConfirming(path);
+      return;
+    }
+    setConfirming(null);
+    const result = await window.api.restoreBackup(path);
+    if (!result.ok) setMessage({ ok: false, text: errorText(result)! });
+    else if (result.value) onRestored(result.value);
+  }
+
+  if (!local || !status) return null;
+  const when = (iso: string) => new Date(iso).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" });
+  return (
+    <section className="card printer-card" aria-label={ar.backup.title}>
+      <div className="stack">
+        <h2>{ar.backup.title}</h2>
+        <span className="muted">{ar.backup.hint}</span>
+      </div>
+      {message && (
+        <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
+          {message.text}
+        </div>
+      )}
+      <dl className="server-facts">
+        <dt>{ar.backup.folder}</dt>
+        <dd dir="ltr">{status.folder ?? ar.backup.noFolder}</dd>
+        <dt>{ar.backup.last}</dt>
+        <dd>{status.lastBackupAt ? when(status.lastBackupAt) : ar.backup.never}</dd>
+      </dl>
+      <div className="row">
+        <button type="button" className="btn" onClick={() => void chooseFolder()}>
+          {ar.backup.chooseFolder}
+        </button>
+        <button type="button" className="btn btn-primary" disabled={!status.folder} onClick={() => void backup()}>
+          {ar.backup.now}
+        </button>
+        <button type="button" className="btn" onClick={() => void restore(null)}>
+          {ar.backup.restoreOther}
+        </button>
+      </div>
+      {status.backups.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>{ar.backup.when}</th>
+              <th className="col-money">{ar.backup.size}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {status.backups.map((b) => (
+              <tr key={b.path}>
+                <td>{when(b.at)}</td>
+                <td className="num">{(b.size / 1024 / 1024).toFixed(1)} MB</td>
+                <td>
+                  <button type="button" className="btn btn-small" onClick={() => void restore(b.path)}>
+                    {confirming === b.path ? ar.backup.confirmRestore : ar.backup.restore}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

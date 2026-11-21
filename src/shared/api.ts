@@ -80,6 +80,9 @@ export const BUSINESS_METHODS = [
   "postOpeningStock",
   "checkImport",
   "importData",
+  "backupStatus",
+  "setBackupFolder",
+  "backupNow",
   "transferStock",
   "transfers",
   "averageCost",
@@ -160,6 +163,8 @@ export const NO_PRINTER: PrinterSettings = { kind: "none" };
 /** Preferences of this computer, kept outside the business file. */
 export type Preferences = { theme: ThemeId; printer: PrinterSettings };
 
+export type FileStatus = { path: string; syncFolder: string | null; openElsewhere: { host: string; at: string } | null };
+
 /** A Manager+ server heard on the network, or typed in. */
 export type FoundServer = { name: string; host: string; port: number };
 /** This PC serving its open business to others. */
@@ -214,6 +219,12 @@ export interface DesktopApi {
   openSpreadsheet(): Promise<Result<{ name: string; sheets: ReadSheet[] } | null>>;
   /** Saves the import template in Arabic or English; `saved` is its path, or null when cancelled. */
   saveImportTemplate(lang: Lang): Promise<Result<{ saved: string | null }>>;
+  /** The open file on this PC: whether it sits in a sync folder and whether another PC had it open; null as a client. */
+  fileStatus(): Promise<FileStatus | null>;
+  /** Asks for a folder; null when cancelled. */
+  chooseFolder(): Promise<string | null>;
+  /** Restores a backup (asks for one when null), backing up the file first; the business reopens signed out. */
+  restoreBackup(path: string | null): Promise<Result<BusinessSettings | null>>;
   /** Servers announcing themselves on the local network. */
   discoverServers(): Promise<FoundServer[]>;
   /** The server this PC last connected to, for a one-click reconnect. */
@@ -243,6 +254,9 @@ export const CHANNELS = {
   exportExcel: "export:excel",
   openSpreadsheet: "import:open",
   saveImportTemplate: "import:template",
+  fileStatus: "file:status",
+  chooseFolder: "file:choose-folder",
+  restoreBackup: "file:restore",
   discoverServers: "network:discover",
   lastServer: "network:last",
   connectServer: "network:connect",

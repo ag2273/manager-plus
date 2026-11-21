@@ -1,6 +1,7 @@
 import { existsSync, rmSync } from "node:fs";
 import Database from "better-sqlite3";
 import { BusinessError } from "./errors";
+import { type BackupFile, type BackupStatus, backupNow, backupStatus, copyDatabase, dailyBackupDue, replaceFile, setBackupFolder } from "./backup";
 import {
   type Account,
   type AccountChanges,
@@ -237,6 +238,18 @@ import {
 } from "./users";
 
 const IN_MEMORY = ":memory:";
+
+function beforeRestorePath(path: string, at: Date): string {
+  return `${path.replace(/\.mplus$/i, "")} قبل الاسترجاع ${at.toISOString().slice(0, 19).replace("T", " ").replace(/:/g, "")}.mplus`;
+}
+
+/** "shop.mplus" at schema 18 → "shop قبل التحديث 18.mplus" beside it, numbered if that exists. */
+function beforeUpgradePath(path: string, version: number): string {
+  const base = path.replace(/\.mplus$/i, "");
+  let candidate = `${base} قبل التحديث ${version}.mplus`;
+  for (let n = 2; existsSync(candidate); n++) candidate = `${base} قبل التحديث ${version} (${n}).mplus`;
+  return candidate;
+}
 /** Marks a SQLite file as a Manager+ business file ("MPLS"). */
 const APPLICATION_ID = 0x4d504c53;
 
@@ -269,6 +282,8 @@ export class Business {
   private constructor(
     private readonly db: Database.Database,
     private readonly user: User | null,
+    /** Where the file lives; backups are named after it. */
+    private readonly path: string,
   ) {}
 
   /** Create a new business file at `path` (or ":memory:"), with its first manager signed in. */
@@ -308,7 +323,7 @@ export class Business {
       }
       throw error;
     }
-    return new Business(db, first);
+    return new Business(db, first, path);
   }
 
   /** Open an existing business file, signed out. */
@@ -326,18 +341,49 @@ export class Business {
       }
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
-      migrate(db);
     } catch (error) {
       db.close();
       if (error instanceof BusinessError) throw error;
       throw new BusinessError("not_a_business_file", `${path} is not a Manager+ business file`);
     }
-    return new Business(db, null);
+    const version = db.pragma("user_version", { simple: true }) as number;
+    if (version < LATEST_SCHEMA_VERSION) {
+      // A copy before upgrading, beside the file; if the upgrade fails the file goes back to it.
+      const before = beforeUpgradePath(path, version);
+      try {
+        copyDatabase(db, before);
+        migrate(db);
+      } catch (error) {
+        db.close();
+        if (existsSync(before)) replaceFile(before, path);
+        console.error(error);
+        throw new BusinessError("migration_failed", `Upgrading ${path} failed; it was put back as it was`);
+      }
+    }
+    return new Business(db, null, path);
+  }
+
+  /** Checks that a file is a business file this version can open, without changing it. */
+  static check(path: string): void {
+    if (!existsSync(path)) throw new BusinessError("file_not_found", `No file at ${path}`);
+    let db: Database.Database | null = null;
+    try {
+      db = new Database(path, { readonly: true, fileMustExist: true });
+      if (db.pragma("application_id", { simple: true }) !== APPLICATION_ID) throw new Error("not ours");
+      if ((db.pragma("user_version", { simple: true }) as number) > LATEST_SCHEMA_VERSION) {
+        throw new BusinessError("made_by_newer_version", `${path} was saved by a newer version of the app`);
+      }
+    } catch (error) {
+      if (error instanceof BusinessError) throw error;
+      throw new BusinessError("not_a_business_file", `${path} is not a Manager+ business file`);
+    } finally {
+      db?.close();
+    }
   }
 
   /** Returns this business acting for the user with these credentials. */
   signIn(name: string, password: string): Business {
-    return new Business(this.db, authenticate(this.db, { name, password }));
+    return new Business(this.db, authenticate(this.db, { name, password }), this.path);
   }
 
   /** The signed-in user, or null when signed out. */
@@ -1058,6 +1104,45 @@ export class Business {
   /** Aged receivables (customers) or payables (suppliers) on a date. */
   aging(kind: PartyKind, asOf: IsoDate): Aging {
     return this.read("aging", () => aging(this.db, kind, asOf));
+  }
+
+  // Backups
+
+  /** The backup folder, when the last backup ran, and the backups kept there. */
+  backupStatus(): BackupStatus {
+    return this.read("backupStatus", () => backupStatus(this.db, this.path));
+  }
+
+  setBackupFolder(folder: string | null): void {
+    this.write("setBackupFolder", { folder }, () => setBackupFolder(this.db, folder));
+  }
+
+  backupNow(): BackupFile {
+    this.allow("backupNow");
+    return backupNow(this.db, this.path, new Date());
+  }
+
+  /**
+   * The daily backup, run by the app on the PC that holds the file whether or not anyone is signed
+   * in; null when no folder is set or today's backup is done.
+   */
+  scheduledBackup(now: Date): BackupFile | null {
+    return dailyBackupDue(this.db, this.path, now) ? backupNow(this.db, this.path, now) : null;
+  }
+
+  /**
+   * Puts a backup in place of this file: the file as it is now is backed up first (to the backup
+   * folder, or beside it when none is set), then this business closes and the backup opens, signed out.
+   */
+  restore(backupPath: string): Business {
+    this.allow("restoreBackup");
+    if (this.path === IN_MEMORY) throw new BusinessError("file_not_found", "An in-memory business has no file to restore into");
+    Business.check(backupPath);
+    if (backupStatus(this.db, this.path).folder) backupNow(this.db, this.path, new Date());
+    else copyDatabase(this.db, beforeRestorePath(this.path, new Date()));
+    this.db.close();
+    replaceFile(backupPath, this.path);
+    return Business.open(this.path);
   }
 
   close(): void {

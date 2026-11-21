@@ -41,6 +41,8 @@ import { importTemplate } from "../shared/import-template";
 import { decodeCsv, parseCsv, readXlsx } from "../shared/spreadsheet-read";
 import { inflateRawSync } from "node:zlib";
 import { basename } from "node:path";
+import { hostname } from "node:os";
+import { type LockInfo, refreshLock, releaseLock, syncFolder, takeLock } from "../core/file-lock";
 
 const FILE_FILTER = { name: "Manager+ business", extensions: ["mplus"] };
 const MAX_RECENT = 8;
@@ -54,6 +56,35 @@ let remote: RemoteBusiness | null = null;
 /** This PC serving its open file to others. */
 let serving: { server: RunningServer; stopAdvertising: () => void } | null = null;
 let window: BrowserWindow | null = null;
+/** This PC in the lock file next to the open business file. */
+const ME = { host: hostname(), pid: process.pid };
+/** Another PC that had the open file when this one opened it. */
+let openElsewhere: LockInfo | null = null;
+
+/** Lets go of the open file's lock, if this PC has one. */
+function unlock(): void {
+  if (localPath) releaseLock(localPath, ME);
+  openElsewhere = null;
+}
+
+/** The daily backup of the file this PC holds, while it is open; failures are logged and tried again later. */
+function backupIfDue(): void {
+  if (!file || remote) return;
+  try {
+    const done = file.scheduledBackup(new Date());
+    if (done) console.log(`Backed up to ${done.path}`);
+  } catch (error) {
+    console.error("Scheduled backup failed", error);
+  }
+}
+
+setInterval(
+  () => {
+    if (localPath && file) refreshLock(localPath, ME, new Date());
+    backupIfDue();
+  },
+  5 * 60 * 1000,
+);
 
 function recentPath(): string {
   return join(app.getPath("userData"), "recent-files.json");
@@ -77,9 +108,17 @@ function switchTo(business: Business, path: string): BusinessSettings {
   void stopServing();
   remote?.close();
   remote = null;
+  unlock();
   file?.close();
   file = business;
   localPath = path;
+  try {
+    openElsewhere = takeLock(path, ME, new Date());
+  } catch (error) {
+    // A read-only folder: no lock, but the file still opens.
+    console.error(error);
+  }
+  backupIfDue();
   current = business.currentUser() ? business : null;
   rememberRecent(path);
   const serve = readNetwork().serve;
@@ -274,6 +313,40 @@ ipcMain.handle(CHANNELS.openSpreadsheet, async (): Promise<Result<{ name: string
   }
 });
 
+ipcMain.handle(CHANNELS.fileStatus, () =>
+  localPath && file && !remote ? { path: localPath, syncFolder: syncFolder(localPath), openElsewhere } : null,
+);
+
+ipcMain.handle(CHANNELS.chooseFolder, async () => {
+  const options = { properties: ["openDirectory" as const, "createDirectory" as const] };
+  const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+  return choice.canceled ? null : (choice.filePaths[0] ?? null);
+});
+
+ipcMain.handle(CHANNELS.restoreBackup, async (_event, given: string | null) => {
+  const business = current;
+  if (!business || remote || !localPath || business.currentUser()?.role !== "manager") {
+    return { ok: false, code: "restore_needs_manager", message: "Only a manager on the PC that holds the file can restore" };
+  }
+  let backup = given;
+  if (!backup) {
+    const options = { properties: ["openFile" as const], filters: [FILE_FILTER] };
+    const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+    if (choice.canceled || !choice.filePaths[0]) return { ok: true, value: null };
+    backup = choice.filePaths[0];
+  }
+  const chosen = backup;
+  const path = localPath;
+  return attempt(() => {
+    void stopServing();
+    const restored = business.restore(chosen);
+    // The old handles are closed by the restore; the restored file opens signed out.
+    file = null;
+    current = null;
+    return switchTo(restored, path);
+  });
+});
+
 ipcMain.handle(CHANNELS.printA4, async (_event, request: A4Request): Promise<Result<{ saved: string | null }>> => {
   let page: { html: string; name: string };
   try {
@@ -400,6 +473,7 @@ ipcMain.handle(CHANNELS.connectServer, async (_event, host: string, port: number
   }
   await stopServing();
   remote?.close();
+  unlock();
   file?.close();
   file = null;
   current = null;
@@ -451,6 +525,7 @@ void app.whenReady().then(createWindow);
 app.on("window-all-closed", () => {
   void stopServing();
   remote?.close();
+  unlock();
   file?.close();
   app.quit();
 });

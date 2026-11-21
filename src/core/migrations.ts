@@ -758,6 +758,16 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 20,
+    up: (db) => {
+      db.exec(`
+        -- Where this business is backed up every day (a folder on the PC that holds the file), and when it last was.
+        ALTER TABLE business_settings ADD COLUMN backup_folder TEXT;
+        ALTER TABLE business_settings ADD COLUMN last_backup_at TEXT;
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;
