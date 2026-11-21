@@ -10,7 +10,15 @@ export const APPROVAL_ERRORS = ["sign_in_failed", "approval_not_manager"];
  * Shown when a document would take a customer past their credit limit: the amount over, and a
  * manager's name and password to approve it on the spot.
  */
-export function CreditApprovalPrompt({ over, onApprove, onCancel }: { over: number; onApprove: (approval: Credentials) => void; onCancel: () => void }) {
+export function CreditApprovalPrompt({
+  over,
+  onApprove,
+  onCancel,
+}: {
+  over: number;
+  onApprove: (approval: Credentials) => void;
+  onCancel: () => void;
+}) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const approve = () => onApprove({ name, password });

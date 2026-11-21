@@ -111,6 +111,10 @@ function validateEntry(db: Database.Database, input: JournalEntryInput): void {
 
 export function postJournalEntry(db: Database.Database, input: JournalEntryInput, kind = "journal"): number {
   validateEntry(db, input);
+  const lock = db.prepare("SELECT lock_date AS lockDate FROM business_settings WHERE id = 1").get() as { lockDate: string | null } | undefined;
+  if (lock?.lockDate && input.date <= lock.lockDate) {
+    throw new BusinessError("period_locked", `The books are locked up to ${lock.lockDate}; nothing can be posted on ${input.date}`);
+  }
   const entry = db
     .prepare("INSERT INTO journal_entries (date, memo, kind) VALUES (?, ?, ?)")
     .run(input.date, input.memo.trim(), kind);

@@ -75,6 +75,27 @@ import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
 import {
+  type AccountLine,
+  type Expense,
+  type ExpenseInput,
+  type MoneyAccount,
+  type MoneyTransfer,
+  type PostedDocument,
+  type Reconciliation,
+  type MoneyTransferInput,
+  accountLines,
+  listExpenses,
+  listMoneyAccounts,
+  listMoneyTransfers,
+  lockDate,
+  reconciliation,
+  recordExpense,
+  setCleared,
+  setLockDate,
+  transferMoney,
+  voidEntry,
+} from "./money";
+import {
   type WithholdingCategory,
   type WithholdingReport,
   addWithholdingRate,
@@ -782,6 +803,62 @@ export class Business {
   /** A credit note by its printed number. */
   findCreditNote(number: number): CreditNote {
     return this.read("findCreditNote", () => findCreditNote(this.db, number));
+  }
+
+  // Money accounts, expenses, transfers, reconciliation and the lock date
+
+  /** Cash, bank and wallet accounts with their balances on a date. */
+  moneyAccounts(asOf: IsoDate): MoneyAccount[] {
+    return this.read("moneyAccounts", () => listMoneyAccounts(this.db, asOf));
+  }
+
+  recordExpense(expense: ExpenseInput): PostedDocument {
+    const user = this.allow("recordExpense");
+    return this.write("recordExpense", expense, () => recordExpense(this.db, expense, user.id));
+  }
+
+  /** Expenses, newest first. */
+  expenses(): Expense[] {
+    return this.read("expenses", () => listExpenses(this.db));
+  }
+
+  transferMoney(transfer: MoneyTransferInput): PostedDocument {
+    const user = this.allow("transferMoney");
+    return this.write("transferMoney", transfer, () => transferMoney(this.db, transfer, user.id));
+  }
+
+  /** Transfers between money accounts, newest first. */
+  moneyTransfers(): MoneyTransfer[] {
+    return this.read("moneyTransfers", () => listMoneyTransfers(this.db));
+  }
+
+  /** Every posting to an account between two dates, with its reconciled tick. */
+  accountLines(accountId: number, from: IsoDate, to: IsoDate): AccountLine[] {
+    return this.read("accountLines", () => accountLines(this.db, accountId, from, to));
+  }
+
+  /** Ticks (or unticks) ledger lines of an account as on the bank statement. */
+  setCleared(accountId: number, lineIds: number[], cleared: boolean): void {
+    this.write("setCleared", { lineIds, cleared }, () => setCleared(this.db, accountId, lineIds, cleared), accountId);
+  }
+
+  /** The account's balance and its ticked lines' balance against a statement balance. */
+  reconciliation(accountId: number, statement: Piastres): Reconciliation {
+    return this.read("reconciliation", () => reconciliation(this.db, accountId, statement));
+  }
+
+  lockDate(): IsoDate | null {
+    return this.read("lockDate", () => lockDate(this.db));
+  }
+
+  /** Nothing can be posted on or before this date; null unlocks. */
+  setLockDate(date: IsoDate | null): void {
+    this.write("setLockDate", { date }, () => setLockDate(this.db, date));
+  }
+
+  /** Voids a journal entry, expense or transfer by posting its reverse on `date`; returns the reversing entry. */
+  voidEntry(entryId: number, date: IsoDate): number {
+    return this.write("voidEntry", { date }, () => voidEntry(this.db, entryId, date), entryId);
   }
 
   // Withholding tax
