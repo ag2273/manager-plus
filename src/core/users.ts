@@ -179,6 +179,7 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   salesByPaymentMethod: ["manager", "accountant"],
   salesDocuments: ["manager", "accountant"],
   stockAt: ["manager", "accountant"],
+  vatReturn: ["manager", "accountant"],
   dashboard: ["manager", "accountant"],
   postStockCount: ["manager", "storekeeper"],
   stockCounts: ["manager", "accountant", "storekeeper"],

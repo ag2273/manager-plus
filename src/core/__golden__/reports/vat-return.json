@@ -1,0 +1,215 @@
+{
+  "from": "2026-03-01",
+  "to": "2026-03-31",
+  "boxes": [
+    {
+      "section": "sales",
+      "taxKind": "standard",
+      "net": 300000,
+      "vat": 42000
+    },
+    {
+      "section": "sales",
+      "taxKind": "zero_rated",
+      "net": 16000,
+      "vat": 0
+    },
+    {
+      "section": "sales",
+      "taxKind": "exempt",
+      "net": 2000,
+      "vat": 0
+    },
+    {
+      "section": "purchases",
+      "taxKind": "standard",
+      "net": 540000,
+      "vat": 75600
+    },
+    {
+      "section": "purchases",
+      "taxKind": "zero_rated",
+      "net": 30000,
+      "vat": 0
+    },
+    {
+      "section": "purchases",
+      "taxKind": "exempt",
+      "net": 20000,
+      "vat": 0
+    },
+    {
+      "section": "expenses",
+      "taxKind": "standard",
+      "net": 10000,
+      "vat": 1400
+    },
+    {
+      "section": "imports",
+      "taxKind": "standard",
+      "net": 30000,
+      "vat": 70000
+    }
+  ],
+  "outputVat": 42000,
+  "inputVat": 147000,
+  "outputAdjustments": 0,
+  "inputAdjustments": 500,
+  "netDue": -105500,
+  "transactions": [
+    {
+      "section": "expenses",
+      "taxKind": "standard",
+      "kind": "expense",
+      "number": "1",
+      "date": "2026-03-08",
+      "party": "",
+      "net": 10000,
+      "vat": 1400,
+      "entryId": 9
+    },
+    {
+      "section": "expenses",
+      "taxKind": "standard",
+      "kind": "expense",
+      "number": "2",
+      "date": "2026-03-09",
+      "party": "مورد محلي",
+      "net": 5000,
+      "vat": 700,
+      "entryId": 10
+    },
+    {
+      "section": "expenses",
+      "taxKind": "standard",
+      "kind": "expense_void",
+      "number": "2",
+      "date": "2026-03-10",
+      "party": "مورد محلي",
+      "net": -5000,
+      "vat": -700,
+      "entryId": 11
+    },
+    {
+      "section": "imports",
+      "taxKind": "standard",
+      "kind": "import_shipment",
+      "number": "1",
+      "date": "2026-03-07",
+      "party": "BL-1",
+      "net": 30000,
+      "vat": 70000,
+      "entryId": 8
+    },
+    {
+      "section": "purchases",
+      "taxKind": "exempt",
+      "kind": "purchase_invoice",
+      "number": "P-100",
+      "date": "2026-03-01",
+      "party": "مورد محلي",
+      "net": 20000,
+      "vat": 0,
+      "entryId": 1
+    },
+    {
+      "section": "purchases",
+      "taxKind": "standard",
+      "kind": "purchase_invoice",
+      "number": "P-100",
+      "date": "2026-03-01",
+      "party": "مورد محلي",
+      "net": 600000,
+      "vat": 84000,
+      "entryId": 1
+    },
+    {
+      "section": "purchases",
+      "taxKind": "standard",
+      "kind": "debit_note",
+      "number": "1",
+      "date": "2026-03-06",
+      "party": "مورد محلي",
+      "net": -60000,
+      "vat": -8400,
+      "entryId": 6
+    },
+    {
+      "section": "purchases",
+      "taxKind": "zero_rated",
+      "kind": "purchase_invoice",
+      "number": "P-100",
+      "date": "2026-03-01",
+      "party": "مورد محلي",
+      "net": 30000,
+      "vat": 0,
+      "entryId": 1
+    },
+    {
+      "section": "sales",
+      "taxKind": "exempt",
+      "kind": "sale",
+      "number": "1",
+      "date": "2026-03-02",
+      "party": "",
+      "net": 2000,
+      "vat": 0,
+      "entryId": 2
+    },
+    {
+      "section": "sales",
+      "taxKind": "standard",
+      "kind": "sale",
+      "number": "1",
+      "date": "2026-03-02",
+      "party": "",
+      "net": 200000,
+      "vat": 28000,
+      "entryId": 2
+    },
+    {
+      "section": "sales",
+      "taxKind": "standard",
+      "kind": "sale_return",
+      "number": "1",
+      "date": "2026-03-03",
+      "party": "",
+      "net": -100000,
+      "vat": -14000,
+      "entryId": 3
+    },
+    {
+      "section": "sales",
+      "taxKind": "standard",
+      "kind": "sales_invoice",
+      "number": "1",
+      "date": "2026-03-04",
+      "party": "شركة الأمل",
+      "net": 300000,
+      "vat": 42000,
+      "entryId": 4
+    },
+    {
+      "section": "sales",
+      "taxKind": "standard",
+      "kind": "credit_note",
+      "number": "1",
+      "date": "2026-03-05",
+      "party": "شركة الأمل",
+      "net": -100000,
+      "vat": -14000,
+      "entryId": 5
+    },
+    {
+      "section": "sales",
+      "taxKind": "zero_rated",
+      "kind": "sales_invoice",
+      "number": "1",
+      "date": "2026-03-04",
+      "party": "شركة الأمل",
+      "net": 16000,
+      "vat": 0,
+      "entryId": 4
+    }
+  ]
+}

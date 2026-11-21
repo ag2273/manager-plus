@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { Account } from "../../../core/ledger";
 import type { EntryDetail, GeneralLedger } from "../../../core/reports";
+import type { VatBox, VatTransaction } from "../../../core/vat-return";
 import { formatMoney } from "../../../shared/money";
 import { formatQuantity } from "../../../shared/quantity";
 import {
@@ -13,16 +14,23 @@ import {
   salesByItemTable,
   salesByMethodTable,
   stockTable,
+  vatReturnTable,
 } from "../../../shared/report-tables";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 
-type Tab = "pnl" | "balanceSheet" | "ledger" | "byItem" | "byDay" | "byMethod" | "stock";
-const TABS: Tab[] = ["pnl", "balanceSheet", "ledger", "byItem", "byDay", "byMethod", "stock"];
+type Tab = "pnl" | "balanceSheet" | "ledger" | "byItem" | "byDay" | "byMethod" | "stock" | "vat";
+const TABS: Tab[] = ["pnl", "balanceSheet", "ledger", "byItem", "byDay", "byMethod", "stock", "vat"];
 const startOfYear = () => `${today().slice(0, 4)}-01-01`;
 
 /** A report built in both languages: Arabic on screen, either one for the PDF or Excel file. */
-type Built = { table: (lang: Lang) => ReportTable; accounts?: (number | null)[]; entries?: (number | null)[] };
+type Built = {
+  table: (lang: Lang) => ReportTable;
+  accounts?: (number | null)[];
+  entries?: (number | null)[];
+  /** The VAT return's boxes, row by row, and the documents behind them. */
+  vat?: { boxes: VatBox[]; transactions: VatTransaction[] };
+};
 
 function Cell({ value, kind }: { value: string | number | null; kind: "text" | "money" | "quantity" }) {
   if (value === null) return <td />;
@@ -154,8 +162,42 @@ function EntryCard({ entry, onClose }: { entry: EntryDetail; onClose: () => void
   );
 }
 
-/** Profit and loss, balance sheet, general ledger, sales and stock reports, with drill-down and export. */
-export function Reports() {
+/** The documents behind one box of the VAT return; each opens its journal entry. */
+function VatDocuments({ box, rows, onEntry }: { box: VatBox; rows: VatTransaction[]; onEntry: (id: number) => void }) {
+  const title = `${ar.reports.vatSections[box.section]} (${ar.reports.vatKinds[box.taxKind]})`;
+  return (
+    <section className="table-card" aria-label={title}>
+      <table>
+        <caption>{title}</caption>
+        <thead>
+          <tr>
+            <th>{ar.reports.document}</th>
+            <th>{ar.reports.number}</th>
+            <th>{ar.reports.date}</th>
+            <th>{ar.reports.party}</th>
+            <th className="col-money">{ar.reports.netAmount}</th>
+            <th className="col-money">{ar.reports.vatAmount}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((t, i) => (
+            <tr key={i} className="clickable" onClick={() => onEntry(t.entryId)}>
+              <td>{ar.reports.vatDocuments[t.kind] ?? t.kind}</td>
+              <td>{t.number}</td>
+              <td>{t.date}</td>
+              <td>{t.party}</td>
+              <Cell value={t.net} kind="money" />
+              <Cell value={t.vat} kind="money" />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+/** Profit and loss, balance sheet, general ledger, sales, stock and VAT reports, with drill-down and export. */
+export function Reports({ vatRegistered }: { vatRegistered: boolean }) {
   const [tab, setTab] = useState<Tab>("pnl");
   const [from, setFrom] = useState(startOfYear());
   const [to, setTo] = useState(today());
@@ -163,6 +205,7 @@ export function Reports() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [built, setBuilt] = useState<Built | null>(null);
   const [entry, setEntry] = useState<EntryDetail | null>(null);
+  const [box, setBox] = useState<VatBox | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pointInTime = tab === "balanceSheet" || tab === "stock";
 
@@ -172,6 +215,7 @@ export function Reports() {
 
   async function load(which: Tab, account: number | "" = accountId) {
     setEntry(null);
+    setBox(null);
     let result;
     if (which === "pnl") {
       result = await business.profitAndLoss(from, to);
@@ -227,6 +271,12 @@ export function Reports() {
         const rows = result.value;
         setBuilt({ table: (l) => salesByMethodTable(rows, from, to, l) });
       }
+    } else if (which === "vat") {
+      result = await business.vatReturn(from, to);
+      if (result.ok) {
+        const r = result.value;
+        setBuilt({ table: (l) => vatReturnTable(r, l), vat: { boxes: r.boxes, transactions: r.transactions } });
+      }
     } else {
       result = await business.stockAt(to);
       if (result.ok) {
@@ -262,6 +312,8 @@ export function Reports() {
   }
 
   const onRow = (index: number) => {
+    const vatBox = built?.vat?.boxes[index];
+    if (vatBox) return () => setBox(vatBox);
     const account = built?.accounts?.[index];
     if (account) return () => openLedger(account);
     const entryId = built?.entries?.[index];
@@ -278,8 +330,19 @@ export function Reports() {
         </div>
       </header>
       <div role="tablist" aria-label={ar.nav.reports} className="pills">
-        {TABS.map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={t === tab} className="pill" onClick={() => setTab(t)}>
+        {TABS.filter((t) => t !== "vat" || vatRegistered).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={t === tab}
+            className="pill"
+            onClick={() => {
+              // A VAT return covers a month or quarter: start from the first of the month.
+              if (t === "vat") setFrom(`${to.slice(0, 7)}-01`);
+              setTab(t);
+            }}
+          >
             {ar.reports.tabs[t]}
           </button>
         ))}
@@ -329,7 +392,16 @@ export function Reports() {
           <ExportBar key={tab} built={built} />
           {entry && <EntryCard entry={entry} onClose={() => setEntry(null)} />}
           <ReportView table={built.table("ar")} onRow={onRow} />
-          {(built.accounts || built.entries) && <p className="muted">{built.accounts ? ar.reports.drillAccount : ar.reports.drillEntry}</p>}
+          {box && built.vat && (
+            <VatDocuments
+              box={box}
+              rows={built.vat.transactions.filter((t) => t.section === box.section && t.taxKind === box.taxKind)}
+              onEntry={(id) => void openEntry(id)}
+            />
+          )}
+          {(built.accounts || built.entries || built.vat) && (
+            <p className="muted">{built.accounts ? ar.reports.drillAccount : built.vat ? ar.reports.drillVat : ar.reports.drillEntry}</p>
+          )}
         </>
       )}
       {!built && tab === "ledger" && !error && <p className="muted">{ar.reports.pickLedger}</p>}

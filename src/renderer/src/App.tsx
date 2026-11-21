@@ -186,7 +186,7 @@ export function App() {
         {screen === "warehouses" && <Warehouses canChange={user.role === "manager" || user.role === "storekeeper"} />}
         {screen === "money" && <Money />}
         {screen === "accounts" && <Accounts />}
-        {screen === "reports" && <Reports />}
+        {screen === "reports" && <Reports vatRegistered={open.vatRegistered} />}
         {screen === "users" && <Users me={user} />}
         {screen === "audit" && <AuditLog />}
         {screen === "settings" && (

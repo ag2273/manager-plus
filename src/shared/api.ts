@@ -42,6 +42,7 @@ export const BUSINESS_METHODS = [
   "salesByPaymentMethod",
   "salesDocuments",
   "stockAt",
+  "vatReturn",
   "dashboard",
   "postStockCount",
   "stockCounts",

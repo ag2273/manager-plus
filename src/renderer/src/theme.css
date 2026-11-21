@@ -194,3 +194,4 @@ tr.total-row th { text-align: start; }
 .export-bar .field { flex: 0 1 160px; }
 .row.spread { justify-content: space-between; align-items: center; }
 .figure { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+caption { caption-side: top; text-align: start; padding: 12px 14px 4px; font-weight: 600; }

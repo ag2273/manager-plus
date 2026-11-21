@@ -1,4 +1,5 @@
 import type { BusinessSettings } from "../core/business";
+import type { VatReturn } from "../core/vat-return";
 import type { BalanceSheet, DaySalesRow, GeneralLedger, ItemSalesRow, MethodSalesRow, ProfitAndLoss, ReportRow, StockReport } from "../core/reports";
 import type { A4Document } from "./a4";
 import { formatMoney } from "./money";
@@ -62,6 +63,17 @@ const L = {
     stock: "قيمة المخزون",
     value: "القيمة",
     totalValue: "إجمالي قيمة المخزون",
+    vatReturn: "إقرار ضريبة القيمة المضافة",
+    box: "البند",
+    netAmount: "القيمة قبل الضريبة",
+    taxAmount: "الضريبة",
+    sections: { sales: "المبيعات", purchases: "المشتريات", expenses: "المصروفات", imports: "الواردات (ضريبة الجمارك)" },
+    kinds: { standard: "خاضعة للسعر العام", zero_rated: "خاضعة بنسبة صفر", exempt: "معفاة" },
+    outputVat: "ضريبة المخرجات",
+    inputVat: "ضريبة المدخلات",
+    outputAdjustments: "تسويات على ضريبة المخرجات",
+    inputAdjustments: "تسويات على ضريبة المدخلات",
+    netDue: "صافي الضريبة المستحقة",
   },
   en: {
     from: "From",
@@ -107,6 +119,17 @@ const L = {
     stock: "Stock value",
     value: "Value",
     totalValue: "Total stock value",
+    vatReturn: "VAT return",
+    box: "Box",
+    netAmount: "Net amount",
+    taxAmount: "VAT",
+    sections: { sales: "Sales", purchases: "Purchases", expenses: "Expenses", imports: "Imports (customs VAT)" },
+    kinds: { standard: "standard rate", zero_rated: "zero-rated", exempt: "exempt" },
+    outputVat: "Output VAT",
+    inputVat: "Input VAT",
+    outputAdjustments: "Output VAT adjustments",
+    inputAdjustments: "Input VAT adjustments",
+    netDue: "Net VAT due",
   },
 } as const;
 
@@ -225,6 +248,25 @@ export function stockTable(r: StockReport, lang: Lang): ReportTable {
     columns: [{ label: l.item, kind: "text" }, { label: l.quantity, kind: "quantity" }, { label: l.value, kind: "money" }],
     rows: r.rows.map((x) => [x.nameAr, x.quantity, x.value]),
     totals: [{ label: l.totalValue, value: r.totalValue }],
+  };
+}
+
+/** The VAT return's boxes, then output, input and the net due. */
+export function vatReturnTable(r: VatReturn, lang: Lang): ReportTable {
+  const l = L[lang];
+  return {
+    lang,
+    title: l.vatReturn,
+    meta: period(l, r.from, r.to),
+    columns: [{ label: l.box, kind: "text" }, { label: l.netAmount, kind: "money" }, { label: l.taxAmount, kind: "money" }],
+    rows: r.boxes.map((b) => [`${l.sections[b.section]}${b.section === "imports" ? "" : ` (${l.kinds[b.taxKind]})`}`, b.net, b.vat]),
+    totals: [
+      { label: l.outputVat, value: r.outputVat },
+      ...(r.outputAdjustments ? [{ label: l.outputAdjustments, value: r.outputAdjustments }] : []),
+      { label: l.inputVat, value: r.inputVat },
+      ...(r.inputAdjustments ? [{ label: l.inputAdjustments, value: r.inputAdjustments }] : []),
+      { label: l.netDue, value: r.netDue },
+    ],
   };
 }
 
