@@ -7,6 +7,7 @@ import { type Currency, ONE, type Rate, assertRate, toEgp } from "./currency";
 import { documentRate, findSupplier } from "./purchases";
 import { nextNumber } from "./shares";
 import { accountByRole } from "./stock";
+import { type WithholdingInput, withholdingRate } from "./withholding";
 
 /** Customers owe the business (their documents are debits); the business owes suppliers (credits). */
 export type PartyKind = "customer" | "supplier";
@@ -23,6 +24,11 @@ export type PaymentInput = {
   reference: string;
   /** Documents this payment settles, by their journal entry (see `openDocuments`). Any rest settles the oldest first. */
   allocations?: { entryId: number; amount: Piastres }[];
+  /**
+   * Withholding tax held back from `amount`, which stays the full amount settled: the cash
+   * that moves is `amount` less the tax. EGP only.
+   */
+  withholding?: WithholdingInput;
 };
 export type PaymentResult = { id: number; number: number };
 /** A document that raised what a party owes (an invoice, a credit sale, an opening balance). */
@@ -156,6 +162,9 @@ export function recordPayment(db: Database.Database, kind: PartyKind, input: Pay
     throw new BusinessError("account_not_allowed", `Account ${input.accountId} is not a cash, bank or wallet account`);
   }
 
+  const withholding = input.withholding ? withheld(db, input.withholding, input.date, input.amount, currency) : null;
+  const tax = withholding?.tax ?? 0;
+
   const documents = open(db, kind, input.partyId);
   const byEntry = new Map(documents.map((d) => [d.entryId, d]));
   const allocations: { entryId: number; amount: number; egp: Piastres }[] = [];
@@ -195,22 +204,25 @@ export function recordPayment(db: Database.Database, kind: PartyKind, input: Pay
   const journal: JournalLine[] =
     kind === "customer"
       ? [
-          { accountId: account.id, debit: input.amount },
+          { accountId: account.id, debit: input.amount - tax },
+          ...(tax > 0 ? [{ accountId: accountByRole(db, "withholding_receivable"), debit: tax }] : []),
           { accountId: accountByRole(db, "receivables"), credit: input.amount, ...party },
         ]
       : [
           { accountId: accountByRole(db, "payables"), debit: settledEgp, ...party, ...(currency === "EGP" ? {} : { foreign: input.amount }) },
           ...(difference > 0 ? [{ accountId: accountByRole(db, "exchange_loss"), debit: difference }] : []),
           ...(difference < 0 ? [{ accountId: accountByRole(db, "exchange_gain"), credit: -difference }] : []),
-          { accountId: account.id, credit: paidEgp },
+          { accountId: account.id, credit: paidEgp - tax },
+          ...(tax > 0 ? [{ accountId: accountByRole(db, "withholding_payable"), credit: tax }] : []),
         ];
   const memo = kind === "customer" ? `سند قبض رقم ${number} من ${name}` : `سند صرف رقم ${number} إلى ${name}${currency === "EGP" ? "" : ` (${currency})`}`;
   const entryId = postJournalEntry(db, { date: input.date, memo, lines: journal }, `${kind}_payment`);
   const id = Number(
     db
       .prepare(
-        `INSERT INTO payments (kind, number, date, customer_id, supplier_id, account_id, amount, reference, entry_id, user_id, currency, rate)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO payments (kind, number, date, customer_id, supplier_id, account_id, amount, reference, entry_id, user_id, currency, rate,
+                               withholding_category_id, withholding_rate, withholding_base, withholding_amount)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         kind,
@@ -225,11 +237,25 @@ export function recordPayment(db: Database.Database, kind: PartyKind, input: Pay
         userId,
         currency,
         rate,
+        withholding?.categoryId ?? null,
+        withholding?.rate ?? 0,
+        withholding?.base ?? 0,
+        tax,
       ).lastInsertRowid,
   );
   const insert = db.prepare("INSERT INTO payment_allocations (payment_id, entry_id, amount, egp_amount) VALUES (?, ?, ?, ?)");
   for (const a of allocations) insert.run(id, a.entryId, a.amount, a.egp);
   return { id, number };
+}
+
+/** Checks a payment's withholding and works out the tax at the category's rate on the payment date. */
+function withheld(db: Database.Database, w: WithholdingInput, date: IsoDate, amount: Piastres, currency: Currency) {
+  if (currency !== "EGP") throw new BusinessError("withholding_not_egp", "Withholding tax is taken on EGP payments only");
+  const rate = withholdingRate(db, w.categoryId, date);
+  if (!Number.isSafeInteger(w.base) || w.base <= 0) throw new BusinessError("withholding_invalid", `Base ${w.base} is not a positive amount`);
+  const tax = Math.round((w.base * rate) / 10_000);
+  if (tax >= amount) throw new BusinessError("withholding_invalid", `Withholding ${tax} is not less than the payment ${amount}`);
+  return { categoryId: w.categoryId, rate, base: w.base, tax };
 }
 
 /** Every posting to the party's account between two dates, with the balance before, after each line, and at the end. */

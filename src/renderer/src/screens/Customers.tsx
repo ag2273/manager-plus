@@ -4,6 +4,7 @@ import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText } from "../api";
 import { ar } from "../strings";
+import { WithholdingSelect, useWithholdingCategories } from "./Withholding";
 import { AgingView, PaymentForm, StatementView } from "./Parties";
 
 type Tab = "customers" | "payment" | "statement" | "aging";
@@ -48,8 +49,16 @@ export function Customers({ keepsBooks }: { keepsBooks: boolean }) {
   );
 }
 
-type Draft = { name: string; phone: string; taxRegistrationNumber: string; address: string; priceLevel: PriceLevel; creditLimit: string };
-const emptyDraft: Draft = { name: "", phone: "", taxRegistrationNumber: "", address: "", priceLevel: "retail", creditLimit: "" };
+type Draft = {
+  name: string;
+  phone: string;
+  taxRegistrationNumber: string;
+  address: string;
+  priceLevel: PriceLevel;
+  creditLimit: string;
+  withholdingCategoryId: number | null;
+};
+const emptyDraft: Draft = { name: "", phone: "", taxRegistrationNumber: "", address: "", priceLevel: "retail", creditLimit: "", withholdingCategoryId: null };
 const draftOf = (c: Customer): Draft => ({
   name: c.name,
   phone: c.phone,
@@ -57,12 +66,14 @@ const draftOf = (c: Customer): Draft => ({
   address: c.address,
   priceLevel: c.priceLevel,
   creditLimit: c.creditLimit === null ? "" : formatMoney(c.creditLimit),
+  withholdingCategoryId: c.withholdingCategoryId,
 });
 
 function CustomerList({ customers, onChange, keepsBooks }: { customers: Customer[]; onChange: () => Promise<void>; keepsBooks: boolean }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editing, setEditing] = useState<number | null>(null);
   const [balances, setBalances] = useState<Record<number, number>>({});
+  const [categories] = useWithholdingCategories();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -141,6 +152,10 @@ function CustomerList({ customers, onChange, keepsBooks }: { customers: Customer
                 value={draft.creditLimit}
                 onChange={(e) => setDraft({ ...draft, creditLimit: e.target.value })}
               />
+            </label>
+            <label className="field narrow">
+              {ar.withholding.category}
+              <WithholdingSelect categories={categories} value={draft.withholdingCategoryId} onChange={(id) => setDraft({ ...draft, withholdingCategoryId: id })} />
             </label>
           </div>
         )}

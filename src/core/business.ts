@@ -74,6 +74,14 @@ import {
 import { type SerialHistory, findSerial, setItemSerials } from "./serials";
 import { type DebitNote, type DebitNoteInput, listDebitNotes, postDebitNote } from "./debit-notes";
 import { type ImportShipment, type ImportShipmentInput, listImportShipments, postImportShipment } from "./shipments";
+import {
+  type WithholdingCategory,
+  type WithholdingReport,
+  addWithholdingRate,
+  listWithholdingCategories,
+  withholdingReport,
+  withholdingTax,
+} from "./withholding";
 import { type Quotation, type QuotationInput, findQuotation, listPrice, listQuotations, saveQuotation } from "./quotations";
 import {
   type Aging,
@@ -768,6 +776,27 @@ export class Business {
   /** A credit note by its printed number. */
   findCreditNote(number: number): CreditNote {
     return this.read("findCreditNote", () => findCreditNote(this.db, number));
+  }
+
+  // Withholding tax
+
+  withholdingCategories(): WithholdingCategory[] {
+    return this.read("withholdingCategories", () => listWithholdingCategories(this.db));
+  }
+
+  /** Adds a withholding rate that applies from `from` onwards. */
+  addWithholdingRate(categoryId: number, rate: { from: IsoDate; rate: BasisPoints }): void {
+    this.write("addWithholdingRate", rate, () => addWithholdingRate(this.db, categoryId, rate), categoryId);
+  }
+
+  /** The withholding on `base` (the documents' value before VAT) at the category's rate on `date`. */
+  withholdingTax(categoryId: number, date: IsoDate, base: Piastres): Piastres {
+    return this.read("withholdingTax", () => withholdingTax(this.db, categoryId, date, base));
+  }
+
+  /** Withholding taken on payments and receipts between two dates, for the quarterly form. */
+  withholdingReport(from: IsoDate, to: IsoDate): WithholdingReport {
+    return this.read("withholdingReport", () => withholdingReport(this.db, from, to));
   }
 
   // Payments, statements and aging

@@ -27,7 +27,9 @@ export type AccountRole =
   | "stock_loss"
   | "cash_short"
   | "exchange_gain"
-  | "exchange_loss";
+  | "exchange_loss"
+  | "withholding_receivable"
+  | "withholding_payable";
 
 type TemplateAccount = { code: string; name: string; type: AccountType; role?: AccountRole };
 
@@ -44,11 +46,13 @@ export const RETAIL_CHART_OF_ACCOUNTS: readonly TemplateAccount[] = [
   { code: "1200", name: "العملاء", type: "asset", role: "receivables" },
   { code: "1300", name: "المخزون", type: "asset", role: "stock" },
   { code: "1400", name: "ضريبة القيمة المضافة على المشتريات", type: "asset", role: "input_vat" },
+  { code: "1410", name: "ضرائب خصم من المنبع لدى الغير", type: "asset", role: "withholding_receivable" },
   { code: "1500", name: "أثاث وتجهيزات المحل", type: "asset" },
   { code: "2100", name: "الموردون", type: "liability", role: "payables" },
   { code: "2200", name: "ضريبة القيمة المضافة على المبيعات", type: "liability", role: "output_vat" },
   { code: "2300", name: "ضريبة القيمة المضافة المستحقة للمصلحة", type: "liability", role: "vat_payable" },
   { code: "2400", name: "مصروفات مستحقة", type: "liability" },
+  { code: "2500", name: "ضريبة الخصم والإضافة المستحقة للمصلحة", type: "liability", role: "withholding_payable" },
   { code: "3100", name: "رأس المال", type: "equity", role: "capital" },
   { code: "3200", name: "جاري صاحب المحل", type: "equity", role: "owner_drawings" },
   { code: "3300", name: "الأرباح المحتجزة", type: "equity", role: "retained_earnings" },
