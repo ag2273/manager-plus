@@ -135,7 +135,15 @@ export type BusinessErrorCode =
   | "eta_unreachable"
   | "eta_not_cancellable"
   | "eta_rejected"
-  | "eta_signing_failed";
+  | "eta_signing_failed"
+  | "read_only"
+  | "licence_users_exceeded"
+  | "licence_invalid"
+  | "licence_other_machine"
+  | "licence_key_invalid"
+  | "licence_moves_exhausted"
+  | "licence_revoked"
+  | "licence_unreachable";
 
 export class BusinessError extends Error {
   constructor(

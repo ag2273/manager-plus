@@ -94,6 +94,8 @@ td input, td select { height: 38px; }
 .badge.muted { background: var(--surface-2); color: var(--muted); }
 .error { padding: 10px 14px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }
 .ok { padding: 10px 14px; border-radius: 8px; background: var(--ok-soft); color: var(--ok); }
+.notice { padding: 10px 14px; border-radius: 8px; background: var(--soft); }
+.licence-banner { margin-bottom: 12px; }
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; }

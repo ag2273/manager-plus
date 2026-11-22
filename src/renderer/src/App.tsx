@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Role } from "../../core/users";
+import type { LicenceMode } from "../../core/business";
+import type { LicenceStatus } from "../../core/licence/licence";
 import type { BusinessSettings, FileStatus, Preferences, ThemeId, User } from "../../shared/api";
 import { Accounts } from "./screens/Accounts";
 import { AuditLog } from "./screens/AuditLog";
@@ -191,6 +193,7 @@ export function App() {
         </div>
       </nav>
       <main className="content">
+        <LicenceBanner key={screen} onActivate={() => setScreen("settings")} />
         {serverLost && (
           <div role="alert" className="error server-lost">
             {ar.errors["server_unreachable"]}{" "}
@@ -231,6 +234,38 @@ export function App() {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+/** Says on every screen when the trial is running or the app is read-only, with the way to activate. */
+function LicenceBanner({ onActivate }: { onActivate: () => void }) {
+  const [mode, setMode] = useState<LicenceMode | null>(null);
+  const [status, setStatus] = useState<LicenceStatus | null>(null);
+  useEffect(() => {
+    void business.licenceMode().then((r) => r.ok && setMode(r.value));
+    void window.api.licenceStatus().then(setStatus);
+  }, []);
+  const readOnly = mode?.readOnly ?? (status?.mode === "read_only" ? status.reason : null);
+  if (readOnly) {
+    return (
+      <div role="alert" className="error licence-banner">
+        {ar.licence.readOnly[readOnly]}{" "}
+        {status && (
+          <button type="button" className="link" onClick={onActivate}>
+            {ar.licence.activateLink}
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (status?.mode !== "trial") return null;
+  return (
+    <div role="note" className="notice licence-banner">
+      {ar.licence.trial(status.daysLeft)}{" "}
+      <button type="button" className="link" onClick={onActivate}>
+        {ar.licence.activateLink}
+      </button>
     </div>
   );
 }

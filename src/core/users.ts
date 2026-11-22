@@ -243,6 +243,7 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   cashInOut: ["manager", "cashier"],
   closeShift: ["manager", "cashier"],
   zReport: ["manager", "accountant", "cashier"],
+  licenceMode: ["manager", "accountant", "cashier"],
   shifts: ["manager", "accountant", "cashier"],
   priceSale: ["manager", "accountant", "cashier"],
   postCashSale: ["manager", "cashier"],

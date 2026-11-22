@@ -20,6 +20,7 @@ import {
   setEtaSettings,
 } from "./eta/store";
 import type { EtaReceiptBooks } from "./eta/sender";
+import type { LicenceLimits, ReadOnlyReason } from "./licence/licence";
 import {
   type EtaReceiptCredentials,
   type EtaReceiptKind,
@@ -304,6 +305,15 @@ function withoutPassword<T extends { creditApproval?: { name: string } }>(input:
   return creditApproval ? { ...rest, creditApprovedBy: creditApproval.name } : rest;
 }
 
+/** What the licence lets the books do, shared by a file and everyone signed in to it. */
+type Gate = { limits: LicenceLimits; signedIn: Map<Business, number> };
+
+/** Commands that still work read-only: backups, passwords, and sending to the ETA what was already posted. */
+const READ_ONLY_ALLOWED = new Set(["setBackupFolder", "changeOwnPassword", "resetPassword", "retryEta"]);
+
+/** The licence's mode as the books see it, for every screen's banner. */
+export type LicenceMode = { readOnly: ReadOnlyReason | null; users: number | null; signedIn: number };
+
 /**
  * The one entry point to a business's books. Every business rule lives behind
  * this facade; screens only call its commands and queries.
@@ -319,7 +329,10 @@ export class Business {
     private readonly user: User | null,
     /** Where the file lives; backups are named after it. */
     private readonly path: string,
-  ) {}
+    private readonly gate: Gate = { limits: { readOnly: null, users: null }, signedIn: new Map() },
+  ) {
+    if (user) gate.signedIn.set(this, user.id);
+  }
 
   /** Create a new business file at `path` (or ":memory:"), with its first manager signed in. */
   static create(path: string, settings: BusinessSettings, manager: Credentials): Business {
@@ -416,14 +429,48 @@ export class Business {
     }
   }
 
-  /** Returns this business acting for the user with these credentials. */
+  /**
+   * Returns this business acting for the user with these credentials. The licence's number of
+   * users counts different people signed in at once; signing in again as yourself is not another.
+   */
   signIn(name: string, password: string): Business {
-    return new Business(this.db, authenticate(this.db, { name, password }), this.path);
+    const user = authenticate(this.db, { name, password });
+    const others = new Set([...this.gate.signedIn.values()].filter((id) => id !== user.id));
+    const { users } = this.gate.limits;
+    if (users !== null && others.size >= users) {
+      throw new BusinessError("licence_users_exceeded", `The licence allows ${users} signed-in users`);
+    }
+    return new Business(this.db, user, this.path, this.gate);
+  }
+
+  /** Ends this sign-in, so it no longer counts against the licence's users. */
+  signOut(): void {
+    this.gate.signedIn.delete(this);
+  }
+
+  /** Applies the licence: read-only without a valid one, and how many users may be signed in. Set by the PC that holds the file. */
+  setLicenceLimits(limits: LicenceLimits): void {
+    this.gate.limits = { ...limits };
+  }
+
+  /** Whether the books are read-only and why, and the licensed and signed-in users. */
+  licenceMode(): LicenceMode {
+    return this.read("licenceMode", () => ({
+      readOnly: this.gate.limits.readOnly,
+      users: this.gate.limits.users,
+      signedIn: new Set(this.gate.signedIn.values()).size,
+    }));
   }
 
   /** The signed-in user, or null when signed out. */
   currentUser(): User | null {
     return this.user;
+  }
+
+  /** When the file's first record was made: the licence trial counts from the oldest file. For the PC that holds it. */
+  startedAt(): Date {
+    const row = this.db.prepare("SELECT MIN(at) AS at FROM audit_log").get() as { at: string | null };
+    return row.at ? new Date(row.at) : new Date();
   }
 
   /** Shown before sign-in, so it needs none. */
@@ -467,6 +514,9 @@ export class Business {
   /** A command: role check, then the change and its audit entry in one transaction. */
   private write<T>(method: string, detail: unknown, work: () => T, entityId?: number): T {
     const user = this.allow(method);
+    if (this.gate.limits.readOnly && !READ_ONLY_ALLOWED.has(method)) {
+      throw new BusinessError("read_only", `Read-only (${this.gate.limits.readOnly}): ${method} is not allowed`);
+    }
     return this.db.transaction(() => {
       const since = lastMovementId(this.db);
       const result = work();

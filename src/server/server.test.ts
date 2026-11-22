@@ -21,7 +21,7 @@ beforeAll(async () => {
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 /** A business on its own server on a free local port, with a cashier and an item in stock. */
-async function serve(): Promise<{ server: RunningServer; item: number; warehouse: number }> {
+async function serve(): Promise<{ server: RunningServer; item: number; warehouse: number; owner: Business }> {
   const owner = Business.create(":memory:", shop, manager);
   owner.addUser({ ...cashier, role: "cashier" });
   const standard = owner.taxCodes().find((c) => c.kind === "standard")!.id;
@@ -29,7 +29,7 @@ async function serve(): Promise<{ server: RunningServer; item: number; warehouse
   const warehouse = owner.warehouses()[0]!.id;
   owner.postOpeningStock("2026-01-01", warehouse, [{ itemId: item, quantity: 1_000_000, unitCost: 500 }]);
   const server = await startServer(owner, identity, { port: 0, host: "127.0.0.1" });
-  return { server, item, warehouse };
+  return { server, item, warehouse, owner };
 }
 
 describe("server mode", () => {
@@ -90,6 +90,30 @@ describe("server mode", () => {
 
     expect((await client.call("items", [])).ok).toBe(true);
     client.close();
+    await server.close();
+  });
+
+  test("the licence's users are counted across PCs; a PC that went away gives up its seat when one is needed", async () => {
+    const { server, owner } = await serve();
+    owner.addUser({ name: "منى", password: "كلمة سر منى", role: "cashier" });
+    owner.setLicenceLimits({ readOnly: null, users: 2 });
+    const first = await RemoteBusiness.connect("127.0.0.1", server.port);
+    const second = await RemoteBusiness.connect("127.0.0.1", server.port);
+    expect((await first.signIn(cashier)).ok).toBe(true);
+
+    expect(await second.signIn({ name: "منى", password: "كلمة سر منى" })).toEqual(expect.objectContaining({ ok: false, code: "licence_users_exceeded" }));
+    await first.signOut();
+    expect((await second.signIn({ name: "منى", password: "كلمة سر منى" })).ok).toBe(true);
+
+    // A PC that drops off without signing out keeps its seat only until another is needed.
+    await second.signOut();
+    const third = await RemoteBusiness.connect("127.0.0.1", server.port);
+    expect((await third.signIn(cashier)).ok).toBe(true);
+    third.close();
+    await new Promise((done) => setTimeout(done, 50));
+    expect((await second.signIn({ name: "منى", password: "كلمة سر منى" })).ok).toBe(true);
+    first.close();
+    second.close();
     await server.close();
   });
 

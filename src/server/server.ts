@@ -32,6 +32,27 @@ function answer(id: number, work: () => unknown): Reply {
 export function startServer(file: Business, identity: ServerIdentity, options: { port: number; host?: string }): Promise<RunningServer> {
   const sessions = new Map<string, Business>();
   const sockets = new Set<TLSSocket>();
+  const connections = new Set<{ token: string | null }>();
+
+  function end(token: string) {
+    sessions.get(token)?.signOut();
+    sessions.delete(token);
+  }
+
+  /**
+   * Signs in, within the licence's number of users. A PC that went away without signing out
+   * keeps its seat while it may come back; when the seats run out, those sessions end first.
+   */
+  function signIn(name: string, password: string): Business {
+    try {
+      return file.signIn(name, password);
+    } catch (error) {
+      if (!(error instanceof BusinessError) || error.code !== "licence_users_exceeded") throw error;
+      const live = new Set([...connections].map((c) => c.token));
+      for (const token of [...sessions.keys()]) if (!live.has(token)) end(token);
+      return file.signIn(name, password);
+    }
+  }
 
   function handle(request: Request, connection: { token: string | null }): Reply {
     const id = typeof request.id === "number" ? request.id : 0;
@@ -40,7 +61,7 @@ export function startServer(file: Business, identity: ServerIdentity, options: {
         case "hello":
           return { app: "manager-plus", protocol: 1, settings: file.settings() } satisfies Hello;
         case "signIn": {
-          const business = file.signIn(String(request.name), String(request.password));
+          const business = signIn(String(request.name), String(request.password));
           const token = randomBytes(32).toString("base64url");
           sessions.set(token, business);
           connection.token = token;
@@ -53,7 +74,7 @@ export function startServer(file: Business, identity: ServerIdentity, options: {
           return business.currentUser();
         }
         case "signOut":
-          if (connection.token) sessions.delete(connection.token);
+          if (connection.token) end(connection.token);
           connection.token = null;
           return null;
         case "call": {
@@ -76,6 +97,7 @@ export function startServer(file: Business, identity: ServerIdentity, options: {
     socket.setNoDelay(true);
     socket.setKeepAlive(true, 30_000);
     const connection = { token: null as string | null };
+    connections.add(connection);
     let buffer = "";
     socket.setEncoding("utf8");
     socket.on("data", (chunk: string) => {
@@ -99,7 +121,10 @@ export function startServer(file: Business, identity: ServerIdentity, options: {
       }
     });
     socket.on("error", () => socket.destroy());
-    socket.on("close", () => sockets.delete(socket));
+    socket.on("close", () => {
+      sockets.delete(socket);
+      connections.delete(connection);
+    });
   });
 
   return new Promise((resolve, reject) => {
@@ -114,7 +139,7 @@ export function startServer(file: Business, identity: ServerIdentity, options: {
         close: () =>
           new Promise<void>((done) => {
             for (const s of sockets) s.destroy();
-            sessions.clear();
+            for (const token of [...sessions.keys()]) end(token);
             server.close(() => done());
           }),
       });

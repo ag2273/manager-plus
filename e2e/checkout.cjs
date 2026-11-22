@@ -22,6 +22,7 @@ const LANGUAGES = {
     counted: "النقدية المعدودة في الدرج",
     noPrinter: /لم يتم إعداد طابعة/,
     print: "اطبع التقرير",
+    trial: /نسخة تجريبية: باقي 14 أيام/,
   },
   en: {
     prefs: { screenLanguage: "en", documentLanguage: "en", digits: "western" },
@@ -38,6 +39,7 @@ const LANGUAGES = {
     counted: "Cash counted in the drawer",
     noPrinter: /No receipt printer/,
     print: "Print the report",
+    trial: /Trial: 14 days left/,
   },
 };
 
@@ -72,6 +74,8 @@ async function journey(lang) {
     await page.getByLabel(t.password, { exact: true }).fill("strong-password-1");
     await page.getByRole("button", { name: t.create }).click();
     await page.getByRole("navigation").waitFor();
+    await page.getByRole("note").filter({ hasText: t.trial }).waitFor();
+    check(true, "a new install runs the 14-day trial");
 
     await page.evaluate(async () => {
       const call = (method, args) => window.api.call(method, args).then((r) => r.value);

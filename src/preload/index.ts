@@ -28,6 +28,8 @@ const api: DesktopApi = {
   etaCertificates: () => ipcRenderer.invoke(CHANNELS.etaCertificates),
   saveEtaSettings: (settings) => ipcRenderer.invoke(CHANNELS.saveEtaSettings, settings),
   saveEtaReceiptSettings: (settings) => ipcRenderer.invoke(CHANNELS.saveEtaReceiptSettings, settings),
+  licenceStatus: () => ipcRenderer.invoke(CHANNELS.licenceStatus),
+  activateLicence: (key) => ipcRenderer.invoke(CHANNELS.activateLicence, key),
   sendEtaNow: () => ipcRenderer.invoke(CHANNELS.sendEtaNow),
   cancelEta: (kind, documentId, reason) => ipcRenderer.invoke(CHANNELS.cancelEta, kind, documentId, reason),
 };

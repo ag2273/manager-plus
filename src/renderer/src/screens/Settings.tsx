@@ -3,6 +3,8 @@ import { DEFAULT_PREFERENCES, NO_PRINTER, THEMES, type Connection, type Preferen
 import type { BackupStatus } from "../../../core/backup";
 import type { EtaSettings } from "../../../core/eta/store";
 import type { EtaReceiptSettings } from "../../../core/eta/receipts-store";
+import type { LicenceMode } from "../../../core/business";
+import type { LicenceStatus } from "../../../core/licence/licence";
 import type { TokenCertificate } from "../../../shared/api";
 import type { BusinessSettings } from "../../../shared/api";
 import { business, errorText } from "../api";
@@ -69,6 +71,7 @@ export function Settings({
           </button>
         ))}
       </section>
+      <LicenceSetup />
       <LanguageSetup onLanguage={onLanguage} />
       <PrinterSetup />
       <ServerSetup />
@@ -638,6 +641,72 @@ function EtaReceiptSetup() {
           {ar.save}
         </button>
       </div>
+    </form>
+  );
+}
+
+/** The licence on this PC: what it covers, and activating a key. */
+function LicenceSetup() {
+  const [status, setStatus] = useState<LicenceStatus | null | undefined>(undefined);
+  const [mode, setMode] = useState<LicenceMode | null>(null);
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const t = ar.licence;
+
+  function load() {
+    void window.api.licenceStatus().then(setStatus);
+    void business.licenceMode().then((r) => r.ok && setMode(r.value));
+  }
+  useEffect(load, []);
+  if (status === undefined) return null;
+
+  async function activate(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    const result = await window.api.activateLicence(key);
+    setBusy(false);
+    setMessage(result.ok ? { ok: true, text: t.activated } : { ok: false, text: errorText(result)! });
+    if (result.ok) {
+      setKey("");
+      load();
+    }
+  }
+
+  const date = (iso: string) => new Date(iso).toLocaleDateString(locale());
+  const summary =
+    status === null
+      ? t.onClient
+      : status.mode === "trial"
+        ? t.statusTrial(status.daysLeft, date(status.trialEndsAt))
+        : status.mode === "licensed"
+          ? t.statusLicensed(status.company, status.users, date(status.supportUntil))
+          : t.readOnly[status.reason];
+
+  return (
+    <form className="card printer-card" onSubmit={activate} aria-label={t.title}>
+      <div className="stack">
+        <h2>{t.title}</h2>
+        <span>{summary}</span>
+        {mode?.users != null && <span className="muted small">{t.users(mode.signedIn, mode.users)}</span>}
+        {status !== null && <span className="muted small">{t.hint}</span>}
+      </div>
+      {message && (
+        <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
+          {message.text}
+        </div>
+      )}
+      {status !== null && (
+        <div className="row">
+          <label className="field">
+            {t.key}
+            <input dir="ltr" autoComplete="off" value={key} placeholder="XXXX-XXXX-XXXX-XXXX" onChange={(e) => setKey(e.target.value)} />
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={busy || key.trim() === ""}>
+            {t.activate}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

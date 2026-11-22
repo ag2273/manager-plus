@@ -3,6 +3,9 @@ import { cancelDocument, refreshReceiptStatuses, refreshStatuses, sendPending, s
 import type { EtaReceiptSettingsInput } from "../core/eta/receipts-store";
 import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
 import { httpEtaClient, httpEtaReceiptClient, listCertificates, windowsTokenSigner } from "./eta";
+import { Licensing, type LicenceStatus } from "../core/licence/licence";
+import { LICENCE_PUBLIC_KEY } from "../core/licence/public-key";
+import { fileLicenceStore, httpLicenceClient, machineFingerprint } from "./licence";
 import { readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
@@ -111,6 +114,25 @@ function etaReceiptLink() {
   return httpEtaReceiptClient({ ...credentials, posClientSecret: unseal(credentials.posClientSecret), presharedKey: unseal(credentials.presharedKey) });
 }
 
+let licensing: Licensing | null = null;
+
+/** This PC's licence, read once the app's data folder is known. */
+async function loadLicensing(): Promise<Licensing> {
+  licensing ??= new Licensing({
+    store: fileLicenceStore(join(app.getPath("userData"), "licence.json")),
+    client: httpLicenceClient(undefined, app.getVersion()),
+    publicKeyPem: LICENCE_PUBLIC_KEY,
+    machine: await machineFingerprint(),
+  });
+  return licensing;
+}
+
+/** Applies this PC's licence to the file it holds: read-only without one, and the number of users. */
+function applyLicence(): void {
+  if (!file || remote || !licensing) return;
+  file.setLicenceLimits(licensing.limits(new Date()));
+}
+
 let etaRunning: Promise<number> | null = null;
 
 /**
@@ -154,6 +176,7 @@ function etaCycle(): Promise<number> {
 setInterval(
   () => {
     if (localPath && file) refreshLock(localPath, ME, new Date());
+    applyLicence();
     backupIfDue();
     etaCycle().catch((error) => console.error("E-invoice sending failed", error));
   },
@@ -192,6 +215,8 @@ function switchTo(business: Business, path: string): BusinessSettings {
     // A read-only folder: no lock, but the file still opens.
     console.error(error);
   }
+  licensing?.noteFile(business.startedAt(), new Date());
+  applyLicence();
   backupIfDue();
   current = business.currentUser() ? business : null;
   rememberRecent(path);
@@ -250,6 +275,8 @@ ipcMain.handle(CHANNELS.signIn, async (_event, credentials: Credentials) => {
 });
 
 ipcMain.handle(CHANNELS.signOut, async () => {
+  // The file itself stays signed in when it was just created; only a sign-in made here ends.
+  if (current && current !== file) current.signOut();
   current = null;
   await remote?.signOut();
 });
@@ -306,6 +333,23 @@ ipcMain.handle(CHANNELS.saveEtaReceiptSettings, (_event, input: EtaReceiptSettin
     business.setEtaReceiptSettings(settings);
     return null;
   });
+});
+
+/** This PC's licence; a PC using another's file is covered by that server's licence. */
+ipcMain.handle(CHANNELS.licenceStatus, async (): Promise<LicenceStatus | null> => {
+  if (remote) return null;
+  return (await loadLicensing()).status(new Date());
+});
+
+ipcMain.handle(CHANNELS.activateLicence, async (_event, key: string): Promise<Result<LicenceStatus>> => {
+  if (remote) return { ok: false, code: "not_allowed", message: "Activate on the PC that holds the file" };
+  try {
+    const status = await (await loadLicensing()).activate(String(key), new Date());
+    applyLicence();
+    return { ok: true, value: status };
+  } catch (error) {
+    return failure(error);
+  }
 });
 
 /** E-invoice setup and sending happen on the PC that holds the file, by a manager. */
@@ -696,7 +740,10 @@ function createWindow(): void {
   }
 }
 
-void app.whenReady().then(createWindow);
+void app
+  .whenReady()
+  .then(() => loadLicensing().catch((error) => console.error("Reading the licence failed", error)))
+  .then(createWindow);
 app.on("window-all-closed", () => {
   void stopServing();
   remote?.close();
