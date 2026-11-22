@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The app's one window: the core's defaults and the file dialogs.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

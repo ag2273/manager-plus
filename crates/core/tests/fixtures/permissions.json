@@ -1,0 +1,604 @@
+{
+ "accountLines": [
+  "manager",
+  "accountant"
+ ],
+ "accounts": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "addAccount": [
+  "manager",
+  "accountant"
+ ],
+ "addCustomer": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "addItem": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "addSupplier": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "addTaxRate": [
+  "manager",
+  "accountant"
+ ],
+ "addUser": [
+  "manager"
+ ],
+ "addWarehouse": [
+  "manager",
+  "storekeeper"
+ ],
+ "addWithholdingRate": [
+  "manager",
+  "accountant"
+ ],
+ "aging": [
+  "manager",
+  "accountant"
+ ],
+ "auditLog": [
+  "manager",
+  "accountant"
+ ],
+ "averageCost": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "backupNow": [
+  "manager"
+ ],
+ "backupStatus": [
+  "manager"
+ ],
+ "balanceSheet": [
+  "manager",
+  "accountant"
+ ],
+ "cashInOut": [
+  "manager",
+  "cashier"
+ ],
+ "changeOwnPassword": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "checkImport": [
+  "manager"
+ ],
+ "closeShift": [
+  "manager",
+  "cashier"
+ ],
+ "currentShift": [
+  "manager",
+  "cashier"
+ ],
+ "currentUser": [
+  "manager"
+ ],
+ "customerBalance": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "customers": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "dashboard": [
+  "manager",
+  "accountant"
+ ],
+ "deactivateAccount": [
+  "manager",
+  "accountant"
+ ],
+ "deactivateCustomer": [
+  "manager",
+  "accountant"
+ ],
+ "deactivateItem": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "deactivateSupplier": [
+  "manager",
+  "accountant"
+ ],
+ "deactivateUser": [
+  "manager"
+ ],
+ "deactivateWarehouse": [
+  "manager",
+  "storekeeper"
+ ],
+ "debitNotes": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "deleteAccount": [
+  "manager",
+  "accountant"
+ ],
+ "etaDocuments": [
+  "manager",
+  "accountant"
+ ],
+ "etaReceiptQr": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "etaReceiptSettings": [
+  "manager"
+ ],
+ "etaReceipts": [
+  "manager"
+ ],
+ "etaSettings": [
+  "manager",
+  "accountant"
+ ],
+ "etaState": [
+  "manager",
+  "accountant"
+ ],
+ "expenses": [
+  "manager",
+  "accountant"
+ ],
+ "findByBarcode": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "findCreditNote": [
+  "manager",
+  "accountant"
+ ],
+ "findQuotation": [
+  "manager",
+  "accountant"
+ ],
+ "findReceipt": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "findReturn": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "findSalesInvoice": [
+  "manager",
+  "accountant"
+ ],
+ "findSerial": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "generalLedger": [
+  "manager",
+  "accountant"
+ ],
+ "heldSales": [
+  "manager",
+  "cashier"
+ ],
+ "holdSale": [
+  "manager",
+  "cashier"
+ ],
+ "importData": [
+  "manager"
+ ],
+ "importShipments": [
+  "manager",
+  "accountant"
+ ],
+ "itemMovements": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "items": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "journalEntry": [
+  "manager",
+  "accountant"
+ ],
+ "licenceMode": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "listPrice": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "lockDate": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "lowStock": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "moneyAccounts": [
+  "manager",
+  "accountant"
+ ],
+ "moneyTransfers": [
+  "manager",
+  "accountant"
+ ],
+ "openDocuments": [
+  "manager",
+  "accountant"
+ ],
+ "openShift": [
+  "manager",
+  "cashier"
+ ],
+ "paySupplier": [
+  "manager",
+  "accountant"
+ ],
+ "postCashSale": [
+  "manager",
+  "cashier"
+ ],
+ "postCreditNote": [
+  "manager",
+  "accountant"
+ ],
+ "postDebitNote": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "postImportShipment": [
+  "manager",
+  "accountant"
+ ],
+ "postJournalEntry": [
+  "manager",
+  "accountant"
+ ],
+ "postOpeningBalances": [
+  "manager",
+  "accountant"
+ ],
+ "postOpeningStock": [
+  "manager",
+  "accountant"
+ ],
+ "postPurchaseInvoice": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "postSale": [
+  "manager",
+  "cashier"
+ ],
+ "postSalesInvoice": [
+  "manager",
+  "accountant"
+ ],
+ "postStockCount": [
+  "manager",
+  "storekeeper"
+ ],
+ "priceInvoice": [
+  "manager",
+  "accountant"
+ ],
+ "pricePurchase": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "priceSale": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "profitAndLoss": [
+  "manager",
+  "accountant"
+ ],
+ "purchaseInvoices": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "quotations": [
+  "manager",
+  "accountant"
+ ],
+ "reactivateAccount": [
+  "manager",
+  "accountant"
+ ],
+ "reactivateCustomer": [
+  "manager",
+  "accountant"
+ ],
+ "reactivateItem": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "reactivateSupplier": [
+  "manager",
+  "accountant"
+ ],
+ "reactivateUser": [
+  "manager"
+ ],
+ "reactivateWarehouse": [
+  "manager",
+  "storekeeper"
+ ],
+ "recallSale": [
+  "manager",
+  "cashier"
+ ],
+ "receipts": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "receiveCustomerPayment": [
+  "manager",
+  "accountant"
+ ],
+ "reconciliation": [
+  "manager",
+  "accountant"
+ ],
+ "recordExpense": [
+  "manager",
+  "accountant"
+ ],
+ "renameWarehouse": [
+  "manager",
+  "storekeeper"
+ ],
+ "resetPassword": [
+  "manager"
+ ],
+ "restoreBackup": [
+  "manager"
+ ],
+ "retryEta": [
+  "manager",
+  "accountant"
+ ],
+ "retryEtaReceipt": [
+  "manager"
+ ],
+ "returnSale": [
+  "manager",
+  "cashier"
+ ],
+ "salesByDay": [
+  "manager",
+  "accountant"
+ ],
+ "salesByItem": [
+  "manager",
+  "accountant"
+ ],
+ "salesByPaymentMethod": [
+  "manager",
+  "accountant"
+ ],
+ "salesDocuments": [
+  "manager",
+  "accountant"
+ ],
+ "salesInvoices": [
+  "manager",
+  "accountant"
+ ],
+ "saveQuotation": [
+  "manager",
+  "accountant"
+ ],
+ "setBackupFolder": [
+  "manager"
+ ],
+ "setCleared": [
+  "manager",
+  "accountant"
+ ],
+ "setEtaSettings": [
+  "manager"
+ ],
+ "setItemMinimum": [
+  "manager",
+  "storekeeper"
+ ],
+ "setItemSerials": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "setLockDate": [
+  "manager",
+  "accountant"
+ ],
+ "settings": [
+  "manager"
+ ],
+ "shifts": [
+  "manager",
+  "accountant",
+  "cashier"
+ ],
+ "statement": [
+  "manager",
+  "accountant"
+ ],
+ "stockAt": [
+  "manager",
+  "accountant"
+ ],
+ "stockCounts": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "stockOnHand": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "stockValue": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "supplierAccount": [
+  "manager",
+  "accountant"
+ ],
+ "supplierBalance": [
+  "manager",
+  "accountant"
+ ],
+ "suppliers": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "taxCodes": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "transferMoney": [
+  "manager",
+  "accountant"
+ ],
+ "transferStock": [
+  "manager",
+  "storekeeper"
+ ],
+ "transfers": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "trialBalance": [
+  "manager",
+  "accountant"
+ ],
+ "updateAccount": [
+  "manager",
+  "accountant"
+ ],
+ "updateCustomer": [
+  "manager",
+  "accountant"
+ ],
+ "updateItem": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "updateSupplier": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "updateUser": [
+  "manager"
+ ],
+ "users": [
+  "manager"
+ ],
+ "vatRate": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "vatReturn": [
+  "manager",
+  "accountant"
+ ],
+ "voidEntry": [
+  "manager",
+  "accountant"
+ ],
+ "warehouses": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "withholdingCategories": [
+  "manager",
+  "accountant",
+  "cashier",
+  "storekeeper"
+ ],
+ "withholdingReport": [
+  "manager",
+  "accountant"
+ ],
+ "withholdingTax": [
+  "manager",
+  "accountant"
+ ],
+ "writeOffStock": [
+  "manager",
+  "storekeeper"
+ ],
+ "writeOffs": [
+  "manager",
+  "accountant",
+  "storekeeper"
+ ],
+ "zReport": [
+  "manager",
+  "accountant",
+  "cashier"
+ ]
+}

@@ -5,3 +5,6 @@ dist/
 *.mplus-wal
 *.mplus-shm
 .DS_Store
+target/
+src-tauri/gen/
+!crates/core/tests/fixtures/*.mplus

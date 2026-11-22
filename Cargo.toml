@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "src-tauri"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+
+[profile.release]
+# Small and fast: the app's size is a feature.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+# Dependencies optimised in debug builds too: scrypt and SQLite are slow unoptimised.
+[profile.dev.package."*"]
+opt-level = 2

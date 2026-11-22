@@ -1,0 +1,81 @@
+name: Tauri
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The Rust core's tests, and the ledger journey in the built Tauri app.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: WebKitGTK and its WebDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev webkit2gtk-driver xvfb
+      - run: npm ci
+      - run: cargo fmt --all --check
+      - run: npm run build:web
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: npx tauri build --debug --no-bundle
+      - run: cargo install tauri-driver --locked
+      - run: xvfb-run -a node e2e/tauri-ledger.mjs target/debug/manager-plus
+
+  # The Windows installer, and how much memory the app takes there.
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npx tauri build
+      - name: Size and memory
+        shell: pwsh
+        run: |
+          $exe = Get-Item target/release/manager-plus.exe
+          $setup = Get-Item target/release/bundle/nsis/*-setup.exe
+          $p = Start-Process $exe.FullName -PassThru
+          Start-Sleep -Seconds 20
+          $procs = @(Get-Process -Id $p.Id) + @(Get-Process msedgewebview2 -ErrorAction SilentlyContinue)
+          $ws = ($procs | Measure-Object WorkingSet64 -Sum).Sum / 1MB
+          $priv = ($procs | Measure-Object PrivateMemorySize64 -Sum).Sum / 1MB
+          $app = (Get-Process -Id $p.Id).WorkingSet64 / 1MB
+          Stop-Process -Id $p.Id
+          $lines = @(
+            "| | |", "|---|---|",
+            ("| Installer | {0:N1} MB |" -f ($setup.Length / 1MB)),
+            ("| App exe | {0:N1} MB |" -f ($exe.Length / 1MB)),
+            ("| Working set, app process | {0:N0} MB |" -f $app),
+            ("| Working set, app + WebView2 ({1} processes) | {0:N0} MB |" -f $ws, $procs.Count),
+            ("| Private memory, app + WebView2 | {0:N0} MB |" -f $priv)
+          )
+          $lines | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          $lines | Write-Output
+      # From main, the Tauri installer goes beside the Electron one on the "latest-build" pre-release.
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        name: Publish to the latest-build pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp target/release/bundle/nsis/*-setup.exe Manager-Plus-Tauri-Setup.exe
+          gh release view latest-build >/dev/null 2>&1 || gh release create latest-build --prerelease --title "Latest build (main)" --notes "Built from main. Not a customer release."
+          gh release upload latest-build Manager-Plus-Tauri-Setup.exe --clobber
