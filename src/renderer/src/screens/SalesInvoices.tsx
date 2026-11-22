@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Customer } from "../../../core/customers";
 import type { InvoiceLineInput, PricedInvoice, SalesInvoice, SalesInvoiceInput } from "../../../core/invoices";
 import type { Quotation } from "../../../core/quotations";
+import type { EtaDocumentRow } from "../../../core/eta/store";
 import type { Item } from "../../../core/items";
 import type { Warehouse } from "../../../core/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
@@ -12,7 +13,7 @@ import { SerialsField, splitSerials } from "./Serials";
 import { APPROVAL_ERRORS, CreditApprovalPrompt } from "./CreditApproval";
 import { useA4 } from "./Parties";
 
-type Tab = "invoice" | "invoices" | "quotation" | "quotations";
+type Tab = "invoice" | "invoices" | "quotation" | "quotations" | "eta";
 const TABS: Tab[] = ["invoice", "invoices", "quotation", "quotations"];
 
 /** A4 tax invoices to customers on account, and credit notes against them. */
@@ -20,9 +21,11 @@ export function SalesInvoices() {
   const [tab, setTab] = useState<Tab>("invoice");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [from, setFrom] = useState<Quotation | null>(null);
+  const [eta, setEta] = useState(false);
 
   useEffect(() => {
     void business.customers().then((r) => r.ok && setCustomers(r.value));
+    void business.etaSettings().then((r) => r.ok && setEta(r.value.enabled));
   }, []);
 
   return (
@@ -34,7 +37,7 @@ export function SalesInvoices() {
         </div>
       </header>
       <div role="tablist" aria-label={ar.invoices.title} className="pills">
-        {TABS.map((t) => (
+        {(eta ? [...TABS, "eta" as const] : TABS).map((t) => (
           <button
             key={t}
             type="button"
@@ -46,7 +49,7 @@ export function SalesInvoices() {
               setTab(t);
             }}
           >
-            {ar.invoices.tabs[t]}
+            {t === "eta" ? ar.eta.tab : ar.invoices.tabs[t]}
           </button>
         ))}
       </div>
@@ -54,6 +57,7 @@ export function SalesInvoices() {
         <InvoiceForm key={from?.id ?? "new"} customers={customers.filter((c) => c.active)} from={from} onPosted={() => setTab("invoices")} />
       )}
       {tab === "invoices" && <InvoiceList />}
+      {tab === "eta" && <EtaList />}
       {tab === "quotation" && <InvoiceForm kind="quotation" customers={customers.filter((c) => c.active)} onPosted={() => setTab("quotations")} />}
       {tab === "quotations" && (
         <QuotationList
@@ -667,6 +671,123 @@ function QuotationList({ onConvert }: { onConvert: (q: Quotation) => void }) {
                       </button>
                     )}
                   </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/** The ETA's message for a failed document: "code" or "code: detail", worded in the screen language. */
+function etaProblem(error: string): string {
+  if (error === "") return "";
+  const at = error.indexOf(": ");
+  const code = at === -1 ? error : error.slice(0, at);
+  const detail = at === -1 ? "" : error.slice(at + 2);
+  const text = ar.errors[code];
+  if (!text) return error;
+  return detail ? `${text} (${detail})` : text;
+}
+
+/** Invoices and credit notes sent, or waiting to be sent, to the ETA: status, UUID, why one failed, retry and cancel. */
+function EtaList() {
+  const [rows, setRows] = useState<EtaDocumentRow[]>([]);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [cancelling, setCancelling] = useState<{ row: EtaDocumentRow; reason: string } | null>(null);
+  const load = useCallback(async () => {
+    const r = await business.etaDocuments();
+    if (r.ok) setRows(r.value);
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function retry(row: EtaDocumentRow) {
+    const result = await business.retryEta(row.kind, row.documentId);
+    setMessage(result.ok ? null : { ok: false, text: errorText(result)! });
+    const sent = await window.api.sendEtaNow();
+    if (!sent.ok && sent.code !== "restore_needs_manager") setMessage({ ok: false, text: errorText(sent)! });
+    await load();
+  }
+
+  async function cancel(event: FormEvent) {
+    event.preventDefault();
+    if (!cancelling) return;
+    const result = await window.api.cancelEta(cancelling.row.kind, cancelling.row.documentId, cancelling.reason);
+    setMessage(result.ok ? null : { ok: false, text: errorText(result)! });
+    if (result.ok) setCancelling(null);
+    await load();
+  }
+
+  return (
+    <section className="table-card" aria-label={ar.eta.tab}>
+      {message && (
+        <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
+          {message.text}
+        </div>
+      )}
+      {cancelling && (
+        <form className="row" onSubmit={cancel}>
+          <label className="field">
+            {ar.eta.cancelReason}
+            <input autoFocus value={cancelling.reason} onChange={(e) => setCancelling({ ...cancelling, reason: e.target.value })} />
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={cancelling.reason.trim() === ""}>
+            {ar.eta.cancel}
+          </button>
+          <button type="button" className="btn" onClick={() => setCancelling(null)}>
+            {ar.cancel}
+          </button>
+        </form>
+      )}
+      {rows.length === 0 ? (
+        <p className="muted">{ar.eta.empty}</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>{ar.eta.document}</th>
+              <th>{ar.invoices.date}</th>
+              <th>{ar.invoices.customer}</th>
+              <th className="col-money">{ar.invoices.total}</th>
+              <th>{ar.eta.status}</th>
+              <th>{ar.eta.uuid}</th>
+              <th>{ar.eta.problem}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.kind}-${r.documentId}`}>
+                <td>
+                  {ar.eta.kinds[r.kind]} {r.number}
+                </td>
+                <td>{r.date}</td>
+                <td>{r.customerName}</td>
+                <td className="num">{formatMoney(r.total)}</td>
+                <td>
+                  <span className={r.status === "valid" ? "badge" : r.status === "failed" || r.status === "invalid" ? "badge warn" : "badge muted"}>
+                    {ar.eta.statuses[r.status]}
+                  </span>
+                </td>
+                <td dir="ltr" className="small">
+                  {r.uuid}
+                </td>
+                <td className="small">{etaProblem(r.error)}</td>
+                <td>
+                  {(r.status === "failed" || r.status === "invalid") && (
+                    <button type="button" className="link" onClick={() => void retry(r)}>
+                      {ar.eta.retry}
+                    </button>
+                  )}
+                  {(r.status === "valid" || r.status === "submitted") && (
+                    <button type="button" className="link" onClick={() => setCancelling({ row: r, reason: "" })}>
+                      {ar.eta.cancel}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

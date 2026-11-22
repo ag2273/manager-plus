@@ -13,6 +13,10 @@ export type Customer = {
   phone: string;
   taxRegistrationNumber: string;
   address: string;
+  /** Governorate, city and building number: with the address (the street), what an e-invoice needs. */
+  governate: string;
+  regionCity: string;
+  buildingNumber: string;
   priceLevel: PriceLevel;
   /** The most the customer may owe, in piastres; null is no limit. */
   creditLimit: Piastres | null;
@@ -25,6 +29,9 @@ export type CustomerInput = {
   phone: string;
   taxRegistrationNumber: string;
   address?: string;
+  governate?: string;
+  regionCity?: string;
+  buildingNumber?: string;
   priceLevel?: PriceLevel;
   creditLimit?: Piastres | null;
   withholdingCategoryId?: number | null;
@@ -37,18 +44,24 @@ type CustomerRow = {
   phone: string;
   tax_registration_number: string;
   address: string;
+  governate: string;
+  region_city: string;
+  building_number: string;
   price_level: PriceLevel;
   credit_limit: number | null;
   withholding_category_id: number | null;
   active: number;
 };
-const COLUMNS = "id, name, phone, tax_registration_number, address, price_level, credit_limit, withholding_category_id, active";
+const COLUMNS = "id, name, phone, tax_registration_number, address, governate, region_city, building_number, price_level, credit_limit, withholding_category_id, active";
 const toCustomer = (r: CustomerRow): Customer => ({
   id: r.id,
   name: r.name,
   phone: r.phone,
   taxRegistrationNumber: r.tax_registration_number,
   address: r.address,
+  governate: r.governate,
+  regionCity: r.region_city,
+  buildingNumber: r.building_number,
   priceLevel: r.price_level,
   creditLimit: r.credit_limit,
   withholdingCategoryId: r.withholding_category_id,
@@ -86,7 +99,18 @@ function cleanCustomer(db: Database.Database, input: CustomerInput): CleanCustom
   }
   const withholdingCategoryId = input.withholdingCategoryId ?? null;
   assertWithholdingCategory(db, withholdingCategoryId);
-  return { name, phone: input.phone.trim(), taxRegistrationNumber, address: (input.address ?? "").trim(), priceLevel, creditLimit, withholdingCategoryId };
+  return {
+    name,
+    phone: input.phone.trim(),
+    taxRegistrationNumber,
+    address: (input.address ?? "").trim(),
+    governate: (input.governate ?? "").trim(),
+    regionCity: (input.regionCity ?? "").trim(),
+    buildingNumber: (input.buildingNumber ?? "").trim(),
+    priceLevel,
+    creditLimit,
+    withholdingCategoryId,
+  };
 }
 
 export function addCustomer(db: Database.Database, input: CustomerInput): number {
@@ -94,9 +118,11 @@ export function addCustomer(db: Database.Database, input: CustomerInput): number
   return Number(
     db
       .prepare(
-        "INSERT INTO customers (name, phone, tax_registration_number, address, price_level, credit_limit, withholding_category_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        `INSERT INTO customers (name, phone, tax_registration_number, address, governate, region_city, building_number, price_level, credit_limit, withholding_category_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(s.name, s.phone, s.taxRegistrationNumber, s.address, s.priceLevel, s.creditLimit, s.withholdingCategoryId).lastInsertRowid,
+      .run(s.name, s.phone, s.taxRegistrationNumber, s.address, s.governate, s.regionCity, s.buildingNumber, s.priceLevel, s.creditLimit, s.withholdingCategoryId)
+      .lastInsertRowid,
   );
 }
 
@@ -104,8 +130,9 @@ export function updateCustomer(db: Database.Database, id: number, changes: Custo
   const current = findCustomer(db, id);
   const s = cleanCustomer(db, { ...current, ...changes });
   db.prepare(
-    "UPDATE customers SET name = ?, phone = ?, tax_registration_number = ?, address = ?, price_level = ?, credit_limit = ?, withholding_category_id = ? WHERE id = ?",
-  ).run(s.name, s.phone, s.taxRegistrationNumber, s.address, s.priceLevel, s.creditLimit, s.withholdingCategoryId, id);
+    `UPDATE customers SET name = ?, phone = ?, tax_registration_number = ?, address = ?, governate = ?, region_city = ?, building_number = ?,
+            price_level = ?, credit_limit = ?, withholding_category_id = ? WHERE id = ?`,
+  ).run(s.name, s.phone, s.taxRegistrationNumber, s.address, s.governate, s.regionCity, s.buildingNumber, s.priceLevel, s.creditLimit, s.withholdingCategoryId, id);
 }
 
 export function setCustomerActive(db: Database.Database, id: number, active: boolean): void {

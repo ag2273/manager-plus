@@ -1,6 +1,24 @@
 import { existsSync, rmSync } from "node:fs";
 import Database from "better-sqlite3";
 import { BusinessError } from "./errors";
+import type { EtaBooks } from "./eta/sender";
+import {
+  type EtaDocumentRow,
+  type EtaKind,
+  type EtaSettings,
+  type EtaSettingsInput,
+  type EtaState,
+  type EtaCredentials,
+  etaCredentials,
+  etaDocuments,
+  etaSettings,
+  etaStateOf,
+  prepareEtaDocument,
+  queueEtaDocument,
+  recordEtaOutcome,
+  retryEtaDocument,
+  setEtaSettings,
+} from "./eta/store";
 import { type BackupFile, type BackupStatus, backupNow, backupStatus, copyDatabase, dailyBackupDue, replaceFile, setBackupFolder } from "./backup";
 import {
   type Account,
@@ -885,7 +903,11 @@ export class Business {
   /** Posts a tax invoice to a customer's account. */
   postSalesInvoice(invoice: SalesInvoiceInput): SalesInvoiceResult {
     const user = this.allow("postSalesInvoice");
-    return this.write("postSalesInvoice", withoutPassword(invoice), () => postSalesInvoice(this.db, invoice, user.id));
+    return this.write("postSalesInvoice", withoutPassword(invoice), () => {
+      const posted = postSalesInvoice(this.db, invoice, user.id);
+      queueEtaDocument(this.db, "invoice", posted.id, new Date());
+      return posted;
+    });
   }
 
   /** Sales invoices, newest first. */
@@ -901,7 +923,11 @@ export class Business {
   /** Takes goods back against a sales invoice, credited to the customer's account. */
   postCreditNote(note: CreditNoteInput): { id: number; number: number; total: Piastres } {
     const user = this.allow("postCreditNote");
-    return this.write("postCreditNote", note, () => postCreditNote(this.db, note, user.id));
+    return this.write("postCreditNote", note, () => {
+      const posted = postCreditNote(this.db, note, user.id);
+      queueEtaDocument(this.db, "credit_note", posted.id, new Date());
+      return posted;
+    });
   }
 
   /** A credit note by its printed number. */
@@ -1143,6 +1169,51 @@ export class Business {
     this.db.close();
     replaceFile(backupPath, this.path);
     return Business.open(this.path);
+  }
+
+  // E-invoicing (ETA)
+
+  /** Whether e-invoicing is on, and its settings; the client secret is never returned. */
+  etaSettings(): EtaSettings {
+    return this.read("etaSettings", () => etaSettings(this.db));
+  }
+
+  /** Saves the e-invoice settings. The PC seals the client secret before it gets here. */
+  setEtaSettings(input: EtaSettingsInput): void {
+    // The audit log keeps what changed, never the secret.
+    this.write("setEtaSettings", { ...input, clientSecret: input.clientSecret === undefined ? "(kept)" : "(changed)" }, () => setEtaSettings(this.db, input));
+  }
+
+  /** Sales invoices and credit notes sent, or waiting to be sent, to the ETA, newest first. */
+  etaDocuments(): EtaDocumentRow[] {
+    return this.read("etaDocuments", () => etaDocuments(this.db));
+  }
+
+  /** A document's ETA status and UUID by its printed number; null when it isn't an e-invoice. */
+  etaState(kind: EtaKind, number: number): EtaState | null {
+    return this.read("etaState", () => etaStateOf(this.db, kind, number));
+  }
+
+  /** Sends a failed or invalid document again, once it is fixed. */
+  retryEta(kind: EtaKind, documentId: number): void {
+    this.write("retryEta", { kind, documentId }, () => retryEtaDocument(this.db, kind, documentId, new Date()), documentId);
+  }
+
+  /** The API credentials, for the PC that talks to the ETA; not for screens. */
+  etaCredentials(): EtaCredentials {
+    return etaCredentials(this.db);
+  }
+
+  /**
+   * The queue as the sender works it, on the PC that holds the file, whether or not anyone is
+   * signed in, like the daily backup. Outcomes go to the audit log as the system's.
+   */
+  etaBooks(): EtaBooks {
+    return {
+      etaDocuments: (statuses) => etaDocuments(this.db, statuses),
+      etaPrepare: (kind, documentId, now) => this.db.transaction(() => prepareEtaDocument(this.db, kind, documentId, now))(),
+      etaRecord: (kind, documentId, outcome) => recordEtaOutcome(this.db, kind, documentId, outcome, new Date()),
+    };
   }
 
   close(): void {

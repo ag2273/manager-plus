@@ -122,7 +122,20 @@ export type BusinessErrorCode =
   | "serial_not_in_stock"
   | "serial_not_on_document"
   | "serial_setting_locked"
-  | "warranty_invalid";
+  | "warranty_invalid"
+  | "activity_code_invalid"
+  | "eta_settings_incomplete"
+  | "eta_not_enabled"
+  | "eta_document_not_found"
+  | "eta_not_retryable"
+  | "eta_customer_tax_number_required"
+  | "eta_customer_address_required"
+  | "eta_item_code_required"
+  | "eta_invoice_not_valid"
+  | "eta_unreachable"
+  | "eta_not_cancellable"
+  | "eta_rejected"
+  | "eta_signing_failed";
 
 export class BusinessError extends Error {
   constructor(
@@ -130,6 +143,8 @@ export class BusinessError extends Error {
     message: string,
     /** An amount the screen shows with the message, such as how far past a credit limit a sale goes. */
     readonly amount?: number,
+    /** A name the screen shows with the message, such as the item that lacks a code. */
+    readonly detail?: string,
   ) {
     super(message);
     this.name = "BusinessError";

@@ -1,4 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
+import { cancelDocument, refreshStatuses, sendPending } from "../core/eta/sender";
+import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
+import { httpEtaClient, listCertificates, windowsTokenSigner } from "./eta";
 import { readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
@@ -81,10 +84,44 @@ function backupIfDue(): void {
   }
 }
 
+/** The ETA client and token signer for the file this PC holds, or null when e-invoicing is off or this PC is a client. */
+function etaLink() {
+  if (!file || remote) return null;
+  let credentials;
+  try {
+    credentials = file.etaCredentials();
+  } catch {
+    return null;
+  }
+  const clientSecret = safeStorage.decryptString(Buffer.from(credentials.clientSecret, "base64"));
+  return { client: httpEtaClient({ ...credentials, clientSecret }), signer: windowsTokenSigner(credentials.certificate) };
+}
+
+let etaRunning: Promise<number> | null = null;
+
+/**
+ * Asks the ETA about submitted documents, then signs and sends the pending ones. Runs in the
+ * background after each invoice or credit note and every few minutes; posting never waits on it.
+ */
+function etaCycle(): Promise<number> {
+  etaRunning ??= (async () => {
+    try {
+      const link = etaLink();
+      if (!link || !file) return 0;
+      await refreshStatuses(file.etaBooks(), link.client);
+      return await sendPending(file.etaBooks(), link.signer, link.client);
+    } finally {
+      etaRunning = null;
+    }
+  })();
+  return etaRunning;
+}
+
 setInterval(
   () => {
     if (localPath && file) refreshLock(localPath, ME, new Date());
     backupIfDue();
+    etaCycle().catch((error) => console.error("E-invoice sending failed", error));
   },
   5 * 60 * 1000,
 );
@@ -129,15 +166,19 @@ function switchTo(business: Business, path: string): BusinessSettings {
   return business.settings();
 }
 
+function failure(error: unknown): { ok: false; code: string; message: string; amount?: number } {
+  if (error instanceof BusinessError) {
+    return { ok: false, code: error.code, message: error.message, ...(error.amount === undefined ? {} : { amount: error.amount }) };
+  }
+  console.error(error);
+  return { ok: false, code: "unexpected", message: String(error) };
+}
+
 function attempt<T>(work: () => T): Result<T> {
   try {
     return { ok: true, value: work() };
   } catch (error) {
-    if (error instanceof BusinessError) {
-      return { ok: false, code: error.code, message: error.message, ...(error.amount === undefined ? {} : { amount: error.amount }) };
-    }
-    console.error(error);
-    return { ok: false, code: "unexpected", message: String(error) };
+    return failure(error);
   }
 }
 
@@ -204,7 +245,56 @@ ipcMain.handle(CHANNELS.call, (_event, method: BusinessMethod, args: unknown[]) 
   if (!BUSINESS_METHODS.includes(method) || !Array.isArray(args)) {
     return { ok: false, code: "unexpected", message: `Not a business method: ${String(method)}` };
   }
-  return call(method, args);
+  const result = call(method, args);
+  if (method === "postSalesInvoice" || method === "postCreditNote") {
+    void result.then((r) => {
+      if (r.ok) etaCycle().catch((error) => console.error("E-invoice sending failed", error));
+    });
+  }
+  return result;
+});
+
+/** E-invoice setup and sending happen on the PC that holds the file, by a manager. */
+function etaManager(): Business | null {
+  return current && !remote && current.currentUser()?.role === "manager" ? current : null;
+}
+
+ipcMain.handle(CHANNELS.etaCertificates, () => listCertificates().catch(() => []));
+
+ipcMain.handle(CHANNELS.saveEtaSettings, (_event, input: EtaSettingsInput) => {
+  const business = etaManager();
+  if (!business) return { ok: false, code: "restore_needs_manager", message: "Only a manager on the PC that holds the file sets up e-invoicing" };
+  const secret = input.clientSecret?.trim();
+  const settings: EtaSettingsInput = { ...input };
+  delete settings.clientSecret;
+  if (secret) {
+    if (!safeStorage.isEncryptionAvailable()) return { ok: false, code: "unexpected", message: "This PC can't seal the client secret" };
+    settings.clientSecret = safeStorage.encryptString(secret).toString("base64");
+  }
+  return attempt(() => {
+    business.setEtaSettings(settings);
+    return null;
+  });
+});
+
+ipcMain.handle(CHANNELS.sendEtaNow, async () => {
+  if (!etaManager()) return { ok: false, code: "restore_needs_manager", message: "Only a manager on the PC that holds the file sends e-invoices" };
+  try {
+    return { ok: true, value: await etaCycle() };
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+ipcMain.handle(CHANNELS.cancelEta, async (_event, kind: EtaKind, documentId: number, reason: string) => {
+  const link = etaManager() ? etaLink() : null;
+  if (!link || !file) return { ok: false, code: "eta_not_enabled", message: "E-invoicing is off here" };
+  try {
+    await cancelDocument(file.etaBooks(), link.client, kind, documentId, reason);
+    return { ok: true, value: null };
+  } catch (error) {
+    return failure(error);
+  }
 });
 
 function preferencesPath(): string {

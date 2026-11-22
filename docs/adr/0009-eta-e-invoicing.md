@@ -1,0 +1,11 @@
+# E-invoicing with the ETA: optional, queued, signed through Windows
+
+E-invoicing is a setting each business turns on; it is off by default and nothing else depends on it.
+
+- **Posting never waits.** Posting a sales invoice or credit note only adds it to a queue (`eta_documents`) in the same transaction. The PC that holds the file signs and sends the queue in the background: after each posting and every five minutes. A document that can't be prepared (an item without an EGS/GS1 code, a customer without a tax number or address), can't be signed, or that the ETA refuses is marked *failed* with the reason; the owner fixes it and sends it again. When the ETA can't be reached, documents stay *pending*.
+- **What goes:** sales invoices (type I) and credit notes (type C) to company customers (receiver type B). A credit note goes once its invoice is *valid*, referring to the invoice's UUID. Till receipts are a separate ETA system (e-receipts) and are not sent here.
+- **Signature:** a detached CAdES-BES signature (CMS SignedData with the signing-certificate-v2 attribute) over the ETA's canonical form of the document, built in `core/eta/cades.ts`. Only the RSA-SHA256 signature over the signed attributes is asked of the token.
+- **The token:** Egyptian signing tokens install a Windows driver that puts their certificate in the user's certificate store. The app signs through Windows (PowerShell and .NET's RSA key of that certificate), and the driver asks for the PIN. This avoids a native PKCS#11 module that would have to be compiled for each Electron version. If a token is found that only offers PKCS#11, a PKCS#11 signer can be added behind the same `Signer` interface.
+- **Credentials:** the client secret is sealed with Windows DPAPI (Electron `safeStorage`) on the PC that saves it, and stored sealed in the business file. On another PC, or for another Windows user, it has to be typed in again.
+- **Tax subtypes:** standard-rated lines go as T1/V009, zero-rated as T1/V001 (exports), exempt as T1/V003. To be confirmed by the accountant and in pre-production.
+- **Testing:** the ETA client is injected, so the tests use a fake ETA. Before release, the whole flow must be run against the ETA pre-production environment with the business's own test credentials and token.

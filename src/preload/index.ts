@@ -25,6 +25,10 @@ const api: DesktopApi = {
   connection: () => ipcRenderer.invoke(CHANNELS.connection),
   serverStatus: () => ipcRenderer.invoke(CHANNELS.serverStatus),
   setServing: (on, port) => ipcRenderer.invoke(CHANNELS.setServing, on, port),
+  etaCertificates: () => ipcRenderer.invoke(CHANNELS.etaCertificates),
+  saveEtaSettings: (settings) => ipcRenderer.invoke(CHANNELS.saveEtaSettings, settings),
+  sendEtaNow: () => ipcRenderer.invoke(CHANNELS.sendEtaNow),
+  cancelEta: (kind, documentId, reason) => ipcRenderer.invoke(CHANNELS.cancelEta, kind, documentId, reason),
 };
 
 contextBridge.exposeInMainWorld("api", api);
