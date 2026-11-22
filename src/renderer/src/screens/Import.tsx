@@ -5,7 +5,7 @@ import { BALANCE_COLUMNS, ITEM_COLUMNS } from "../../../shared/import-columns";
 import { formatMoney } from "../../../shared/money";
 import type { Lang } from "../../../shared/report-tables";
 import { business, errorText, today } from "../api";
-import { ar } from "../strings";
+import { ar, currentLanguage } from "../strings";
 
 const COLUMN_LABELS = new Map<string, string>([...ITEM_COLUMNS, ...BALANCE_COLUMNS].map((c) => [c.key, c.ar]));
 
@@ -14,7 +14,7 @@ const COLUMN_LABELS = new Map<string, string>([...ITEM_COLUMNS, ...BALANCE_COLUM
  * the file, check it (nothing is saved), then import.
  */
 export function ImportPanel({ onClose, onImported }: { onClose: () => void; onImported: (report: ImportReport) => Promise<void> }) {
-  const [lang, setLang] = useState<Lang>("ar");
+  const [lang, setLang] = useState<Lang>(currentLanguage());
   const [file, setFile] = useState<{ name: string; sheets: ImportSheet[] } | null>(null);
   const [date, setDate] = useState(today());
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);

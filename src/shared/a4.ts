@@ -4,6 +4,7 @@ import type { CreditNote, SalesInvoice } from "../core/invoices";
 import type { Quotation } from "../core/quotations";
 import type { Statement } from "../core/settlements";
 import { formatMoney } from "./money";
+import { lineName, type DocLang } from "./receipt";
 import { serialNote } from "./serials";
 import { formatQuantity } from "./quantity";
 import { amountInWords } from "./words";
@@ -11,7 +12,7 @@ import { amountInWords } from "./words";
 /** An A4 page: an invoice, a credit note or a statement, already formatted. */
 export type A4Document = {
   /** Arabic (right to left) unless set to English. */
-  lang?: "ar" | "en";
+  lang?: DocLang;
   shop: { name: string; address: string; taxRegistrationNumber: string };
   title: string;
   /** Number, date, reference and the like, shown beside the title. */
@@ -25,45 +26,123 @@ export type A4Document = {
   notes: string;
 };
 
+/** The words printed on A4 documents, in each document language. */
+const TEXT = {
+  ar: {
+    columns: ["م", "الصنف", "الوحدة", "الكمية", "سعر الوحدة", "الخصم", "الصافي", "الضريبة", "الإجمالي"],
+    customer: "العميل",
+    supplier: "المورد",
+    addressee: "السادة",
+    receiver: "المستلم",
+    invoiceNumber: "رقم الفاتورة",
+    date: "التاريخ",
+    customerReference: "مرجع العميل",
+    grossBeforeDiscount: "الإجمالي قبل الخصم",
+    discount: "الخصم",
+    netBeforeVat: "الصافي قبل الضريبة",
+    vat: "ضريبة القيمة المضافة",
+    totalDue: "الإجمالي المستحق",
+    total: "الإجمالي",
+    taxInvoice: "فاتورة ضريبية",
+    salesInvoice: "فاتورة مبيعات",
+    noteNumber: "رقم الإشعار",
+    onInvoice: "على فاتورة رقم",
+    noteTotal: "إجمالي الإشعار",
+    creditNote: "إشعار دائن",
+    quotationNumber: "رقم العرض",
+    validUntil: "ساري حتى",
+    quotation: "عرض سعر",
+    deliveryNote: "إذن تسليم",
+    received: "استلمت البضاعة الموضحة أعلاه بحالة جيدة.\nاسم المستلم: ....................   التاريخ: ...........",
+    owedByCustomer: "مستحق على العميل",
+    owedToSupplier: "مستحق للمورد",
+    creditSide: "(دائن)",
+    customerStatement: "كشف حساب عميل",
+    supplierStatement: "كشف حساب مورد",
+    from: "من",
+    to: "إلى",
+    statementColumns: ["التاريخ", "البيان", "مدين", "دائن", "الرصيد"],
+    opening: "رصيد أول المدة",
+    balanceOn: (date: string, owed: string) => `الرصيد في ${date} (${owed})`,
+    taxNumber: "رقم التسجيل الضريبي",
+    signature: "التوقيع",
+    stamp: "الختم",
+  },
+  en: {
+    columns: ["#", "Item", "Unit", "Qty", "Unit price", "Discount", "Net", "VAT", "Total"],
+    customer: "Customer",
+    supplier: "Supplier",
+    addressee: "To",
+    receiver: "Delivered to",
+    invoiceNumber: "Invoice no.",
+    date: "Date",
+    customerReference: "Customer reference",
+    grossBeforeDiscount: "Total before discount",
+    discount: "Discount",
+    netBeforeVat: "Net before VAT",
+    vat: "VAT",
+    totalDue: "Total due",
+    total: "Total",
+    taxInvoice: "Tax invoice",
+    salesInvoice: "Sales invoice",
+    noteNumber: "Credit note no.",
+    onInvoice: "Against invoice no.",
+    noteTotal: "Credit note total",
+    creditNote: "Credit note",
+    quotationNumber: "Quotation no.",
+    validUntil: "Valid until",
+    quotation: "Quotation",
+    deliveryNote: "Delivery note",
+    received: "Received the goods above in good condition.\nReceived by: ....................   Date: ...........",
+    owedByCustomer: "owed by the customer",
+    owedToSupplier: "owed to the supplier",
+    creditSide: "(credit)",
+    customerStatement: "Customer statement",
+    supplierStatement: "Supplier statement",
+    from: "From",
+    to: "To",
+    statementColumns: ["Date", "Description", "Debit", "Credit", "Balance"],
+    opening: "Opening balance",
+    balanceOn: (date: string, owed: string) => `Balance on ${date} (${owed})`,
+    taxNumber: "Tax registration no.",
+    signature: "Signature",
+    stamp: "Stamp",
+  },
+};
+
 const shopOf = (s: BusinessSettings): A4Document["shop"] => ({ name: s.name, address: s.address, taxRegistrationNumber: s.taxRegistrationNumber });
-const buyer = (c: Customer, label = "العميل"): A4Document["party"] => ({ label, name: c.name, address: c.address, taxRegistrationNumber: c.taxRegistrationNumber });
+const buyer = (c: Customer, label: string): A4Document["party"] => ({ label, name: c.name, address: c.address, taxRegistrationNumber: c.taxRegistrationNumber });
 const rate = (basisPoints: number) => `${basisPoints / 100}%`;
-const LINE_COLUMNS: A4Document["columns"] = [
-  { label: "م" },
-  { label: "الصنف" },
-  { label: "الوحدة" },
-  { label: "الكمية", numeric: true },
-  { label: "سعر الوحدة", numeric: true },
-  { label: "الخصم", numeric: true },
-  { label: "الصافي", numeric: true },
-  { label: "الضريبة", numeric: true },
-  { label: "الإجمالي", numeric: true },
-];
+/** Invoice columns: #, item, unit, quantity, unit price, discount, net, VAT, total. Numbers from quantity on. */
+const lineColumns = (lang: DocLang, pick = [0, 1, 2, 3, 4, 5, 6, 7, 8]): A4Document["columns"] =>
+  pick.map((i) => ({ label: TEXT[lang].columns[i]!, ...(i >= 3 ? { numeric: true } : {}) }));
 
 /** A sales invoice: a tax invoice when the business is VAT-registered. */
-export function invoiceA4(invoice: SalesInvoice, settings: BusinessSettings, customer: Customer): A4Document {
+export function invoiceA4(invoice: SalesInvoice, settings: BusinessSettings, customer: Customer, lang: DocLang = "ar"): A4Document {
+  const t = TEXT[lang];
   const meta = [
-    { label: "رقم الفاتورة", value: String(invoice.number) },
-    { label: "التاريخ", value: invoice.date },
+    { label: t.invoiceNumber, value: String(invoice.number) },
+    { label: t.date, value: invoice.date },
   ];
-  if (invoice.reference) meta.push({ label: "مرجع العميل", value: invoice.reference });
+  if (invoice.reference) meta.push({ label: t.customerReference, value: invoice.reference });
   const totals: A4Document["totals"] = [];
   if (invoice.discount > 0) {
-    totals.push({ label: "الإجمالي قبل الخصم", value: formatMoney(invoice.gross) });
-    totals.push({ label: "الخصم", value: formatMoney(invoice.discount) });
+    totals.push({ label: t.grossBeforeDiscount, value: formatMoney(invoice.gross) });
+    totals.push({ label: t.discount, value: formatMoney(invoice.discount) });
   }
-  totals.push({ label: "الصافي قبل الضريبة", value: formatMoney(invoice.net) });
-  if (settings.vatRegistered) totals.push({ label: "ضريبة القيمة المضافة", value: formatMoney(invoice.vat) });
-  totals.push({ label: "الإجمالي المستحق", value: formatMoney(invoice.total), strong: true });
+  totals.push({ label: t.netBeforeVat, value: formatMoney(invoice.net) });
+  if (settings.vatRegistered) totals.push({ label: t.vat, value: formatMoney(invoice.vat) });
+  totals.push({ label: t.totalDue, value: formatMoney(invoice.total), strong: true });
   return {
+    lang,
     shop: shopOf(settings),
-    title: settings.vatRegistered ? "فاتورة ضريبية" : "فاتورة مبيعات",
+    title: settings.vatRegistered ? t.taxInvoice : t.salesInvoice,
     meta,
-    party: buyer(customer),
-    columns: LINE_COLUMNS,
+    party: buyer(customer, t.customer),
+    columns: lineColumns(lang),
     rows: invoice.lines.map((l, i) => [
       String(i + 1),
-      l.nameAr + serialNote(l),
+      lineName(l, lang) + serialNote(l, lang),
       l.unitName,
       formatQuantity(l.quantity),
       formatMoney(l.unitPrice),
@@ -73,30 +152,32 @@ export function invoiceA4(invoice: SalesInvoice, settings: BusinessSettings, cus
       formatMoney(l.net + l.vat),
     ]),
     totals,
-    words: amountInWords(invoice.total),
+    words: amountInWords(invoice.total, lang),
     notes: invoice.notes,
   };
 }
 
 /** A credit note against a sales invoice. */
-export function creditNoteA4(note: CreditNote, settings: BusinessSettings, customer: Customer): A4Document {
+export function creditNoteA4(note: CreditNote, settings: BusinessSettings, customer: Customer, lang: DocLang = "ar"): A4Document {
+  const t = TEXT[lang];
   const meta = [
-    { label: "رقم الإشعار", value: String(note.number) },
-    { label: "التاريخ", value: note.date },
-    { label: "على فاتورة رقم", value: String(note.invoiceNumber) },
+    { label: t.noteNumber, value: String(note.number) },
+    { label: t.date, value: note.date },
+    { label: t.onInvoice, value: String(note.invoiceNumber) },
   ];
-  const totals: A4Document["totals"] = [{ label: "الصافي قبل الضريبة", value: formatMoney(note.net) }];
-  if (settings.vatRegistered) totals.push({ label: "ضريبة القيمة المضافة", value: formatMoney(note.vat) });
-  totals.push({ label: "إجمالي الإشعار", value: formatMoney(note.total), strong: true });
+  const totals: A4Document["totals"] = [{ label: t.netBeforeVat, value: formatMoney(note.net) }];
+  if (settings.vatRegistered) totals.push({ label: t.vat, value: formatMoney(note.vat) });
+  totals.push({ label: t.noteTotal, value: formatMoney(note.total), strong: true });
   return {
+    lang,
     shop: shopOf(settings),
-    title: "إشعار دائن",
+    title: t.creditNote,
     meta,
-    party: buyer(customer),
-    columns: [LINE_COLUMNS[0]!, LINE_COLUMNS[1]!, LINE_COLUMNS[2]!, LINE_COLUMNS[3]!, LINE_COLUMNS[6]!, LINE_COLUMNS[7]!, LINE_COLUMNS[8]!],
+    party: buyer(customer, t.customer),
+    columns: lineColumns(lang, [0, 1, 2, 3, 6, 7, 8]),
     rows: note.lines.map((l, i) => [
       String(i + 1),
-      l.nameAr,
+      lineName(l, lang),
       l.unitName,
       formatQuantity(l.quantity),
       formatMoney(l.net),
@@ -104,36 +185,38 @@ export function creditNoteA4(note: CreditNote, settings: BusinessSettings, custo
       formatMoney(l.net + l.vat),
     ]),
     totals,
-    words: amountInWords(note.total),
+    words: amountInWords(note.total, lang),
     notes: note.reason,
   };
 }
 
 /** A price offer: the invoice's columns, the validity date, and no ledger effect. */
-export function quotationA4(q: Quotation, settings: BusinessSettings, customer: Customer): A4Document {
+export function quotationA4(q: Quotation, settings: BusinessSettings, customer: Customer, lang: DocLang = "ar"): A4Document {
+  const t = TEXT[lang];
   const meta = [
-    { label: "رقم العرض", value: String(q.number) },
-    { label: "التاريخ", value: q.date },
-    { label: "ساري حتى", value: q.validUntil },
+    { label: t.quotationNumber, value: String(q.number) },
+    { label: t.date, value: q.date },
+    { label: t.validUntil, value: q.validUntil },
   ];
-  if (q.reference) meta.push({ label: "مرجع العميل", value: q.reference });
+  if (q.reference) meta.push({ label: t.customerReference, value: q.reference });
   const totals: A4Document["totals"] = [];
   if (q.discount > 0) {
-    totals.push({ label: "الإجمالي قبل الخصم", value: formatMoney(q.gross) });
-    totals.push({ label: "الخصم", value: formatMoney(q.discount) });
+    totals.push({ label: t.grossBeforeDiscount, value: formatMoney(q.gross) });
+    totals.push({ label: t.discount, value: formatMoney(q.discount) });
   }
-  totals.push({ label: "الصافي قبل الضريبة", value: formatMoney(q.net) });
-  if (settings.vatRegistered) totals.push({ label: "ضريبة القيمة المضافة", value: formatMoney(q.vat) });
-  totals.push({ label: "الإجمالي", value: formatMoney(q.total), strong: true });
+  totals.push({ label: t.netBeforeVat, value: formatMoney(q.net) });
+  if (settings.vatRegistered) totals.push({ label: t.vat, value: formatMoney(q.vat) });
+  totals.push({ label: t.total, value: formatMoney(q.total), strong: true });
   return {
+    lang,
     shop: shopOf(settings),
-    title: "عرض سعر",
+    title: t.quotation,
     meta,
-    party: buyer(customer, "السادة"),
-    columns: LINE_COLUMNS,
+    party: buyer(customer, t.addressee),
+    columns: lineColumns(lang),
     rows: q.lines.map((l, i) => [
       String(i + 1),
-      l.nameAr,
+      lineName(l, lang),
       l.unitName,
       formatQuantity(l.quantity),
       formatMoney(l.unitPrice),
@@ -143,28 +226,30 @@ export function quotationA4(q: Quotation, settings: BusinessSettings, customer: 
       formatMoney(l.net + l.vat),
     ]),
     totals,
-    words: amountInWords(q.total),
+    words: amountInWords(q.total, lang),
     notes: q.notes,
   };
 }
 
 /** What goes out with the goods: items, quantities and serials, without prices. */
-export function deliveryNoteA4(invoice: SalesInvoice, settings: BusinessSettings, customer: Customer): A4Document {
+export function deliveryNoteA4(invoice: SalesInvoice, settings: BusinessSettings, customer: Customer, lang: DocLang = "ar"): A4Document {
+  const t = TEXT[lang];
   const meta = [
-    { label: "رقم الفاتورة", value: String(invoice.number) },
-    { label: "التاريخ", value: invoice.date },
+    { label: t.invoiceNumber, value: String(invoice.number) },
+    { label: t.date, value: invoice.date },
   ];
-  if (invoice.reference) meta.push({ label: "مرجع العميل", value: invoice.reference });
+  if (invoice.reference) meta.push({ label: t.customerReference, value: invoice.reference });
   return {
+    lang,
     shop: shopOf(settings),
-    title: "إذن تسليم",
+    title: t.deliveryNote,
     meta,
-    party: buyer(customer, "المستلم"),
-    columns: [LINE_COLUMNS[0]!, LINE_COLUMNS[1]!, LINE_COLUMNS[2]!, LINE_COLUMNS[3]!],
-    rows: invoice.lines.map((l, i) => [String(i + 1), l.nameAr + serialNote(l), l.unitName, formatQuantity(l.quantity)]),
+    party: buyer(customer, t.receiver),
+    columns: lineColumns(lang, [0, 1, 2, 3]),
+    rows: invoice.lines.map((l, i) => [String(i + 1), lineName(l, lang) + serialNote(l, lang), l.unitName, formatQuantity(l.quantity)]),
     totals: [],
     words: "",
-    notes: [invoice.notes, "استلمت البضاعة الموضحة أعلاه بحالة جيدة.\nاسم المستلم: ....................   التاريخ: ..........."].filter(Boolean).join("\n\n"),
+    notes: [invoice.notes, t.received].filter(Boolean).join("\n\n"),
   };
 }
 
@@ -173,24 +258,28 @@ export function statementA4(
   st: Statement,
   settings: BusinessSettings,
   party: { kind: "customer" | "supplier"; address: string; taxRegistrationNumber: string },
+  lang: DocLang = "ar",
 ): A4Document {
-  const owed = party.kind === "customer" ? "مستحق على العميل" : "مستحق للمورد";
-  const balance = (n: number) => (n === 0 ? "0.00" : `${formatMoney(Math.abs(n))} ${n > 0 ? "" : "(دائن)"}`.trim());
+  const t = TEXT[lang];
+  const owed = party.kind === "customer" ? t.owedByCustomer : t.owedToSupplier;
+  const balance = (n: number) => (n === 0 ? formatMoney(0) : `${formatMoney(Math.abs(n))} ${n > 0 ? "" : t.creditSide}`.trim());
+  const [date, memo, debit, credit, running] = t.statementColumns;
   return {
+    lang,
     shop: shopOf(settings),
-    title: `${party.kind === "customer" ? "كشف حساب عميل" : "كشف حساب مورد"}${st.currency === "EGP" ? "" : ` (${st.currency})`}`,
+    title: `${party.kind === "customer" ? t.customerStatement : t.supplierStatement}${st.currency === "EGP" ? "" : ` (${st.currency})`}`,
     meta: [
-      { label: "من", value: st.from },
-      { label: "إلى", value: st.to },
+      { label: t.from, value: st.from },
+      { label: t.to, value: st.to },
     ],
-    party: { label: party.kind === "customer" ? "العميل" : "المورد", name: st.name, address: party.address, taxRegistrationNumber: party.taxRegistrationNumber },
-    columns: [{ label: "التاريخ" }, { label: "البيان" }, { label: "مدين", numeric: true }, { label: "دائن", numeric: true }, { label: "الرصيد", numeric: true }],
+    party: { label: party.kind === "customer" ? t.customer : t.supplier, name: st.name, address: party.address, taxRegistrationNumber: party.taxRegistrationNumber },
+    columns: [{ label: date! }, { label: memo! }, { label: debit!, numeric: true }, { label: credit!, numeric: true }, { label: running!, numeric: true }],
     rows: [
-      [st.from, "رصيد أول المدة", "", "", balance(st.opening)],
+      [st.from, t.opening, "", "", balance(st.opening)],
       ...st.lines.map((l) => [l.date, l.memo, l.debit ? formatMoney(l.debit) : "", l.credit ? formatMoney(l.credit) : "", balance(l.balance)]),
     ],
-    totals: [{ label: `الرصيد في ${st.to} (${owed})`, value: balance(st.closing), strong: true }],
-    words: st.closing > 0 ? amountInWords(st.closing) : "",
+    totals: [{ label: t.balanceOn(st.to, owed), value: balance(st.closing), strong: true }],
+    words: st.closing > 0 ? amountInWords(st.closing, lang) : "",
     notes: "",
   };
 }
@@ -200,11 +289,12 @@ const escape = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;",
 /** The page as HTML for Chromium to print or save as PDF. */
 export function a4Html(doc: A4Document, fontCss = ""): string {
   const en = doc.lang === "en";
+  const t = TEXT[en ? "en" : "ar"];
   const meta = doc.meta.map((m) => `<div><span class="muted">${escape(m.label)}:</span> <b dir="auto">${escape(m.value)}</b></div>`).join("\n");
   const party = doc.party
     ? `<section class="party"><div class="muted">${escape(doc.party.label)}</div><div class="name">${escape(doc.party.name)}</div>
 ${doc.party.address ? `<div>${escape(doc.party.address)}</div>` : ""}
-${doc.party.taxRegistrationNumber ? `<div>رقم التسجيل الضريبي: <span dir="ltr">${escape(doc.party.taxRegistrationNumber)}</span></div>` : ""}</section>`
+${doc.party.taxRegistrationNumber ? `<div>${t.taxNumber}: <span dir="ltr">${escape(doc.party.taxRegistrationNumber)}</span></div>` : ""}</section>`
     : "";
   const head = doc.columns.map((c) => `<th${c.numeric ? ' class="num"' : ""}>${escape(c.label)}</th>`).join("");
   const rows = doc.rows
@@ -248,7 +338,7 @@ h1, .meta, .num { text-align: right !important; }
 <header>
 <div class="shop"><div class="name">${escape(doc.shop.name)}</div>
 ${doc.shop.address ? `<div>${escape(doc.shop.address)}</div>` : ""}
-${doc.shop.taxRegistrationNumber ? `<div>${en ? "Tax registration no." : "رقم التسجيل الضريبي"}: <span dir="ltr">${escape(doc.shop.taxRegistrationNumber)}</span></div>` : ""}</div>
+${doc.shop.taxRegistrationNumber ? `<div>${t.taxNumber}: <span dir="ltr">${escape(doc.shop.taxRegistrationNumber)}</span></div>` : ""}</div>
 <div><h1>${escape(doc.title)}</h1><div class="meta">${meta}</div></div>
 </header>
 ${party}
@@ -258,6 +348,6 @@ ${rows}
 <table class="totals">${totals}</table>
 ${doc.words ? `<div class="words">${escape(doc.words)}</div>` : ""}
 ${doc.notes ? `<div class="notes">${escape(doc.notes)}</div>` : ""}
-<footer><span>${en ? "Signature" : "التوقيع"}: ....................</span><span>${en ? "Stamp" : "الختم"}</span></footer>
+<footer><span>${t.signature}: ....................</span><span>${t.stamp}</span></footer>
 </body></html>`;
 }

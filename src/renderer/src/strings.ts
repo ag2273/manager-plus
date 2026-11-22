@@ -1,4 +1,6 @@
 import type { BusinessErrorCode } from "../../core/errors";
+import { digitStyle } from "../../shared/digits";
+import { en } from "./strings-en";
 
 const errors = {
   name_required: "اكتب اسم النشاط.",
@@ -124,8 +126,8 @@ const errors = {
   unexpected: "حدث خطأ غير متوقع.",
 } satisfies Record<BusinessErrorCode | "unexpected", string>;
 
-/** Arabic screen text. English arrives with the full English mode ticket (#19). */
-export const ar = {
+/** Arabic screen text; the English twin is in strings-en.ts. */
+const arabic = {
   appName: "Manager+",
   welcome: "أهلًا بك. ابدأ بإنشاء ملف لنشاطك أو افتح ملفًا موجودًا.",
   newBusiness: "نشاط جديد",
@@ -400,6 +402,7 @@ export const ar = {
       expected: "النقدية المتوقعة",
       counted: "النقدية المعدودة",
       difference: "الفرق (زيادة + / عجز −)",
+      print: "اطبع التقرير",
       done: "تم",
     },
   },
@@ -848,6 +851,7 @@ export const ar = {
       receiveCustomerPayment: "سند قبض من عميل",
       paySupplier: "سند صرف لمورد",
       setItemSerials: "تتبع السيريال والضمان لصنف",
+      setLanguage: "تغيير اللغة",
     } as Record<string, string>,
   },
   nav: {
@@ -884,6 +888,12 @@ export const ar = {
     appearanceHint: "اختر ثيم التطبيق. التغيير يظهر فورًا على كل الشاشات.",
     themes: "الثيمات",
     inUse: "مُستخدم الآن",
+    language: "اللغة والأرقام",
+    languageHint: "الشاشات والمستندات المطبوعة كل واحدة ممكن تكون بالعربي أو بالإنجليزي.",
+    screenLanguage: "لغة الشاشات",
+    documentLanguage: "الإيصالات والفواتير والتقارير",
+    digits: "الأرقام",
+    digitStyles: { western: "غربية (123)", arabic: "عربية (١٢٣)" },
   },
   themes: {
     calm: { name: "أزرق هادئ", desc: "الافتراضي · محايد ومريح للعين" },
@@ -966,6 +976,8 @@ export const ar = {
     empty: "لا توجد أصناف بعد. أضف أول صنف.",
     noMatch: "لا توجد أصناف مطابقة.",
     stockLater: "الرصيد ومتوسط التكلفة يظهروا بعد تسجيل المشتريات.",
+    defaultUnit: "قطعة",
+    defaultPack: "كرتونة",
   },
   taxKinds: { standard: "خاضع", zero_rated: "صفر", exempt: "معفى" },
   trial: {
@@ -973,6 +985,8 @@ export const ar = {
     total: "الإجمالي",
     empty: "لا توجد حركات حتى هذا التاريخ.",
   },
+  list: "، ",
+  egp: "ج.م",
   errors: {
     ...errors,
     // Printing happens on this computer, outside the core.
@@ -985,3 +999,29 @@ export const ar = {
     server_port_busy: "المنفذ مستخدم من برنامج تاني. اختار رقم منفذ تاني.",
   } as Record<string, string>,
 };
+
+export type Strings = typeof arabic;
+export type ScreenLanguage = "ar" | "en";
+
+/** The screen text in use. Screens read it on every render, so switching language re-renders the app. */
+export let ar: Strings = arabic;
+
+let screenLanguage: ScreenLanguage = "ar";
+
+export function setScreenLanguage(lang: ScreenLanguage): void {
+  screenLanguage = lang;
+  ar = lang === "en" ? en : arabic;
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
+}
+
+export function currentLanguage(): ScreenLanguage {
+  return screenLanguage;
+}
+
+/** The locale for dates and times on screen, in the screen language and the chosen digits. */
+export function locale(): string {
+  const arabicDigits = digitStyle() === "arabic";
+  if (screenLanguage === "en") return arabicDigits ? "en-GB-u-nu-arab" : "en-GB";
+  return arabicDigits ? "ar-EG-u-nu-arab" : "ar-EG-u-nu-latn";
+}

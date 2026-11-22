@@ -41,7 +41,7 @@ export type Quotation = {
   net: Piastres;
   vat: Piastres;
   total: Piastres;
-  lines: (InvoiceLine & { nameAr: string; unitName: string })[];
+  lines: (InvoiceLine & { nameAr: string; nameEn: string; unitName: string })[];
 };
 
 /**
@@ -100,11 +100,11 @@ const SELECT = `
 function withLines(db: Database.Database, r: QuotationRow, today: IsoDate): Quotation {
   const stored = db
     .prepare(
-      `SELECT l.item_id AS itemId, i.name_ar AS nameAr, l.unit, u.name AS unitName, l.quantity, l.unit_price AS unitPrice, l.discount
+      `SELECT l.item_id AS itemId, i.name_ar AS nameAr, i.name_en AS nameEn, l.unit, u.name AS unitName, l.quantity, l.unit_price AS unitPrice, l.discount
          FROM quotation_lines l JOIN items i ON i.id = l.item_id JOIN item_units u ON u.item_id = l.item_id AND u.kind = l.unit
         WHERE l.quotation_id = ? ORDER BY l.id`,
     )
-    .all(r.id) as (QuotationLineInput & { nameAr: string; unitName: string; quantity: Quantity })[];
+    .all(r.id) as (QuotationLineInput & { nameAr: string; nameEn: string; unitName: string; quantity: Quantity })[];
   const priced = priceInvoice(db, r.date, stored);
   const status: QuotationStatus = r.invoiceNumber !== null ? "converted" : r.validUntil < today ? "expired" : "open";
   return {
@@ -115,7 +115,7 @@ function withLines(db: Database.Database, r: QuotationRow, today: IsoDate): Quot
     net: priced.net,
     vat: priced.vat,
     total: priced.total,
-    lines: priced.lines.map((l, i) => ({ ...l, nameAr: stored[i]!.nameAr, unitName: stored[i]!.unitName })),
+    lines: priced.lines.map((l, i) => ({ ...l, nameAr: stored[i]!.nameAr, nameEn: stored[i]!.nameEn, unitName: stored[i]!.unitName })),
   };
 }
 

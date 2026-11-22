@@ -538,7 +538,7 @@ function CreditNoteForm({ invoice, onChange, send }: { invoice: SalesInvoice; on
                 {l.nameAr}
                 {l.serials.length > 0 && (
                   <div className="muted small" dir="ltr">
-                    {l.serials.join("، ")}
+                    {l.serials.join(ar.list)}
                   </div>
                 )}
               </td>

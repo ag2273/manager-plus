@@ -30,3 +30,19 @@ describe("reading typed amounts", () => {
     expect(parseMoney(typed)).toBeNull();
   });
 });
+
+describe("digit style", () => {
+  test("amounts and quantities can show in Arabic-Indic digits, and still read back", async () => {
+    const { setDigitStyle } = await import("./digits");
+    const { formatQuantity } = await import("./quantity");
+    setDigitStyle("arabic");
+    try {
+      expect(formatMoney(18_642_075)).toBe("١٨٦٬٤٢٠٫٧٥");
+      expect(formatQuantity(6_250)).toBe("٦٫٢٥");
+      expect(parseMoney(formatMoney(18_642_075))).toBe(18_642_075);
+    } finally {
+      setDigitStyle("western");
+    }
+    expect(formatMoney(18_642_075)).toBe("186,420.75");
+  });
+});

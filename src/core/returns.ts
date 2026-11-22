@@ -147,7 +147,7 @@ export type SaleReturn = {
   returnedBy: string;
   total: Piastres;
   vat: Piastres;
-  lines: { itemId: number; nameAr: string; unit: "base" | "pack"; quantity: Quantity; amount: Piastres; vat: Piastres }[];
+  lines: { itemId: number; nameAr: string; nameEn: string; unit: "base" | "pack"; quantity: Quantity; amount: Piastres; vat: Piastres }[];
 };
 
 /** One return by its printed number. */
@@ -162,7 +162,7 @@ export function findReturn(db: Database.Database, number: number): SaleReturn {
   if (!row) throw new BusinessError("receipt_not_found", `No return number ${number}`);
   const lines = db
     .prepare(
-      `SELECT l.item_id AS itemId, i.name_ar AS nameAr, l.unit, x.quantity, x.amount, x.vat
+      `SELECT l.item_id AS itemId, i.name_ar AS nameAr, i.name_en AS nameEn, l.unit, x.quantity, x.amount, x.vat
          FROM sales_return_lines x
          JOIN sales_receipt_lines l ON l.id = x.receipt_line_id
          JOIN items i ON i.id = l.item_id

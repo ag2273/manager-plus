@@ -103,6 +103,8 @@ tfoot td { font-weight: 600; border-bottom: 0; }
 tr.inactive td { color: var(--muted); }
 .num { font-variant-numeric: tabular-nums; direction: ltr; text-align: left; }
 th.col-money { text-align: left; }
+/* Numbers line up on the end side: the left in Arabic, the right in English. */
+:root[dir="ltr"] .num, :root[dir="ltr"] th.col-money { text-align: right; }
 .col-code { width: 90px; }
 .col-type { width: 130px; }
 .col-money { width: 150px; }

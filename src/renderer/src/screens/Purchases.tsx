@@ -735,7 +735,7 @@ function Owed({ account }: { account: SupplierAccount }) {
   return (
     <>
       {account.currency} {formatMoney(account.owed)}
-      <div className="muted small">{formatMoney(account.owedEgp)} ج.م</div>
+      <div className="muted small">{formatMoney(account.owedEgp)} {ar.egp}</div>
     </>
   );
 }

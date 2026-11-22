@@ -22,3 +22,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # The checkout journey in Arabic and in English, in the built app.
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a npm run e2e
+      - if: runner.os == 'Windows'
+        run: npm run e2e

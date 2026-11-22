@@ -161,7 +161,16 @@ export type PrinterSettings =
 export const NO_PRINTER: PrinterSettings = { kind: "none" };
 
 /** Preferences of this computer, kept outside the business file. */
-export type Preferences = { theme: ThemeId; printer: PrinterSettings };
+export type Preferences = {
+  theme: ThemeId;
+  printer: PrinterSettings;
+  /** The language of the screens. */
+  screenLanguage: "ar" | "en";
+  /** The language of receipts, invoices, statements and report exports. */
+  documentLanguage: "ar" | "en";
+  digits: "western" | "arabic";
+};
+export const DEFAULT_PREFERENCES: Preferences = { theme: "calm", printer: NO_PRINTER, screenLanguage: "ar", documentLanguage: "ar", digits: "western" };
 
 export type FileStatus = { path: string; syncFolder: string | null; openElsewhere: { host: string; at: string } | null };
 
@@ -186,6 +195,7 @@ export type A4Request = (
 export type PrintRequest =
   | { kind: "sale"; number: number; copy: boolean; openDrawer: boolean }
   | { kind: "return"; number: number; copy: boolean }
+  | { kind: "z"; shiftId: number }
   | { kind: "test" };
 
 /**

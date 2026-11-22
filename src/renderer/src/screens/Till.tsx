@@ -9,7 +9,7 @@ import type { Warehouse } from "../../../core/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
-import { ar } from "../strings";
+import { ar, locale } from "../strings";
 import { APPROVAL_ERRORS, CreditApprovalPrompt } from "./CreditApproval";
 
 type Tender = "cash" | "card" | "wallet" | "split" | "credit";
@@ -423,7 +423,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
             {held.map((h) => (
               <li key={h.id}>
                 <button type="button" className="btn btn-small" onClick={() => void recall(h.id)}>
-                  {ar.till.recall(h.note, new Date(h.at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }), h.lines.length)}
+                  {ar.till.recall(h.note, new Date(h.at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }), h.lines.length)}
                 </button>
               </li>
             ))}
@@ -495,7 +495,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
               >
                 {ar.printer.reprint}
               </button>
-              {last.names.length > 0 && <div className="warn-text">{ar.till.belowZero(last.names.join("، "))}</div>}
+              {last.names.length > 0 && <div className="warn-text">{ar.till.belowZero(last.names.join(ar.list))}</div>}
             </div>
           )}
           <table className="lines">
@@ -615,7 +615,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
           </div>
           <div className="till-total">
             <span>{ar.till.due}</span>
-            <span className="num">{priced ? formatMoney(priced.total) : "0.00"}</span>
+            <span className="num">{priced ? formatMoney(priced.total) : formatMoney(0)}</span>
           </div>
           <div role="radiogroup" aria-label={ar.till.method} className="pills till-tenders">
             {TENDERS.map((t) => (
@@ -690,7 +690,7 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
                   dir="ltr"
                   inputMode="decimal"
                   value={cash}
-                  placeholder={tender === "cash" && priced ? formatMoney(priced.total) : "0.00"}
+                  placeholder={tender === "cash" && priced ? formatMoney(priced.total) : formatMoney(0)}
                   onChange={(e) => setCash(e.target.value)}
                 />
               </label>
@@ -934,6 +934,11 @@ function ClosePanel({ onCancel, onClosed }: { onCancel: () => void; onClosed: (r
 }
 
 function ZReportView({ report, onDone }: { report: ZReport; onDone: () => void }) {
+  const [printError, setPrintError] = useState<string | null>(null);
+  async function print() {
+    const result = await window.api.print({ kind: "z", shiftId: report.shift.id });
+    setPrintError(result.ok ? null : errorText(result));
+  }
   const rows: [string, number | null][] = [
     [ar.shift.z.receipts, null],
     [ar.shift.z.salesTotal, report.sales.total],
@@ -958,7 +963,7 @@ function ZReportView({ report, onDone }: { report: ZReport; onDone: () => void }
         <div>
           <h1>{ar.shift.z.title}</h1>
           <span className="muted">
-            {report.shift.userName} · {new Date(report.shift.openedAt).toLocaleString("ar-EG")}
+            {report.shift.userName} · {new Date(report.shift.openedAt).toLocaleString(locale())}
           </span>
         </div>
       </header>
@@ -974,9 +979,17 @@ function ZReportView({ report, onDone }: { report: ZReport; onDone: () => void }
           </tbody>
         </table>
       </section>
+      {printError && (
+        <div role="alert" className="error">
+          {printError}
+        </div>
+      )}
       <div className="row">
         <button type="button" className="btn btn-primary" autoFocus onClick={onDone}>
           {ar.shift.z.done}
+        </button>
+        <button type="button" className="btn" onClick={() => void print()}>
+          {ar.shift.z.print}
         </button>
       </div>
     </>

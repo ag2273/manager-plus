@@ -8,7 +8,6 @@ import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 import { SerialsField, splitSerials } from "./Serials";
 
-const t = ar.inventory;
 
 function Notice({ error, done }: { error: string | null; done?: string | null }) {
   return (
@@ -48,9 +47,9 @@ function WarehouseSelect({
 }) {
   return (
     <label className="field narrow">
-      {t.warehouse}
+      {ar.inventory.warehouse}
       <select value={value} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}>
-        {all && <option value="">{t.allWarehouses}</option>}
+        {all && <option value="">{ar.inventory.allWarehouses}</option>}
         {warehouses.map((w) => (
           <option key={w.id} value={w.id}>
             {w.name}
@@ -65,7 +64,7 @@ function ItemSelect({
   items,
   value,
   onChange,
-  label = t.item,
+  label = ar.inventory.item,
 }: {
   items: Item[];
   value: number | "";
@@ -120,7 +119,7 @@ export function CountForm({ warehouses }: { warehouses: Warehouse[] }) {
     const result = await business.postStockCount({ date, warehouseId, memo, lines: out });
     setError(errorText(result));
     if (result.ok) {
-      setDone(t.countPosted);
+      setDone(ar.inventory.countPosted);
       setLines([{ itemId: "", counted: "" }]);
       setMemo("");
       await reload();
@@ -132,7 +131,7 @@ export function CountForm({ warehouses }: { warehouses: Warehouse[] }) {
     <>
       <form className="card" onSubmit={submit} aria-label={ar.warehouses.tabs.count}>
         <Notice error={error} done={done} />
-        <p className="muted small">{t.countHint}</p>
+        <p className="muted small">{ar.inventory.countHint}</p>
         <div className="row">
           <WarehouseSelect warehouses={warehouses} value={warehouseId} onChange={setWarehouseId} />
           <label className="field narrow">
@@ -147,8 +146,8 @@ export function CountForm({ warehouses }: { warehouses: Warehouse[] }) {
         <table className="lines">
           <thead>
             <tr>
-              <th>{t.item}</th>
-              <th className="col-money">{t.counted}</th>
+              <th>{ar.inventory.item}</th>
+              <th className="col-money">{ar.inventory.counted}</th>
             </tr>
           </thead>
           <tbody>
@@ -159,7 +158,7 @@ export function CountForm({ warehouses }: { warehouses: Warehouse[] }) {
                 </td>
                 <td>
                   <input
-                    aria-label={t.counted}
+                    aria-label={ar.inventory.counted}
                     dir="ltr"
                     inputMode="decimal"
                     value={l.counted}
@@ -175,14 +174,14 @@ export function CountForm({ warehouses }: { warehouses: Warehouse[] }) {
             {ar.warehouses.addLine}
           </button>
           <button type="submit" className="btn btn-primary">
-            {t.postCount}
+            {ar.inventory.postCount}
           </button>
         </div>
       </form>
       {counts.map((c) => (
-        <section key={c.id} className="table-card" aria-label={t.countTitle(c.id)}>
+        <section key={c.id} className="table-card" aria-label={ar.inventory.countTitle(c.id)}>
           <div className="row table-head">
-            <strong>{t.countTitle(c.id)}</strong>
+            <strong>{ar.inventory.countTitle(c.id)}</strong>
             <span className="muted">
               {c.date} · {name(c.warehouseId)}
               {c.memo && ` · ${c.memo}`}
@@ -191,11 +190,11 @@ export function CountForm({ warehouses }: { warehouses: Warehouse[] }) {
           <table>
             <thead>
               <tr>
-                <th>{t.item}</th>
-                <th className="col-money">{t.expected}</th>
-                <th className="col-money">{t.counted}</th>
-                <th className="col-money">{t.difference}</th>
-                <th className="col-money">{t.value}</th>
+                <th>{ar.inventory.item}</th>
+                <th className="col-money">{ar.inventory.expected}</th>
+                <th className="col-money">{ar.inventory.counted}</th>
+                <th className="col-money">{ar.inventory.difference}</th>
+                <th className="col-money">{ar.inventory.value}</th>
               </tr>
             </thead>
             <tbody>
@@ -253,7 +252,7 @@ export function WriteOffForm({ warehouses }: { warehouses: Warehouse[] }) {
     const result = await business.writeOffStock({ date, warehouseId, reason, lines: out });
     setError(errorText(result));
     if (result.ok) {
-      setDone(t.writtenOff);
+      setDone(ar.inventory.writtenOff);
       setLines([{ itemId: "", quantity: "", serials: "" }]);
       setReason("");
       await reload();
@@ -272,15 +271,15 @@ export function WriteOffForm({ warehouses }: { warehouses: Warehouse[] }) {
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label className="field">
-            {t.reason}
-            <input value={reason} placeholder={t.reasonHint} onChange={(e) => setReason(e.target.value)} />
+            {ar.inventory.reason}
+            <input value={reason} placeholder={ar.inventory.reasonHint} onChange={(e) => setReason(e.target.value)} />
           </label>
         </div>
         <table className="lines">
           <thead>
             <tr>
-              <th>{t.item}</th>
-              <th className="col-money">{t.quantity}</th>
+              <th>{ar.inventory.item}</th>
+              <th className="col-money">{ar.inventory.quantity}</th>
             </tr>
           </thead>
           <tbody>
@@ -304,7 +303,7 @@ export function WriteOffForm({ warehouses }: { warehouses: Warehouse[] }) {
                   </td>
                   <td>
                     <input
-                      aria-label={t.quantity}
+                      aria-label={ar.inventory.quantity}
                       dir="ltr"
                       inputMode="decimal"
                       value={l.quantity}
@@ -321,21 +320,21 @@ export function WriteOffForm({ warehouses }: { warehouses: Warehouse[] }) {
             {ar.warehouses.addLine}
           </button>
           <button type="submit" className="btn btn-primary">
-            {t.postWriteOff}
+            {ar.inventory.postWriteOff}
           </button>
         </div>
       </form>
-      <section className="table-card" aria-label={t.writeOffs}>
+      <section className="table-card" aria-label={ar.inventory.writeOffs}>
         {writeOffs.length === 0 ? (
-          <p className="muted empty">{t.noWriteOffs}</p>
+          <p className="muted empty">{ar.inventory.noWriteOffs}</p>
         ) : (
           <table>
             <thead>
               <tr>
                 <th className="col-type">{ar.warehouses.date}</th>
-                <th>{t.reason}</th>
+                <th>{ar.inventory.reason}</th>
                 <th>{ar.warehouses.items}</th>
-                <th className="col-money">{t.value}</th>
+                <th className="col-money">{ar.inventory.value}</th>
               </tr>
             </thead>
             <tbody>
@@ -346,7 +345,7 @@ export function WriteOffForm({ warehouses }: { warehouses: Warehouse[] }) {
                     {w.reason}
                     <div className="muted small">{name(w.warehouseId)}</div>
                   </td>
-                  <td>{w.lines.map((l) => `${l.nameAr} × ${formatQuantity(l.quantity)}`).join("، ")}</td>
+                  <td>{w.lines.map((l) => `${l.nameAr} × ${formatQuantity(l.quantity)}`).join(ar.list)}</td>
                   <td className="num">{formatMoney(w.value)}</td>
                 </tr>
               ))}
@@ -395,17 +394,17 @@ export function LowStockView({ warehouses, canChange }: { warehouses: Warehouse[
     <>
       <Notice error={error} />
       {canChange && (
-        <form className="card form-row" onSubmit={save} aria-label={t.setMinimum}>
+        <form className="card form-row" onSubmit={save} aria-label={ar.inventory.setMinimum}>
           <label className="field">
-            {t.item}
+            {ar.inventory.item}
             <ItemSelect items={items} value={itemId} onChange={setItemId} />
           </label>
           <label className="field narrow">
-            {t.minimum}
-            <input dir="ltr" inputMode="decimal" placeholder={t.noMinimum} value={minimum} onChange={(e) => setMinimum(e.target.value)} />
+            {ar.inventory.minimum}
+            <input dir="ltr" inputMode="decimal" placeholder={ar.inventory.noMinimum} value={minimum} onChange={(e) => setMinimum(e.target.value)} />
           </label>
           <button type="submit" className="btn">
-            {t.setMinimum}
+            {ar.inventory.setMinimum}
           </button>
         </form>
       )}
@@ -414,15 +413,15 @@ export function LowStockView({ warehouses, canChange }: { warehouses: Warehouse[
       </div>
       <section className="table-card" aria-label={ar.warehouses.tabs.low}>
         {rows.length === 0 ? (
-          <p className="muted empty">{t.noLow}</p>
+          <p className="muted empty">{ar.inventory.noLow}</p>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>{t.item}</th>
-                <th className="col-money">{t.minimum}</th>
-                <th className="col-money">{t.onHand}</th>
-                <th>{t.byWarehouse}</th>
+                <th>{ar.inventory.item}</th>
+                <th className="col-money">{ar.inventory.minimum}</th>
+                <th className="col-money">{ar.inventory.onHand}</th>
+                <th>{ar.inventory.byWarehouse}</th>
               </tr>
             </thead>
             <tbody>
@@ -458,7 +457,7 @@ export function MovementsView({ warehouses }: { warehouses: Warehouse[] }) {
     <>
       <div className="card form-row">
         <label className="field">
-          {t.item}
+          {ar.inventory.item}
           <ItemSelect items={items} value={itemId} onChange={setItemId} />
         </label>
         <WarehouseSelect warehouses={warehouses} value={warehouseId} onChange={setWarehouseId} all />
@@ -466,16 +465,16 @@ export function MovementsView({ warehouses }: { warehouses: Warehouse[] }) {
       {itemId !== "" && (
         <section className="table-card" aria-label={ar.warehouses.tabs.movements}>
           {rows.length === 0 ? (
-            <p className="muted empty">{t.noMovements}</p>
+            <p className="muted empty">{ar.inventory.noMovements}</p>
           ) : (
             <table>
               <thead>
                 <tr>
                   <th className="col-type">{ar.warehouses.date}</th>
-                  <th>{t.document}</th>
-                  <th>{t.warehouse}</th>
-                  <th className="col-money">{t.quantity}</th>
-                  <th className="col-money">{t.balance}</th>
+                  <th>{ar.inventory.document}</th>
+                  <th>{ar.inventory.warehouse}</th>
+                  <th className="col-money">{ar.inventory.quantity}</th>
+                  <th className="col-money">{ar.inventory.balance}</th>
                 </tr>
               </thead>
               <tbody>
@@ -483,7 +482,7 @@ export function MovementsView({ warehouses }: { warehouses: Warehouse[] }) {
                   <tr key={m.id}>
                     <td className="muted">{m.date}</td>
                     <td>
-                      {t.sources[m.source] ?? m.source} {m.sourceId}
+                      {ar.inventory.sources[m.source] ?? m.source} {m.sourceId}
                     </td>
                     <td>{m.warehouseName}</td>
                     <td className={`num${m.quantity < 0 ? " warn-text" : ""}`}>{m.quantity !== 0 && formatQuantity(m.quantity)}</td>

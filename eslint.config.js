@@ -6,6 +6,12 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // The end-to-end journeys are plain Node scripts that drive the built app.
+    files: ["e2e/**/*.cjs"],
+    languageOptions: { sourceType: "commonjs", globals: { require: "readonly", __dirname: "readonly", process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
+  {
     files: ["src/core/**/*.ts"],
     rules: {
       "no-restricted-imports": [
