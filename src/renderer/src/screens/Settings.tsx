@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DEFAULT_PREFERENCES, NO_PRINTER, THEMES, type Connection, type Preferences, type PrinterSettings, type ServerStatus, type ThemeId } from "../../../shared/api";
-import type { BackupStatus } from "../../../core/backup";
-import type { EtaSettings } from "../../../core/eta/store";
-import type { EtaReceiptSettings } from "../../../core/eta/receipts-store";
-import type { LicenceMode } from "../../../core/business";
-import type { LicenceStatus } from "../../../core/licence/licence";
-import type { UpdateCheck } from "../../../core/updates";
+import type { BackupStatus } from "../../../shared/books/backup";
+import type { EtaSettings } from "../../../shared/books/eta/store";
+import type { EtaReceiptSettings } from "../../../shared/books/eta/receipts-store";
+import type { LicenceMode } from "../../../shared/books/business";
+import type { LicenceStatus } from "../../../shared/books/licence/licence";
+import type { UpdateCheck } from "../../../shared/books/updates";
 import type { TokenCertificate } from "../../../shared/api";
 import type { BusinessSettings } from "../../../shared/api";
 import { business, errorText } from "../api";

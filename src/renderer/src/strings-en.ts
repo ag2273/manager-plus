@@ -1,4 +1,4 @@
-import type { BusinessErrorCode } from "../../core/errors";
+import type { BusinessErrorCode } from "../../shared/books/errors";
 import type { Strings } from "./strings";
 
 const errors = {

@@ -19,10 +19,10 @@ use manager_core::shipments::{ImportShipmentInput, ShipmentCostInput};
 use manager_core::{Business, BusinessSettings};
 use serde::Serialize;
 
-/** The report as JSON against the TypeScript core's golden file. */
+/** The report as JSON against the golden file the TypeScript core made. */
 fn golden(name: &str, value: &impl Serialize) {
     let path = format!(
-        "{}/../../src/core/__golden__/reports/{name}.json",
+        "{}/tests/fixtures/reports/{name}.json",
         env!("CARGO_MANIFEST_DIR")
     );
     let expected: serde_json::Value =

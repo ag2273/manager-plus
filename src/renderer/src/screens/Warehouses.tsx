@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { Item } from "../../../core/items";
-import type { SerialLine, Transfer, UnitLine, Warehouse } from "../../../core/stock";
+import type { Item } from "../../../shared/books/items";
+import type { SerialLine, Transfer, UnitLine, Warehouse } from "../../../shared/books/stock";
 import type { Result } from "../../../shared/api";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";

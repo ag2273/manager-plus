@@ -1,6 +1,6 @@
-import type { BusinessSettings } from "../core/business";
-import type { VatReturn } from "../core/vat-return";
-import type { BalanceSheet, DaySalesRow, GeneralLedger, ItemSalesRow, MethodSalesRow, ProfitAndLoss, ReportRow, StockReport } from "../core/reports";
+import type { BusinessSettings } from "./books/business";
+import type { VatReturn } from "./books/vat-return";
+import type { BalanceSheet, DaySalesRow, GeneralLedger, ItemSalesRow, MethodSalesRow, ProfitAndLoss, ReportRow, StockReport } from "./books/reports";
 import type { A4Document } from "./a4";
 import { formatMoney } from "./money";
 import { formatQuantity } from "./quantity";

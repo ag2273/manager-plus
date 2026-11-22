@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { Role } from "../../../core/users";
+import type { Role } from "../../../shared/books/users";
 import type { Result, User } from "../../../shared/api";
 import { business, errorText } from "../api";
 import { ar } from "../strings";

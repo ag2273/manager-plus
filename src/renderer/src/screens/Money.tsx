@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { Account } from "../../../core/ledger";
-import type { AccountLine, Expense, MoneyAccount, MoneyTransfer, Reconciliation } from "../../../core/money";
-import type { Supplier } from "../../../core/purchases";
+import type { Account } from "../../../shared/books/ledger";
+import type { AccountLine, Expense, MoneyAccount, MoneyTransfer, Reconciliation } from "../../../shared/books/money";
+import type { Supplier } from "../../../shared/books/purchases";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText, today } from "../api";

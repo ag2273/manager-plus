@@ -1,4 +1,4 @@
-import type { Quantity } from "../core/items";
+import type { Quantity } from "./books/items";
 import { inDigits } from "./digits";
 
 /** Shows a quantity in thousandths as base units: 12000 → "12", 6250 → "6.25". */

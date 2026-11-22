@@ -1,0 +1,140 @@
+{
+  "settings": {
+    "name": "شركة النور للكمبيوتر",
+    "address": "الدقي، الجيزة",
+    "taxRegistrationNumber": "123456789",
+    "vatRegistered": true,
+    "fiscalYearStartMonth": 1
+  },
+  "customer": {
+    "id": 1,
+    "name": "شركة الأمل للتجارة",
+    "phone": "",
+    "taxRegistrationNumber": "987654321",
+    "address": "مدينة نصر، القاهرة",
+    "governate": "",
+    "regionCity": "",
+    "buildingNumber": "",
+    "priceLevel": "retail",
+    "creditLimit": null,
+    "withholdingCategoryId": null,
+    "active": true
+  },
+  "invoice": {
+    "id": 1,
+    "number": 1,
+    "date": "2026-11-20",
+    "customerId": 1,
+    "customerName": "شركة الأمل للتجارة",
+    "warehouseId": 1,
+    "reference": "PO-15",
+    "notes": "التسليم في مقر العميل",
+    "postedBy": "أيمن",
+    "gross": 240000,
+    "discount": 10000,
+    "net": 230000,
+    "vat": 32200,
+    "total": 262200,
+    "credited": 0,
+    "creditNotes": [],
+    "lines": [
+      {
+        "lineId": 1,
+        "itemId": 1,
+        "nameAr": "راوتر واي فاي 6",
+        "nameEn": "Wi-Fi 6 router",
+        "unit": "base",
+        "unitName": "قطعة",
+        "quantity": 2000,
+        "unitPrice": 120000,
+        "gross": 240000,
+        "discount": 10000,
+        "net": 230000,
+        "vatRate": 1400,
+        "vat": 32200,
+        "credited": 0,
+        "serials": [],
+        "warrantyEnds": null
+      }
+    ]
+  },
+  "statement": {
+    "partyId": 1,
+    "name": "شركة الأمل للتجارة",
+    "currency": "EGP",
+    "from": "2026-11-01",
+    "to": "2026-11-30",
+    "opening": 0,
+    "lines": [
+      {
+        "date": "2026-11-20",
+        "entryId": 1,
+        "memo": "فاتورة مبيعات رقم 1 - شركة الأمل للتجارة",
+        "debit": 262200,
+        "credit": 0,
+        "balance": 262200
+      }
+    ],
+    "closing": 262200
+  },
+  "creditNote": {
+    "id": 1,
+    "number": 1,
+    "date": "2026-11-21",
+    "invoiceNumber": 1,
+    "customerId": 1,
+    "customerName": "شركة الأمل للتجارة",
+    "reason": "عيب",
+    "postedBy": "أيمن",
+    "net": 115000,
+    "vat": 16100,
+    "total": 131100,
+    "lines": [
+      {
+        "itemId": 1,
+        "nameAr": "راوتر واي فاي 6",
+        "nameEn": "Wi-Fi 6 router",
+        "unit": "base",
+        "unitName": "قطعة",
+        "quantity": 1000,
+        "unitPrice": 120000,
+        "net": 115000,
+        "vat": 16100
+      }
+    ]
+  },
+  "quotation": {
+    "id": 1,
+    "number": 1,
+    "date": "2026-11-20",
+    "validUntil": "2026-11-30",
+    "customerId": 1,
+    "customerName": "شركة الأمل للتجارة",
+    "reference": "RFQ-3",
+    "notes": "",
+    "preparedBy": "أيمن",
+    "status": "open",
+    "invoiceNumber": null,
+    "gross": 360000,
+    "discount": 0,
+    "net": 360000,
+    "vat": 50400,
+    "total": 410400,
+    "lines": [
+      {
+        "itemId": 1,
+        "unit": "base",
+        "quantity": 3000,
+        "unitPrice": 120000,
+        "gross": 360000,
+        "discount": 0,
+        "net": 360000,
+        "vatRate": 1400,
+        "vat": 50400,
+        "nameAr": "راوتر واي فاي 6",
+        "nameEn": "Wi-Fi 6 router",
+        "unitName": "قطعة"
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { PurchaseInvoice, Supplier } from "../../../core/purchases";
-import type { ImportShipment, ShipmentCostKind, SpreadBy } from "../../../core/shipments";
+import type { PurchaseInvoice, Supplier } from "../../../shared/books/purchases";
+import type { ImportShipment, ShipmentCostKind, SpreadBy } from "../../../shared/books/shipments";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";

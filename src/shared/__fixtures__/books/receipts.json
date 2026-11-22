@@ -1,0 +1,129 @@
+{
+  "settings": {
+    "name": "بقالة النور",
+    "address": "الدقي، الجيزة",
+    "taxRegistrationNumber": "123456789",
+    "vatRegistered": true,
+    "fiscalYearStartMonth": 1
+  },
+  "receipt": {
+    "id": 1,
+    "number": 1,
+    "date": "2026-11-20",
+    "at": "2026-11-20T18:15:00.000Z",
+    "warehouseId": 1,
+    "net": 10614,
+    "vat": 1486,
+    "total": 12100,
+    "cashReceived": 15000,
+    "change": 2900,
+    "payments": [
+      {
+        "method": "cash",
+        "amount": 12100
+      }
+    ],
+    "onCredit": 0,
+    "customerId": null,
+    "soldBy": "أيمن",
+    "eta": {
+      "uuid": "",
+      "previousUuid": "",
+      "status": ""
+    },
+    "lines": [
+      {
+        "lineId": 1,
+        "itemId": 1,
+        "nameAr": "أرز مصري 1 كجم",
+        "nameEn": "Egyptian rice 1 kg",
+        "unit": "base",
+        "quantity": 2000,
+        "unitPrice": 3800,
+        "gross": 7600,
+        "discount": 0,
+        "amount": 7600,
+        "net": 6667,
+        "vatRate": 1400,
+        "vat": 933,
+        "cost": 0,
+        "returned": 0,
+        "serials": [],
+        "warrantyEnds": null
+      },
+      {
+        "lineId": 2,
+        "itemId": 2,
+        "nameAr": "شاي ناعم 250 جم",
+        "nameEn": "",
+        "unit": "base",
+        "quantity": 1000,
+        "unitPrice": 4750,
+        "gross": 4750,
+        "discount": 250,
+        "amount": 4500,
+        "net": 3947,
+        "vatRate": 1400,
+        "vat": 553,
+        "cost": 0,
+        "returned": 0,
+        "serials": [],
+        "warrantyEnds": null
+      }
+    ]
+  },
+  "return": {
+    "id": 1,
+    "number": 1,
+    "date": "2026-11-20",
+    "at": "2026-11-20T18:15:00.000Z",
+    "receiptNumber": 1,
+    "refund": "cash",
+    "returnedBy": "أيمن",
+    "total": 3800,
+    "vat": 466,
+    "lines": [
+      {
+        "itemId": 1,
+        "nameAr": "أرز مصري 1 كجم",
+        "nameEn": "Egyptian rice 1 kg",
+        "unit": "base",
+        "quantity": 1000,
+        "amount": 3800,
+        "vat": 466
+      }
+    ]
+  },
+  "zReport": {
+    "shift": {
+      "id": 1,
+      "userId": 1,
+      "userName": "أيمن",
+      "openedAt": "2026-11-20T18:15:00.000Z",
+      "openingFloat": 0,
+      "closedAt": "2026-11-20T18:15:00.000Z",
+      "countedCash": 12000,
+      "status": "closed"
+    },
+    "receipts": 1,
+    "sales": {
+      "total": 12100,
+      "net": 10614,
+      "vat": 1486,
+      "byMethod": {
+        "cash": 12100,
+        "card": 0,
+        "wallet": 0,
+        "credit": 0
+      }
+    },
+    "returns": 0,
+    "discounts": 250,
+    "cashIn": 0,
+    "cashOut": 0,
+    "openingFloat": 0,
+    "expectedCash": 12100,
+    "countedCash": 12000,
+    "difference": -100
+  }
+}

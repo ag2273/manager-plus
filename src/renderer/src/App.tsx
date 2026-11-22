@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Role } from "../../core/users";
-import type { LicenceMode } from "../../core/business";
-import type { LicenceStatus } from "../../core/licence/licence";
+import type { Role } from "../../shared/books/users";
+import type { LicenceMode } from "../../shared/books/business";
+import type { LicenceStatus } from "../../shared/books/licence/licence";
 import type { BusinessSettings, FileStatus, Preferences, ThemeId, User } from "../../shared/api";
 import { Accounts } from "./screens/Accounts";
 import { AuditLog } from "./screens/AuditLog";

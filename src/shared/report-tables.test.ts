@@ -1,40 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { Business } from "../core/business";
+import books from "./__fixtures__/books/reports.json";
 import { a4Html } from "./a4";
+import type { BusinessSettings } from "./books/business";
+import type { GeneralLedger, MethodSalesRow, ProfitAndLoss } from "./books/reports";
 import { ledgerTable, pnlTable, reportA4, reportSheet, salesByMethodTable } from "./report-tables";
 import { xlsx } from "./xlsx";
 
-const manager = { name: "أيمن", password: "كلمة سر قوية" };
-const shop = {
-  name: "شركة النور للكمبيوتر",
-  address: "الدقي، الجيزة",
-  taxRegistrationNumber: "123456789",
-  vatRegistered: true,
-  fiscalYearStartMonth: 1,
-};
-
-function sample() {
-  const business = Business.create(":memory:", shop, manager);
-  const account = (role: string) => business.accounts().find((a) => a.role === role)!.id;
-  const rent = business.accounts().find((a) => a.name === "الإيجار")!.id;
-  business.postJournalEntry({
-    date: "2026-03-01",
-    memo: "رأس المال",
-    lines: [
-      { accountId: account("main_cash"), debit: 1_000_000 },
-      { accountId: account("capital"), credit: 1_000_000 },
-    ],
-  });
-  business.recordExpense({
-    date: "2026-03-05",
-    expenseAccountId: rent,
-    amount: 50_000,
-    vat: 0,
-    paidFrom: { accountId: account("main_cash") },
-    memo: "إيجار مارس",
-  });
-  return { business, account };
-}
+/** What the Rust core answers after capital and a month's rent (crates/core/tests/screen_fixtures.rs). */
+const settings = books.settings as BusinessSettings;
 
 /** Pulls one stored (uncompressed) file out of the zip by its name. */
 function entry(zip: Uint8Array, name: string): string {
@@ -52,21 +25,19 @@ function entry(zip: Uint8Array, name: string): string {
 
 describe("report tables for print and Excel", () => {
   test("an English profit and loss prints left to right with English labels", async () => {
-    const { business } = sample();
-    const table = pnlTable(business.profitAndLoss("2026-03-01", "2026-03-31"), "en");
+    const table = pnlTable(books.profitAndLoss as ProfitAndLoss, "en");
     expect(table.totals.map((t) => [t.label, t.value])).toEqual([
       ["Total income", 0],
       ["Total expenses", 50_000],
       ["Net profit", -50_000],
     ]);
-    const html = a4Html(reportA4(table, business.settings()));
+    const html = a4Html(reportA4(table, settings));
     expect(html).toContain('dir="ltr"');
     await expect(html).toMatchFileSnapshot("__golden__/profit-and-loss-en.html");
   });
 
   test("the Excel file is a zip with the sheet, amounts in pounds, right to left in Arabic", () => {
-    const { business, account } = sample();
-    const table = ledgerTable(business.generalLedger(account("main_cash"), "2026-03-01", "2026-03-31"), "ar");
+    const table = ledgerTable(books.cashLedger as GeneralLedger, "ar");
     const file = xlsx(reportSheet(table));
     const sheet = entry(file, "xl/worksheets/sheet1.xml");
     expect(sheet).toContain('rightToLeft="1"');
@@ -80,8 +51,7 @@ describe("report tables for print and Excel", () => {
   });
 
   test("an English sheet runs left to right and names the payment methods", () => {
-    const { business } = sample();
-    const table = salesByMethodTable(business.salesByPaymentMethod("2026-03-01", "2026-03-31"), "2026-03-01", "2026-03-31", "en");
+    const table = salesByMethodTable(books.salesByPaymentMethod as MethodSalesRow[], "2026-03-01", "2026-03-31", "en");
     const sheet = entry(xlsx(reportSheet(table)), "xl/worksheets/sheet1.xml");
     expect(sheet).not.toContain("rightToLeft");
     expect(sheet).toContain("Wallet / InstaPay");

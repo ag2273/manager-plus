@@ -1,6 +1,6 @@
 # Manager+ (working codename)
 
-Offline Windows desktop app for small Egyptian retail and trading shops: point of sale, stock, and double-entry accounting, in Arabic (RTL, default) and English. Single user. Stack: Electron + TypeScript + React + SQLite (better-sqlite3).
+Offline Windows desktop app for small Egyptian retail and trading shops: point of sale, stock, and double-entry accounting, in Arabic (RTL, default) and English. Single user. Stack: Tauri 2 (WebView2) + a Rust core (`crates/core`, SQLite via rusqlite) + React screens in TypeScript (ADR 0011).
 
 - Product spec (PRD): https://claude.ai/artifact/QFarCgLGUwmnozykFaz1yw
 - Work is tracked as GitHub issues in this repo, one tracer-bullet slice per issue.

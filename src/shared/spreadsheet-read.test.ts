@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
 import { describe, expect, test } from "vitest";
-import { Business } from "../core/business";
 import { importTemplate } from "./import-template";
 import { decodeCsv, parseCsv, readXlsx } from "./spreadsheet-read";
 import { zip } from "./xlsx";
@@ -47,17 +46,13 @@ describe("reading spreadsheets for import", () => {
     expect(decodeCsv(encoder.encode("صنف"))).toBe("صنف");
   });
 
-  test("the template, in Arabic and English, reads back and its example rows import cleanly", () => {
+  // The Rust core imports these example rows cleanly (crates/core/tests/screen_fixtures.rs).
+  test("the template, in Arabic and English, reads back as the sheets the import is checked with", async () => {
     for (const lang of ["ar", "en"] as const) {
       const sheets = readXlsx(importTemplate(lang), inflate);
       expect(sheets.map((s) => s.name)).toEqual(lang === "ar" ? ["الأصناف", "الأرصدة الافتتاحية"] : ["Items", "Opening balances"]);
-      const business = Business.create(
-        ":memory:",
-        { name: "متجر", address: "", taxRegistrationNumber: "", vatRegistered: true, fiscalYearStartMonth: 1 },
-        { name: "أيمن", password: "كلمة سر قوية" },
-      );
-      const report = business.checkImport({ date: "2026-01-01", warehouseId: business.warehouses()[0]!.id, sheets });
-      expect(report).toEqual(expect.objectContaining({ items: 1, stockLines: 1, balances: 3, newCustomers: 1, newSuppliers: 1, problems: [] }));
+      await expect(`${JSON.stringify(sheets, null, 2)}
+`).toMatchFileSnapshot(`__fixtures__/import-template-${lang}.json`);
     }
   });
 });

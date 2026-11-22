@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { WithholdingCategory, WithholdingReport } from "../../../core/withholding";
+import type { WithholdingCategory, WithholdingReport } from "../../../shared/books/withholding";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";

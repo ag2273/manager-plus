@@ -1,0 +1,66 @@
+[
+  {
+    "name": "Items",
+    "rows": [
+      [
+        "Arabic name",
+        "English name",
+        "Item code",
+        "Unit",
+        "Barcode",
+        "Sale price incl. VAT",
+        "Wholesale price",
+        "Tax",
+        "Pack unit",
+        "Units per pack",
+        "Pack barcode",
+        "Pack price",
+        "Opening quantity",
+        "Unit cost"
+      ],
+      [
+        "راوتر واي فاي 6",
+        "WiFi 6 router",
+        "R-100",
+        "piece",
+        "6221234567890",
+        "1500.00",
+        "1400.00",
+        "standard",
+        "carton",
+        "10",
+        "16221234567897",
+        "14500.00",
+        "25",
+        "1100.00"
+      ]
+    ]
+  },
+  {
+    "name": "Opening balances",
+    "rows": [
+      [
+        "Type",
+        "Name or account code",
+        "Debit",
+        "Credit"
+      ],
+      [
+        "customer",
+        "Al Amal Co.",
+        "12500.00"
+      ],
+      [
+        "account",
+        "1110",
+        "50000.00"
+      ],
+      [
+        "supplier",
+        "Supplies Co.",
+        "",
+        "8000.00"
+      ]
+    ]
+  }
+]

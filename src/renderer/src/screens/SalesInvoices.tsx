@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { Customer } from "../../../core/customers";
-import type { InvoiceLineInput, PricedInvoice, SalesInvoice, SalesInvoiceInput } from "../../../core/invoices";
-import type { Quotation } from "../../../core/quotations";
-import type { EtaDocumentRow } from "../../../core/eta/store";
-import type { EtaReceiptRow } from "../../../core/eta/receipts-store";
-import type { Item } from "../../../core/items";
-import type { Warehouse } from "../../../core/stock";
+import type { Customer } from "../../../shared/books/customers";
+import type { InvoiceLineInput, PricedInvoice, SalesInvoice, SalesInvoiceInput } from "../../../shared/books/invoices";
+import type { Quotation } from "../../../shared/books/quotations";
+import type { EtaDocumentRow } from "../../../shared/books/eta/store";
+import type { EtaReceiptRow } from "../../../shared/books/eta/receipts-store";
+import type { Item } from "../../../shared/books/items";
+import type { Warehouse } from "../../../shared/books/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";

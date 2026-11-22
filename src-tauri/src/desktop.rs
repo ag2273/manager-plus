@@ -138,7 +138,7 @@ impl State {
         Ok(check)
     }
 
-    /** Every five minutes while the app runs, as the Electron main process does. */
+    /** Every five minutes while the app runs: the lock, the licence, the daily backup and the ETA queue. */
     pub fn tick(&self) {
         let file = {
             let open = self.open.lock().unwrap();

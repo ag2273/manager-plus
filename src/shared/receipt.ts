@@ -1,8 +1,8 @@
 import { qrSvg } from "./qr";
-import type { BusinessSettings } from "../core/business";
-import type { SaleReturn } from "../core/returns";
-import type { Receipt } from "../core/sales";
-import type { ZReport } from "../core/shifts";
+import type { BusinessSettings } from "./books/business";
+import type { SaleReturn } from "./books/returns";
+import type { Receipt } from "./books/sales";
+import type { ZReport } from "./books/shifts";
 import { formatMoney } from "./money";
 import { serialNote } from "./serials";
 import { formatQuantity } from "./quantity";

@@ -1,97 +1,22 @@
-// The Tauri app end to end (#73 to #77): create a business, post a journal entry, stock an item,
+// The Tauri app end to end (#73 to #81): create a business, post a journal entry, stock an item,
 // buy from a supplier and sell at the till through the Rust core, and see them on the Accounts, Items, Warehouses, Purchases and Till screens. Needs tauri-driver and the platform's WebDriver
 // (WebKitWebDriver on Linux, msedgedriver on Windows). Run after `npx tauri build --debug --no-bundle`:
 //   node e2e/tauri.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
-import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { connect as tlsConnect } from "node:tls";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { check, click, fill, launch, run, sleep, until } from "./driver.mjs";
 
 const app = process.argv[2] ?? "target/debug/manager-plus";
 const dir = mkdtempSync(join(tmpdir(), "mplus-tauri-"));
-const DRIVER = "http://127.0.0.1:4444";
-
-function check(ok, what) {
-  if (!ok) throw new Error(`Failed: ${what}`);
-  console.log(`  ok  ${what}`);
-}
-
-async function wd(method, path, body) {
-  const response = await fetch(`${DRIVER}${path}`, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(`${method} ${path}: ${JSON.stringify(data.value)}`);
-  return data.value;
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function waitForDriver() {
-  for (let i = 0; i < 50; i++) {
-    try {
-      await fetch(`${DRIVER}/status`);
-      return;
-    } catch {
-      await sleep(200);
-    }
-  }
-  throw new Error("tauri-driver did not start");
-}
-
-/** Runs `fn` in the page with `args`, as WebDriver's execute/sync (async functions are awaited). */
-const run = (session, fn, ...args) =>
-  wd("POST", `/session/${session}/execute/async`, {
-    script: `const done = arguments[arguments.length - 1]; Promise.resolve((${fn})(...Array.from(arguments).slice(0, -1))).then(done, (e) => done({ error: String(e) }));`,
-    args,
-  });
-
-/** Waits until `fn` returns something truthy in the page. */
-async function until(session, what, fn, ...args) {
-  for (let i = 0; i < 100; i++) {
-    const value = await run(session, fn, ...args);
-    if (value && !value.error) return value;
-    await sleep(150);
-  }
-  throw new Error(`Timed out: ${what}`);
-}
-
-// In the page: fill a field by its label, and click a button by its text, the way a person would.
-const fill = (label, value) => {
-  const l = [...document.querySelectorAll("label")].find((x) => x.textContent.trim().startsWith(label));
-  const input = l && (l.control ?? l.querySelector("input, select, textarea"));
-  if (!input) return false;
-  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value").set;
-  setter.call(input, value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  return true;
-};
-const click = (text) => {
-  const b = [...document.querySelectorAll("button, [role=tab], a")].find((x) => x.textContent.trim() === text);
-  if (!b) return false;
-  b.click();
-  return true;
-};
 
 const file = join(dir, "shop.mplus");
-// The app answers its save dialog with this path; it and a fresh data folder reach it through tauri-driver.
-const env = { ...process.env, MANAGER_PLUS_E2E_SAVE_AS: file, XDG_DATA_HOME: join(dir, "data"),
-  // Nothing listens here, so the journey never reaches the real licence server.
-  MANAGER_PLUS_LICENCE_URL: "http://127.0.0.1:9",
-};
-const driver = spawn("tauri-driver", [], { stdio: "inherit", env });
-let session;
+// The app answers its save dialog with this path, and keeps its data in a fresh folder.
+const launched = await launch(app, { MANAGER_PLUS_E2E_SAVE_AS: file, XDG_DATA_HOME: join(dir, "data") });
+const { session } = launched;
 try {
-  await waitForDriver();
-  session = (
-    await wd("POST", "/session", {
-      capabilities: { alwaysMatch: { "tauri:options": { application: app }, "webkitgtk:browserOptions": { args: [] } } },
-    })
-  ).sessionId;
   console.log("the ledger, items, stock, purchases and the till on Tauri");
 
   await until(session, "the welcome screen", fill, "اسم النشاط", "بقالة النور");
@@ -329,8 +254,7 @@ try {
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);
 } finally {
-  if (session) await wd("DELETE", `/session/${session}`).catch(() => {});
-  driver.kill();
+  await launched.close();
 }
 
 /** The app's process id (Linux), for its memory. */

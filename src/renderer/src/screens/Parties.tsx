@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { Account } from "../../../core/ledger";
-import type { Aging, OpenDocument, PartyKind, Statement } from "../../../core/settlements";
+import type { Account } from "../../../shared/books/ledger";
+import type { Aging, OpenDocument, PartyKind, Statement } from "../../../shared/books/settlements";
 import type { A4Request, Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { parseRate } from "../../../shared/rate";

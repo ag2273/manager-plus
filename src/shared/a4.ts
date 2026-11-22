@@ -1,8 +1,8 @@
-import type { BusinessSettings } from "../core/business";
-import type { Customer } from "../core/customers";
-import type { CreditNote, SalesInvoice } from "../core/invoices";
-import type { Quotation } from "../core/quotations";
-import type { Statement } from "../core/settlements";
+import type { BusinessSettings } from "./books/business";
+import type { Customer } from "./books/customers";
+import type { CreditNote, SalesInvoice } from "./books/invoices";
+import type { Quotation } from "./books/quotations";
+import type { Statement } from "./books/settlements";
 import { formatMoney } from "./money";
 import { lineName, type DocLang } from "./receipt";
 import { serialNote } from "./serials";

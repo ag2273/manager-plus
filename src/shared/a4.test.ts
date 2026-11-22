@@ -1,31 +1,20 @@
 import { describe, expect, test } from "vitest";
-import { Business } from "../core/business";
+import books from "./__fixtures__/books/a4.json";
 import { a4Html, creditNoteA4, deliveryNoteA4, invoiceA4, quotationA4, statementA4 } from "./a4";
+import type { CreditNote, SalesInvoice } from "./books/invoices";
+import type { Customer } from "./books/customers";
+import type { BusinessSettings } from "./books/business";
+import type { Quotation } from "./books/quotations";
+import type { Statement } from "./books/settlements";
 
-const manager = { name: "أيمن", password: "كلمة سر قوية" };
-const shop = { name: "شركة النور للكمبيوتر", address: "الدقي، الجيزة", taxRegistrationNumber: "123456789", vatRegistered: true, fiscalYearStartMonth: 1 };
-
-function sample() {
-  const business = Business.create(":memory:", shop, manager);
-  const main = business.warehouses()[0]!.id;
-  const standard = business.taxCodes().find((c) => c.kind === "standard")!.id;
-  const router = business.addItem({ nameAr: "راوتر واي فاي 6", nameEn: "Wi-Fi 6 router", baseUnit: "قطعة", salePrice: 150_000, taxCodeId: standard });
-  const customer = business.addCustomer({ name: "شركة الأمل للتجارة", phone: "", taxRegistrationNumber: "987654321", address: "مدينة نصر، القاهرة" });
-  const posted = business.postSalesInvoice({
-    date: "2026-11-20",
-    customerId: customer,
-    warehouseId: main,
-    reference: "PO-15",
-    notes: "التسليم في مقر العميل",
-    lines: [{ itemId: router, unit: "base", quantity: 2_000, unitPrice: 120_000, discount: 10_000 }],
-  });
-  return { business, customer: business.customers()[0]!, posted };
-}
+/** What the Rust core answers for a company invoice, its credit note and a quotation (crates/core/tests/screen_fixtures.rs). */
+const settings = books.settings as BusinessSettings;
+const customer = books.customer as Customer;
+const invoice = books.invoice as SalesInvoice;
 
 describe("A4 documents", () => {
   test("a tax invoice matches the golden file, with the buyer's tax number and the total in words", async () => {
-    const { business, customer } = sample();
-    const doc = invoiceA4(business.findSalesInvoice(1), business.settings(), customer);
+    const doc = invoiceA4(invoice, settings, customer);
 
     expect(doc.title).toBe("فاتورة ضريبية");
     expect(doc.words).toBe("فقط ألفان وستمائة واثنان وعشرون جنيه مصري لا غير");
@@ -34,8 +23,7 @@ describe("A4 documents", () => {
   });
 
   test("the same invoice in English reads left to right, with English labels, names and words", async () => {
-    const { business, customer } = sample();
-    const doc = invoiceA4(business.findSalesInvoice(1), business.settings(), customer, "en");
+    const doc = invoiceA4(invoice, settings, customer, "en");
 
     expect(doc.title).toBe("Tax invoice");
     expect(doc.words).toBe("Only two thousand six hundred twenty-two Egyptian pounds");
@@ -46,21 +34,16 @@ describe("A4 documents", () => {
   });
 
   test("a credit note points to its invoice", () => {
-    const { business, customer, posted } = sample();
-    const line = business.findSalesInvoice(1).lines[0]!.lineId;
-    business.postCreditNote({ date: "2026-11-21", invoiceId: posted.id, reason: "عيب", lines: [{ lineId: line, quantity: 1_000 }] });
-
-    const doc = creditNoteA4(business.findCreditNote(1), business.settings(), customer);
+    const doc = creditNoteA4(books.creditNote as CreditNote, settings, customer);
 
     expect(doc.meta).toContainEqual({ label: "على فاتورة رقم", value: "1" });
     expect(doc.totals.at(-1)).toEqual({ label: "إجمالي الإشعار", value: "1,311.00", strong: true });
   });
 
   test("a statement starts from the balance brought forward", () => {
-    const { business, customer } = sample();
-    const st = business.statement("customer", customer.id, "2026-11-01", "2026-11-30");
+    const st = books.statement as Statement;
 
-    const doc = statementA4(st, business.settings(), { kind: "customer", address: customer.address, taxRegistrationNumber: customer.taxRegistrationNumber });
+    const doc = statementA4(st, settings, { kind: "customer", address: customer.address, taxRegistrationNumber: customer.taxRegistrationNumber });
 
     expect(doc.rows).toEqual([
       ["2026-11-01", "رصيد أول المدة", "", "", "0.00"],
@@ -70,30 +53,19 @@ describe("A4 documents", () => {
   });
 
   test("text from the business is escaped", () => {
-    const { business, customer } = sample();
-    const html = a4Html(invoiceA4(business.findSalesInvoice(1), business.settings(), { ...customer, name: "<b>x</b>" }));
+    const html = a4Html(invoiceA4(invoice, settings, { ...customer, name: "<b>x</b>" }));
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });
 
 describe("quotations and delivery notes", () => {
   test("a quotation shows its validity, and a delivery note shows quantities without prices", () => {
-    const { business, customer } = sample();
-    const router = business.items()[0]!.id;
-    business.saveQuotation({
-      date: "2026-11-20",
-      validUntil: "2026-11-30",
-      customerId: customer.id,
-      reference: "RFQ-3",
-      notes: "",
-      lines: [{ itemId: router, unit: "base", quantity: 3_000, unitPrice: 120_000 }],
-    });
-    const quote = quotationA4(business.findQuotation(1, "2026-11-20"), business.settings(), customer);
+    const quote = quotationA4(books.quotation as Quotation, settings, customer);
     expect(quote.title).toBe("عرض سعر");
     expect(quote.meta).toContainEqual({ label: "ساري حتى", value: "2026-11-30" });
     expect(quote.totals.at(-1)).toEqual({ label: "الإجمالي", value: "4,104.00", strong: true });
 
-    const note = deliveryNoteA4(business.findSalesInvoice(1), business.settings(), customer);
+    const note = deliveryNoteA4(invoice, settings, customer);
     expect(note.title).toBe("إذن تسليم");
     expect(note.columns.map((c) => c.label)).toEqual(["م", "الصنف", "الوحدة", "الكمية"]);
     expect(note.rows).toEqual([["1", "راوتر واي فاي 6", "قطعة", "2"]]);

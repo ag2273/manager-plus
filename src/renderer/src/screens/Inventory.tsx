@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { ItemMovement, LowStockRow, StockCount, WriteOff } from "../../../core/inventory";
-import type { Item } from "../../../core/items";
-import type { Warehouse } from "../../../core/stock";
+import type { ItemMovement, LowStockRow, StockCount, WriteOff } from "../../../shared/books/inventory";
+import type { Item } from "../../../shared/books/items";
+import type { Warehouse } from "../../../shared/books/stock";
 import { formatMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
