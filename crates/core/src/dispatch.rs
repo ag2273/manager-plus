@@ -146,6 +146,41 @@ impl Business {
             "saveQuotation" => json(self.save_quotation(&arg(args, 0)?)?),
             "quotations" => json(self.quotations(&arg::<String>(args, 0)?)?),
             "findQuotation" => json(self.find_quotation(arg(args, 0)?, &arg::<String>(args, 1)?)?),
+            "moneyAccounts" => json(self.money_accounts(&arg::<String>(args, 0)?)?),
+            "recordExpense" => json(self.record_expense(&arg(args, 0)?)?),
+            "expenses" => json(self.expenses()?),
+            "transferMoney" => json(self.transfer_money(&arg(args, 0)?)?),
+            "moneyTransfers" => json(self.money_transfers()?),
+            "accountLines" => json(self.account_lines(
+                arg(args, 0)?,
+                &arg::<String>(args, 1)?,
+                &arg::<String>(args, 2)?,
+            )?),
+            "setCleared" => {
+                json(self.set_cleared(arg(args, 0)?, &arg::<Vec<i64>>(args, 1)?, arg(args, 2)?)?)
+            }
+            "reconciliation" => json(self.reconciliation(arg(args, 0)?, arg(args, 1)?)?),
+            "voidEntry" => json(self.void_entry(arg(args, 0)?, &arg::<String>(args, 1)?)?),
+            "withholdingCategories" => json(self.withholding_categories()?),
+            "addWithholdingRate" => json(self.add_withholding_rate(arg(args, 0)?, &arg(args, 1)?)?),
+            "withholdingTax" => json(self.withholding_tax(
+                arg(args, 0)?,
+                &arg::<String>(args, 1)?,
+                arg(args, 2)?,
+            )?),
+            "withholdingReport" => {
+                json(self.withholding_report(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
+            }
+            "receiveCustomerPayment" => json(self.receive_customer_payment(&arg(args, 0)?)?),
+            "paySupplier" => json(self.pay_supplier(&arg(args, 0)?)?),
+            "openDocuments" => json(self.open_documents(arg(args, 0)?, arg(args, 1)?)?),
+            "statement" => json(self.statement(
+                arg(args, 0)?,
+                arg(args, 1)?,
+                &arg::<String>(args, 2)?,
+                &arg::<String>(args, 3)?,
+            )?),
+            "aging" => json(self.aging(arg(args, 0)?, &arg::<String>(args, 1)?)?),
             _ => refuse(
                 "not_ported",
                 format!("{method} is not in the Rust core yet"),

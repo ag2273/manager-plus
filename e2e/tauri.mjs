@@ -185,6 +185,22 @@ try {
   await until(session, "the invoices screen", () => document.body.textContent.includes("شركة الأمل للتجارة"));
   check(true, "the Sales invoices screen lists the invoice");
 
+  // The customer pays part of it into the bank; the books, the aging and the Money screen agree.
+  const settled = await run(session, async () => {
+    const customer = (await window.api.call("customers", [])).value.find((c) => c.name === "شركة الأمل للتجارة").id;
+    const bank = (await window.api.call("accounts", [])).value.find((a) => a.role === "bank");
+    const paid = await window.api.call("receiveCustomerPayment", [
+      { date: "2026-02-15", partyId: customer, accountId: bank.id, amount: 36800, reference: "شيك 1" },
+    ]);
+    const aging = (await window.api.call("aging", ["customer", "2026-03-01"])).value;
+    const money = (await window.api.call("moneyAccounts", ["2026-12-31"])).value.find((a) => a.id === bank.id);
+    return paid.ok && aging.balance === 100000 && money.balance === 36800 ? bank.name : null;
+  });
+  check(typeof settled === "string", "a customer payment posts through the Rust core and shows in the aging");
+  await run(session, click, "الخزينة والبنوك");
+  await until(session, "the money screen", (name) => document.body.textContent.includes(name), settled);
+  check(true, "the Money screen lists the bank account");
+
   // The receipt, drawn by WebView2 and sent as ESC/POS to a network printer (here a socket of ours).
   const printer = await new Promise((listening) => {
     const got = [];
