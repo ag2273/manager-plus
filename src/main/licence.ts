@@ -6,7 +6,7 @@ import { BusinessError, type BusinessErrorCode } from "../core/errors";
 import type { LicenceClient, LicenceFile, LicenceState, LicenceStore } from "../core/licence/licence";
 
 /** The licence server; a test build can point elsewhere. */
-export const LICENCE_SERVER = process.env["MANAGER_PLUS_LICENCE_URL"] ?? "https://licence.manager-plus.app";
+export const LICENCE_SERVER = process.env["MANAGER_PLUS_LICENCE_URL"] ?? "https://manager-plus-licences.ayman-abdelsalam.workers.dev";
 
 /**
  * This PC's fingerprint: Windows's machine GUID, hashed. It stays the same across reboots and
