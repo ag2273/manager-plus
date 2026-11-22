@@ -321,3 +321,151 @@ mod with_purchases {
         assert_eq!(s.business.stock_on_hand(s.laptop).unwrap().total, 2_000);
     }
 }
+
+mod with_sales {
+    use super::*;
+    use manager_core::customers::CustomerInput;
+    use manager_core::returns::{ReturnInput, ReturnLineInput};
+    use manager_core::sales::{PaymentInput, SaleInput, SaleLineInput, SaleResult};
+    use manager_core::serials::{SerialPurchase, SerialSale};
+
+    struct Till {
+        s: Setup,
+        dell: i64,
+        customer: i64,
+    }
+
+    fn till(serials: &[&str]) -> Till {
+        let s = setup();
+        let dell = s
+            .business
+            .add_supplier(&manager_core::purchases::SupplierInput {
+                name: "Dell Egypt".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        s.business
+            .post_purchase_invoice(&manager_core::purchases::PurchaseInvoiceInput {
+                date: "2026-01-10".into(),
+                supplier_id: dell,
+                warehouse_id: s.main,
+                reference: "D-1".into(),
+                rate: None,
+                lines: vec![manager_core::purchases::PurchaseLineInput {
+                    item_id: s.laptop,
+                    unit: "base".into(),
+                    quantity: serials.len() as f64 * 1_000.0,
+                    unit_price: 1_500_000.0,
+                    serials: Some(serials.iter().map(|x| x.to_string()).collect()),
+                }],
+            })
+            .unwrap();
+        let customer = s
+            .business
+            .add_customer(&CustomerInput {
+                name: "شركة الأمل".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        s.business.open_shift(0.0).unwrap();
+        Till { s, dell, customer }
+    }
+
+    impl Till {
+        fn sell(
+            &self,
+            serials: &[&str],
+            customer: Option<i64>,
+        ) -> manager_core::Result<SaleResult> {
+            self.s.business.post_sale(&SaleInput {
+                date: "2026-03-31".into(),
+                warehouse_id: self.s.main,
+                lines: vec![
+                    SaleLineInput::base(self.s.laptop, serials.len() as i64 * 1_000)
+                        .with_serials(serials),
+                ],
+                payments: vec![PaymentInput::new("cash", 2_000_000 * serials.len() as i64)],
+                customer_id: customer,
+                ..Default::default()
+            })
+        }
+    }
+
+    #[test]
+    fn a_sold_unit_shows_its_supplier_customer_and_warranty_and_only_units_in_stock_sell() {
+        let t = till(&["SN-1", "SN-2"]);
+        t.sell(&["SN-1"], Some(t.customer)).unwrap();
+
+        let history = &t.s.business.find_serial("SN-1", "2026-06-01").unwrap()[0];
+        assert_eq!(
+            (
+                history.item_id,
+                history.name_ar.as_str(),
+                history.in_stock,
+                history.warehouse_id
+            ),
+            (t.s.laptop, "لابتوب", false, None)
+        );
+        assert_eq!(
+            history.purchase,
+            Some(SerialPurchase {
+                date: "2026-01-10".into(),
+                supplier_id: t.dell,
+                supplier_name: "Dell Egypt".into(),
+                reference: "D-1".into()
+            })
+        );
+        assert_eq!(
+            history.sale,
+            Some(SerialSale {
+                date: "2026-03-31".into(),
+                document: "إيصال 1".into(),
+                customer_id: Some(t.customer),
+                customer_name: Some("شركة الأمل".into())
+            })
+        );
+        assert_eq!(
+            (history.warranty_ends.as_deref(), history.under_warranty),
+            (Some("2027-03-31"), true)
+        );
+        assert!(!t.s.business.find_serial("SN-1", "2027-04-01").unwrap()[0].under_warranty);
+        let other = &t.s.business.find_serial("SN-2", "2026-06-01").unwrap()[0];
+        assert_eq!(
+            (other.in_stock, other.warehouse_id, other.sale.is_none()),
+            (true, Some(t.s.main), true)
+        );
+        let line = &t.s.business.find_receipt(1).unwrap().lines[0];
+        assert_eq!(
+            (line.serials.clone(), line.warranty_ends.as_deref()),
+            (vec!["SN-1".to_string()], Some("2027-03-31"))
+        );
+        assert_eq!(code(t.sell(&["SN-1"], None)), "serial_not_in_stock");
+        assert_eq!(code(t.sell(&["NOPE"], None)), "serial_not_in_stock");
+    }
+
+    #[test]
+    fn a_unit_comes_back_only_against_the_sale_it_left_on_and_can_be_sold_again() {
+        let t = till(&["SN-1", "SN-2"]);
+        let first = t.sell(&["SN-1"], None).unwrap();
+        let second = t.sell(&["SN-2"], None).unwrap();
+        let line = |n: i64| t.s.business.find_receipt(n).unwrap().lines[0].line_id;
+        let back = |receipt_id: i64, line_id: i64| {
+            t.s.business.return_sale(&ReturnInput {
+                date: "2026-04-01".into(),
+                receipt_id,
+                lines: vec![ReturnLineInput::new(line_id, 1_000).with_serials(&["SN-1"])],
+                refund: "cash".into(),
+            })
+        };
+
+        assert_eq!(code(back(second.id, line(2))), "serial_not_on_document");
+        back(first.id, line(1)).unwrap();
+
+        let h = &t.s.business.find_serial("SN-1", "2026-04-02").unwrap()[0];
+        assert_eq!(
+            (h.in_stock, h.warehouse_id, h.sale.is_none()),
+            (true, Some(t.s.main), true)
+        );
+        assert_eq!(t.sell(&["SN-1"], None).unwrap().number, 3);
+    }
+}

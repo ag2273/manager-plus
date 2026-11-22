@@ -102,3 +102,67 @@ pub fn balance_of(business: &Business, role: &str) -> i64 {
         .find(|r| r.account_id == account.id)
         .map_or(0, |r| r.debit - r.credit)
 }
+
+/** A supplier to buy stock from. */
+pub fn supplier(business: &Business) -> i64 {
+    business
+        .add_supplier(&manager_core::purchases::SupplierInput {
+            name: "المورد".into(),
+            ..Default::default()
+        })
+        .unwrap()
+}
+
+/** Buys `(item, quantity, unit price)` lines in base units into a warehouse. */
+pub fn buy(
+    business: &Business,
+    supplier_id: i64,
+    warehouse_id: i64,
+    date: &str,
+    lines: &[(i64, i64, i64)],
+) -> i64 {
+    business
+        .post_purchase_invoice(&manager_core::purchases::PurchaseInvoiceInput {
+            date: date.into(),
+            supplier_id,
+            warehouse_id,
+            reference: String::new(),
+            rate: None,
+            lines: lines
+                .iter()
+                .map(
+                    |&(item_id, quantity, price)| manager_core::purchases::PurchaseLineInput {
+                        item_id,
+                        unit: "base".into(),
+                        quantity: quantity as f64,
+                        unit_price: price as f64,
+                        serials: None,
+                    },
+                )
+                .collect(),
+        })
+        .unwrap()
+}
+
+/** Adds a user with the role and signs them in, password 123456. */
+pub fn signed_in(business: &Business, name: &str, role: &str) -> Business {
+    business
+        .add_user(&manager_core::users::NewUser {
+            name: name.into(),
+            role: role.into(),
+            password: "123456".into(),
+        })
+        .unwrap();
+    business.sign_in(name, "123456").unwrap()
+}
+
+/** An account's id by role. */
+pub fn role_account(business: &Business, role: &str) -> i64 {
+    business
+        .accounts()
+        .unwrap()
+        .into_iter()
+        .find(|a| a.role.as_deref() == Some(role))
+        .unwrap_or_else(|| panic!("no account for {role}"))
+        .id
+}

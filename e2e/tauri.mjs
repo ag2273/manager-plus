@@ -1,5 +1,5 @@
-// The Tauri app end to end (#73, #74, #76): create a business, post a journal entry, stock an item
-// and buy from a supplier through the Rust core, and see them on the Accounts, Items, Warehouses and Purchases screens. Needs tauri-driver and the platform's WebDriver
+// The Tauri app end to end (#73 to #76): create a business, post a journal entry, stock an item,
+// buy from a supplier and sell at the till through the Rust core, and see them on the Accounts, Items, Warehouses, Purchases and Till screens. Needs tauri-driver and the platform's WebDriver
 // (WebKitWebDriver on Linux, msedgedriver on Windows). Run after `npx tauri build --debug --no-bundle`:
 //   node e2e/tauri.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
 import { spawn } from "node:child_process";
@@ -87,7 +87,7 @@ try {
       capabilities: { alwaysMatch: { "tauri:options": { application: app }, "webkitgtk:browserOptions": { args: [] } } },
     })
   ).sessionId;
-  console.log("the ledger, items, stock and purchases on Tauri");
+  console.log("the ledger, items, stock, purchases and the till on Tauri");
 
   await until(session, "the welcome screen", fill, "اسم النشاط", "بقالة النور");
   check(await run(session, () => document.documentElement.dir === "rtl"), "the screens run right to left");
@@ -148,6 +148,25 @@ try {
   await run(session, click, "المشتريات والموردين");
   await until(session, "the purchases screen", () => document.body.textContent.includes("شركة الشبكات المتحدة"));
   check(true, "the Purchases screen lists the supplier");
+
+  // The till: open a shift, scan the item, take cash, and close with a Z report.
+  await run(session, click, "شاشة البيع");
+  await until(session, "the open-shift form", fill, "النقدية في الدرج عند البداية", "0");
+  await run(session, () => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "فتح وردية").click());
+  await until(session, "the till", () => document.querySelector(".till-search"));
+  await run(session, fill, "امسح الباركود", "6221");
+  await run(session, () => document.querySelector(".till-search").form.requestSubmit());
+  await until(session, "the scanned line", () => document.querySelector("table.lines")?.textContent.includes("راوتر واي فاي"));
+  await until(session, "the price", () => !document.querySelector(".till-complete")?.disabled);
+  await run(session, click, "إتمام البيع (Enter)");
+  await until(session, "the sale is done", () => document.body.textContent.includes("تم البيع · إيصال رقم 1"));
+  check(true, "a cash sale at the till posts through the Rust core");
+  const z = await run(session, async () => {
+    const shift = (await window.api.call("currentShift", [])).value;
+    const report = (await window.api.call("zReport", [shift.id])).value;
+    return report.receipts === 1 && report.sales.total === 150000 && report.expectedCash === 150000;
+  });
+  check(z === true, "the Z report counts the sale and the cash in the drawer");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);
