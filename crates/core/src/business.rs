@@ -12,6 +12,10 @@ use crate::error::{refuse, BusinessError, Result};
 use crate::inventory::{
     self, ItemMovement, LowStockRow, StockCount, StockCountInput, WriteOff, WriteOffInput,
 };
+use crate::invoices::{
+    self, CreditNote, CreditNoteInput, InvoiceLineInput, PostedCreditNote, PricedInvoice,
+    SalesInvoice, SalesInvoiceInput, SalesInvoiceResult,
+};
 use crate::items::{
     self, BasisPoints, Item, ItemChanges, ItemInput, ItemsOptions, ScannedUnit, TaxCode,
     TaxRateInput,
@@ -26,6 +30,7 @@ use crate::purchases::{
     PurchaseInvoiceInput, PurchaseLineInput, PurchaseMoney, Supplier, SupplierAccount,
     SupplierChanges, SupplierInput,
 };
+use crate::quotations::{self, Quotation, QuotationInput, SavedQuotation};
 use crate::returns::{self, ReturnInput, ReturnResult, SaleReturn};
 use crate::sales::{
     self, CashSaleInput, Discount, HeldSale, HeldSaleInput, PricedSale, Receipt, SaleInput,
@@ -1063,6 +1068,88 @@ impl Business {
     /** A return by its printed number. */
     pub fn find_return(&self, number: i64) -> Result<SaleReturn> {
         self.read("findReturn", |c| returns::find_return(c, number))
+    }
+}
+
+// Sales invoices, credit notes and quotations
+impl Business {
+    /** Net, VAT and total of VAT-exclusive invoice lines on a date, without posting anything. */
+    pub fn price_invoice(&self, date: &str, lines: &[InvoiceLineInput]) -> Result<PricedInvoice> {
+        self.read("priceInvoice", |c| invoices::price_invoice(c, date, lines))
+    }
+
+    /** Posts a tax invoice to a customer's account. */
+    pub fn post_sales_invoice(&self, invoice: &SalesInvoiceInput) -> Result<SalesInvoiceResult> {
+        let user_id = self.allow("postSalesInvoice")?.id;
+        self.write(
+            "postSalesInvoice",
+            without_password(to_json(invoice)),
+            None,
+            |c| {
+                let posted = invoices::post_sales_invoice(c, invoice, user_id)?;
+                invoices::queue_eta_document(c, "invoice", posted.id)?;
+                Ok(posted)
+            },
+        )
+    }
+
+    /** Sales invoices, newest first. */
+    pub fn sales_invoices(&self) -> Result<Vec<SalesInvoice>> {
+        self.read("salesInvoices", |c| invoices::list_sales_invoices(c, 200))
+    }
+
+    /** A sales invoice by its printed number. */
+    pub fn find_sales_invoice(&self, number: i64) -> Result<SalesInvoice> {
+        self.read("findSalesInvoice", |c| {
+            invoices::find_sales_invoice(c, number)
+        })
+    }
+
+    /** Takes goods back against a sales invoice, credited to the customer's account. */
+    pub fn post_credit_note(&self, note: &CreditNoteInput) -> Result<PostedCreditNote> {
+        let user_id = self.allow("postCreditNote")?.id;
+        self.write("postCreditNote", to_json(note), None, |c| {
+            let posted = invoices::post_credit_note(c, note, user_id)?;
+            invoices::queue_eta_document(c, "credit_note", posted.id)?;
+            Ok(posted)
+        })
+    }
+
+    /** A credit note by its printed number. */
+    pub fn find_credit_note(&self, number: i64) -> Result<CreditNote> {
+        self.read("findCreditNote", |c| invoices::find_credit_note(c, number))
+    }
+
+    /** The VAT-exclusive price of one unit for a customer's price level (retail with no customer). */
+    pub fn list_price(
+        &self,
+        customer_id: Option<i64>,
+        item_id: i64,
+        unit: &str,
+        date: &str,
+    ) -> Result<Piastres> {
+        self.read("listPrice", |c| {
+            quotations::list_price(c, customer_id, item_id, unit, date)
+        })
+    }
+
+    /** Saves a quotation for a customer; it posts nothing and moves no stock. */
+    pub fn save_quotation(&self, quotation: &QuotationInput) -> Result<SavedQuotation> {
+        let user_id = self.allow("saveQuotation")?.id;
+        self.write("saveQuotation", to_json(quotation), None, |c| {
+            quotations::save_quotation(c, quotation, user_id)
+        })
+    }
+
+    /** Quotations, newest first, with their status (open, expired, converted) on `today`. */
+    pub fn quotations(&self, today: &str) -> Result<Vec<Quotation>> {
+        self.read("quotations", |c| quotations::list_quotations(c, today))
+    }
+
+    pub fn find_quotation(&self, number: i64, today: &str) -> Result<Quotation> {
+        self.read("findQuotation", |c| {
+            quotations::find_quotation(c, number, today)
+        })
     }
 }
 

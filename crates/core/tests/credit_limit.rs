@@ -1,5 +1,4 @@
-//! Ported from `src/core/credit-limit.test.ts`: the till cases. The invoice cases come with
-//! customers' invoices (#77); here the same approval rules are checked through the till.
+//! Ported from `src/core/credit-limit.test.ts`.
 mod common;
 
 use common::*;
@@ -139,4 +138,69 @@ fn only_a_manager_can_approve_with_the_right_password() {
         "sign_in_failed"
     );
     assert_eq!(s.business.customer_balance(s.amal).unwrap(), 0);
+}
+
+mod invoices {
+    use super::*;
+    use manager_core::invoices::{InvoiceLineInput, SalesInvoiceInput};
+
+    fn invoice(s: &Setup, routers: i64, customer_id: i64) -> SalesInvoiceInput {
+        SalesInvoiceInput {
+            date: "2026-02-01".into(),
+            customer_id,
+            warehouse_id: s.main,
+            lines: vec![InvoiceLineInput::base(s.router, routers * 1_000, 100_000)],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_invoice_past_the_limit_is_refused_with_the_amount_over() {
+        let s = setup();
+        let open = s
+            .business
+            .add_customer(&CustomerInput {
+                name: "مكتب النور".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        s.business
+            .post_sales_invoice(&invoice(&s, 2, s.amal))
+            .unwrap();
+        let refused = s
+            .business
+            .post_sales_invoice(&invoice(&s, 1, s.amal))
+            .unwrap_err();
+        assert_eq!(
+            (refused.code, refused.amount),
+            ("credit_limit_exceeded", Some(42_000))
+        );
+        assert_eq!(s.business.customer_balance(s.amal).unwrap(), 228_000);
+        // No limit, no check.
+        s.business
+            .post_sales_invoice(&invoice(&s, 10, open))
+            .unwrap();
+    }
+
+    #[test]
+    fn a_managers_sign_in_lets_an_invoice_through() {
+        let s = setup();
+        let accountant = signed_in(&s.business, "محاسب", "accountant");
+        accountant
+            .post_sales_invoice(&SalesInvoiceInput {
+                credit_approval: Some(manager()),
+                ..invoice(&s, 3, s.amal)
+            })
+            .unwrap();
+        assert_eq!(s.business.customer_balance(s.amal).unwrap(), 342_000);
+        let log = s.business.audit_log().unwrap();
+        let approval = log
+            .iter()
+            .find(|e| e.action == "approveCreditLimit")
+            .unwrap();
+        let detail: serde_json::Value = serde_json::from_str(&approval.detail).unwrap();
+        assert_eq!(detail["document"], "postSalesInvoice");
+        assert_eq!(detail["requestedBy"], "محاسب");
+        assert!(log.iter().all(|e| !e.detail.contains(&manager().password)));
+    }
 }

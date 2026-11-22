@@ -129,6 +129,23 @@ impl Business {
             "receipts" => json(self.receipts()?),
             "returnSale" => json(self.return_sale(&arg(args, 0)?)?),
             "findReturn" => json(self.find_return(arg(args, 0)?)?),
+            "priceInvoice" => {
+                json(self.price_invoice(&arg::<String>(args, 0)?, &arg::<Vec<_>>(args, 1)?)?)
+            }
+            "postSalesInvoice" => json(self.post_sales_invoice(&arg(args, 0)?)?),
+            "salesInvoices" => json(self.sales_invoices()?),
+            "findSalesInvoice" => json(self.find_sales_invoice(arg(args, 0)?)?),
+            "postCreditNote" => json(self.post_credit_note(&arg(args, 0)?)?),
+            "findCreditNote" => json(self.find_credit_note(arg(args, 0)?)?),
+            "listPrice" => json(self.list_price(
+                arg(args, 0)?,
+                arg(args, 1)?,
+                &arg::<String>(args, 2)?,
+                &arg::<String>(args, 3)?,
+            )?),
+            "saveQuotation" => json(self.save_quotation(&arg(args, 0)?)?),
+            "quotations" => json(self.quotations(&arg::<String>(args, 0)?)?),
+            "findQuotation" => json(self.find_quotation(arg(args, 0)?, &arg::<String>(args, 1)?)?),
             _ => refuse(
                 "not_ported",
                 format!("{method} is not in the Rust core yet"),

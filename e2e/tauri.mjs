@@ -1,4 +1,4 @@
-// The Tauri app end to end (#73 to #76): create a business, post a journal entry, stock an item,
+// The Tauri app end to end (#73 to #77): create a business, post a journal entry, stock an item,
 // buy from a supplier and sell at the till through the Rust core, and see them on the Accounts, Items, Warehouses, Purchases and Till screens. Needs tauri-driver and the platform's WebDriver
 // (WebKitWebDriver on Linux, msedgedriver on Windows). Run after `npx tauri build --debug --no-bundle`:
 //   node e2e/tauri.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
@@ -168,6 +168,22 @@ try {
     return report.receipts === 1 && report.sales.total === 150000 && report.expectedCash === 150000;
   });
   check(z === true, "the Z report counts the sale and the cash in the drawer");
+
+  // A tax invoice to a customer, on the Sales invoices screen.
+  const invoiced = await run(session, async () => {
+    const customer = await window.api.call("addCustomer", [{ name: "شركة الأمل للتجارة", phone: "", taxRegistrationNumber: "987654321" }]);
+    const item = (await window.api.call("items", [{ search: "راوتر" }])).value[0].id;
+    const main = (await window.api.call("warehouses", [])).value[0].id;
+    const invoice = await window.api.call("postSalesInvoice", [
+      { date: "2026-02-10", customerId: customer.value, warehouseId: main, reference: "PO-15", notes: "", lines: [{ itemId: item, unit: "base", quantity: 1000, unitPrice: 120000 }] },
+    ]);
+    const balance = await window.api.call("customerBalance", [customer.value]);
+    return invoice.ok && balance.value === 136800;
+  });
+  check(invoiced === true, "a sales invoice posts through the Rust core, VAT on top");
+  await run(session, click, "فواتير البيع");
+  await until(session, "the invoices screen", () => document.body.textContent.includes("شركة الأمل للتجارة"));
+  check(true, "the Sales invoices screen lists the invoice");
 
   // The receipt, drawn by WebView2 and sent as ESC/POS to a network printer (here a socket of ours).
   const printer = await new Promise((listening) => {

@@ -468,4 +468,48 @@ mod with_sales {
         );
         assert_eq!(t.sell(&["SN-1"], None).unwrap().number, 3);
     }
+    #[test]
+    fn invoices_and_credit_notes_carry_serials_too() {
+        use manager_core::invoices::{
+            CreditLineInput, CreditNoteInput, InvoiceLineInput, SalesInvoiceInput,
+        };
+        let t = till(&["SN-1", "SN-2"]);
+        let invoice =
+            t.s.business
+                .post_sales_invoice(&SalesInvoiceInput {
+                    date: "2026-02-10".into(),
+                    customer_id: t.customer,
+                    warehouse_id: t.s.main,
+                    lines: vec![InvoiceLineInput::base(t.s.laptop, 1_000, 1_800_000)
+                        .with_serials(&["SN-1"])],
+                    ..Default::default()
+                })
+                .unwrap();
+        let line =
+            &t.s.business
+                .find_sales_invoice(invoice.number)
+                .unwrap()
+                .lines[0];
+        assert_eq!(
+            (line.serials.clone(), line.warranty_ends.as_deref()),
+            (vec!["SN-1".to_string()], Some("2027-02-10"))
+        );
+        let sale = t.s.business.find_serial("SN-1", "2026-03-01").unwrap()[0]
+            .sale
+            .clone()
+            .unwrap();
+        assert_eq!(
+            (sale.document.as_str(), sale.customer_name.as_deref()),
+            ("فاتورة 1", Some("شركة الأمل"))
+        );
+        t.s.business
+            .post_credit_note(&CreditNoteInput {
+                date: "2026-02-12".into(),
+                invoice_id: invoice.id,
+                reason: String::new(),
+                lines: vec![CreditLineInput::new(line.line_id, 1_000).with_serials(&["SN-1"])],
+            })
+            .unwrap();
+        assert!(t.s.business.find_serial("SN-1", "2026-03-01").unwrap()[0].in_stock);
+    }
 }
