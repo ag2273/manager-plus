@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 
 use crate::customers::{self, Customer, CustomerChanges, CustomerInput};
 use crate::error::{refuse, BusinessError, Result};
+use crate::import::{self, ImportInput, ImportReport};
 use crate::inventory::{
     self, ItemMovement, LowStockRow, StockCount, StockCountInput, WriteOff, WriteOffInput,
 };
@@ -45,6 +46,7 @@ use crate::settlements::{
     self, Aging, OpenDocument, PartyKind, PaymentInput, PaymentResult, Statement,
 };
 use crate::shifts::{self, CashInOut, CloseShiftInput, Shift, ZReport};
+use crate::shipments::{self, ImportShipment, ImportShipmentInput};
 use crate::stock::{self, OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse};
 use crate::users::{self, AuditEntry, Credentials, NewUser, User, UserChanges};
 use crate::withholding::{self, WithholdingCategory, WithholdingRateInput, WithholdingReport};
@@ -1127,6 +1129,43 @@ impl Business {
         self.read("findQuotation", |c| {
             quotations::find_quotation(c, number, today)
         })
+    }
+
+    // Importing from spreadsheets
+
+    /** A dry run of an import: every row is tried and nothing is saved. */
+    pub fn check_import(&self, input: &ImportInput) -> Result<ImportReport> {
+        self.read("importData", |c| import::import_data(c, input, true))
+    }
+
+    /** Imports items, opening stock and opening balances; refuses with nothing saved if any row fails. */
+    pub fn import_data(&self, input: &ImportInput) -> Result<ImportReport> {
+        if !self.check_import(input)?.problems.is_empty() {
+            return refuse("import_invalid", "Some rows can't be imported");
+        }
+        let summary = json!({
+            "date": input.date,
+            "warehouseId": input.warehouse_id,
+            "sheets": input.sheets.iter().map(|s| json!({ "name": s.name, "rows": s.rows.len() })).collect::<Vec<_>>(),
+        });
+        self.write("importData", summary, None, |c| {
+            import::import_data(c, input, false)
+        })
+    }
+
+    // Import shipments
+
+    /** Spreads an import shipment's customs, freight and other costs into its items' cost. */
+    pub fn post_import_shipment(&self, shipment: &ImportShipmentInput) -> Result<i64> {
+        let user_id = self.allow("postImportShipment")?.id;
+        self.write("postImportShipment", to_json(shipment), None, |c| {
+            shipments::post_import_shipment(c, shipment, user_id)
+        })
+    }
+
+    /** Import shipments, newest first, with each item's landed unit cost. */
+    pub fn import_shipments(&self) -> Result<Vec<ImportShipment>> {
+        self.read("importShipments", shipments::list_import_shipments)
     }
 
     // Money accounts, expenses, transfers, reconciliation and the lock date

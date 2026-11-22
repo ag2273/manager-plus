@@ -201,6 +201,17 @@ try {
   await until(session, "the money screen", (name) => document.body.textContent.includes(name), settled);
   check(true, "the Money screen lists the bank account");
 
+  // An item sheet from Excel or CSV, checked and then imported with its opening stock.
+  const imported = await run(session, async () => {
+    const warehouseId = (await window.api.call("warehouses", [])).value[0].id;
+    const sheets = [{ name: "الأصناف", rows: [["اسم الصنف بالعربية", "الوحدة", "سعر البيع شامل الضريبة", "الكمية الافتتاحية", "تكلفة الوحدة"], ["كابل شبكة", "متر", "11.40", "100", "5.25"]] }];
+    const check = await window.api.call("checkImport", [{ date: "2026-01-01", warehouseId, sheets }]);
+    const done = await window.api.call("importData", [{ date: "2026-01-01", warehouseId, sheets }]);
+    const cable = (await window.api.call("items", [{ search: "كابل شبكة" }])).value[0];
+    return check.ok && check.value.problems.length === 0 && done.ok && done.value.stockValue === 52500 && cable?.salePrice === 1140;
+  });
+  check(imported === true, "an item sheet imports through the Rust core with its opening stock");
+
   // The receipt, drawn by WebView2 and sent as ESC/POS to a network printer (here a socket of ours).
   const printer = await new Promise((listening) => {
     const got = [];
