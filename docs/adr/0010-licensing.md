@@ -19,3 +19,7 @@ Manager+ is sold as a one-time licence per company with a yearly support plan, a
 
 - Determined users can still patch the app; the aim is to keep honest customers honest, not DRM.
 - The public key in the repo is a placeholder until the licence server is deployed; no licence verifies until then.
+
+## The licence server (#21)
+
+A Cloudflare Worker with a D1 database (`licence-server/`). It keeps only each key's SHA-256 and last four characters; a key is shown once when made. Activation on another PC ends the old activation and counts as a move, at most two in any 12 months; the admin can reset that. Revoking stops a key from activating, but a PC that already has its licence file keeps working offline, as any offline licence does. The signing key is a Worker secret, piped straight from `make-keys.mjs` into `wrangler secret put`, so it never touches the repo or a disk. Activation is rate-limited per IP address in D1. The admin page sits behind HTTP Basic auth, compares the password in constant time and limits wrong guesses.

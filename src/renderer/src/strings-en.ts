@@ -143,6 +143,7 @@ const errors = {
   licence_moves_exhausted: "The licence is active on another PC and has used this year's moves. Contact us to move it.",
   licence_revoked: "This licence key was revoked. Contact us.",
   licence_unreachable: "The licence server couldn't be reached. Check the internet and try again.",
+  licence_rate_limited: "Too many activation attempts. Wait an hour and try again.",
   unexpected: "Something unexpected went wrong.",
 } satisfies Record<BusinessErrorCode | "unexpected", string>;
 

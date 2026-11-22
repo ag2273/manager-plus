@@ -144,6 +144,7 @@ const errors = {
   licence_moves_exhausted: "الترخيص متفعّل على جهاز تاني واستنفد مرات النقل المسموحة في السنة. كلّمنا ننقله لك.",
   licence_revoked: "مفتاح الترخيص ده اتلغى. كلّمنا.",
   licence_unreachable: "تعذر الوصول لخادم التراخيص. اتأكد من النت وجرّب تاني.",
+  licence_rate_limited: "محاولات تفعيل كتير. استنى ساعة وجرّب تاني.",
   unexpected: "حدث خطأ غير متوقع.",
 } satisfies Record<BusinessErrorCode | "unexpected", string>;
 
