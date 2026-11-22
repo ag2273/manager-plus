@@ -408,24 +408,6 @@ fn settle(payments: &[PaymentInput], total: Piastres) -> Result<Settled> {
     })
 }
 
-/** E-receipts are issued by the Rust core with #80; until then a till sale is refused while they are on. */
-fn refuse_while_e_receipts_on(conn: &Connection) -> Result<()> {
-    let on: Option<bool> = conn
-        .query_row(
-            "SELECT enabled = 1 AND receipts_enabled = 1 FROM eta_settings LIMIT 1",
-            [],
-            |r| r.get(0),
-        )
-        .optional()?;
-    if on == Some(true) {
-        return refuse(
-            "not_ported",
-            "E-receipts are not issued by this build yet; turn them off to use the till",
-        );
-    }
-    Ok(())
-}
-
 /**
  * A sale at the till: Dr each tender's account (cash after change, card clearing,
  * wallet) and Receivables for any unpaid part; Cr Sales (net) and Output VAT;
@@ -468,7 +450,6 @@ pub fn post_sale(conn: &Connection, input: &SaleInput, user_id: i64) -> Result<S
             &find_user(conn, user_id)?.name,
         )?;
     }
-    refuse_while_e_receipts_on(conn)?;
 
     // Cost each line in order, so two lines of the same item draw down stock one after the other.
     let mut taken: Vec<(i64, Quantity, Piastres)> = Vec::new();

@@ -10,6 +10,7 @@ pub mod customers;
 pub mod dates;
 mod dispatch;
 pub mod error;
+pub mod eta;
 pub mod file_lock;
 pub mod import;
 pub mod inventory;

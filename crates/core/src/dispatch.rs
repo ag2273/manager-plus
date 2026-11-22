@@ -217,6 +217,16 @@ impl Business {
                 &arg::<String>(args, 3)?,
             )?),
             "aging" => json(self.aging(arg(args, 0)?, &arg::<String>(args, 1)?)?),
+            "etaSettings" => json(self.eta_settings()?),
+            "etaDocuments" => json(self.eta_documents()?),
+            "etaState" => json(self.eta_state(&arg::<String>(args, 0)?, arg(args, 1)?)?),
+            "retryEta" => json(self.retry_eta(&arg::<String>(args, 0)?, arg(args, 1)?)?),
+            "etaReceiptSettings" => json(self.eta_receipt_settings()?),
+            "etaReceipts" => json(self.eta_receipts()?),
+            "retryEtaReceipt" => {
+                json(self.retry_eta_receipt(&arg::<String>(args, 0)?, arg(args, 1)?)?)
+            }
+            "etaReceiptQr" => json(self.eta_receipt_qr(&arg::<String>(args, 0)?, arg(args, 1)?)?),
             _ if crate::methods::is_business_method(method) => refuse(
                 "not_ported",
                 format!("{method} is not in the Rust core yet"),

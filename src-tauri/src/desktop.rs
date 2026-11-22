@@ -79,11 +79,19 @@ fn backup_if_due(open: &Open) {
 impl State {
     /** Every five minutes while the app runs, as the Electron main process does. */
     pub fn tick(&self) {
-        let open = self.open.lock().unwrap();
-        if let Some(path) = &open.path {
-            file_lock::refresh_lock(path, &me(), chrono::Utc::now());
+        let file = {
+            let open = self.open.lock().unwrap();
+            if let Some(path) = &open.path {
+                file_lock::refresh_lock(path, &me(), chrono::Utc::now());
+            }
+            backup_if_due(&open);
+            open.file.as_ref().map(Business::signed_out)
+        };
+        if let Some(file) = file {
+            if let Err(error) = crate::eta::cycle(&file) {
+                eprintln!("E-invoice sending failed: {error}");
+            }
         }
-        backup_if_due(&open);
     }
 
     /** Lets go of the open file's lock, stops serving and leaves any server when the app closes. */
@@ -96,6 +104,48 @@ impl State {
         }
         open.elsewhere = None;
     }
+}
+
+/** Postings that may queue an e-invoice or e-receipt, so the ETA cycle runs after them. */
+const ETA_POSTINGS: [&str; 5] = [
+    "postSalesInvoice",
+    "postCreditNote",
+    "postSale",
+    "postCashSale",
+    "returnSale",
+];
+
+/** E-invoice setup and sending happen on the PC that holds the file, by a manager. */
+fn eta_manager(open: &Open) -> Option<&Business> {
+    open.current()
+        .filter(|b| open.remote.is_none() && b.current_user().is_some_and(|u| u.role == "manager"))
+}
+
+fn manager_only(what: &str) -> BusinessError {
+    BusinessError::new(
+        "restore_needs_manager",
+        format!("Only a manager on the PC that holds the file {what}"),
+    )
+}
+
+/** Seals the secret fields the screen typed, in place; an empty one keeps the saved secret. */
+fn seal_fields(input: &mut Value, fields: &[&str]) -> Result<(), BusinessError> {
+    for field in fields {
+        let typed = input[*field]
+            .as_str()
+            .map(str::trim)
+            .unwrap_or_default()
+            .to_string();
+        if let Some(object) = input.as_object_mut() {
+            object.remove(*field);
+        }
+        if !typed.is_empty() {
+            let sealed =
+                crate::eta::seal(&typed).map_err(|e| BusinessError::new("unexpected", e))?;
+            input[*field] = json!(sealed);
+        }
+    }
+    Ok(())
 }
 
 fn ok(value: Value) -> Value {
@@ -451,7 +501,19 @@ pub async fn desktop(
             }
             match open.current() {
                 None => failure(BusinessError::new("sign_in_required", "Sign in first")),
-                Some(business) => result(business.call(&method, &call_args)),
+                Some(business) => {
+                    let done = business.call(&method, &call_args);
+                    if done.is_ok() && ETA_POSTINGS.contains(&method.as_str()) {
+                        if let Some(file) = open.file.as_ref().map(Business::signed_out) {
+                            std::thread::spawn(move || {
+                                if let Err(error) = crate::eta::cycle(&file) {
+                                    eprintln!("E-invoice sending failed: {error}");
+                                }
+                            });
+                        }
+                    }
+                    result(done)
+                }
             }
         }
         "preferences" => preferences(&app),
@@ -624,7 +686,79 @@ pub async fn desktop(
             })();
             result(sent)
         }
-        "etaCertificates" => json!([]),
+        "etaCertificates" => tauri::async_runtime::spawn_blocking(crate::eta::list_certificates)
+            .await
+            .unwrap_or_else(|_| json!([])),
+        "saveEtaSettings" => {
+            let saved = (|| {
+                let open = state.open.lock().unwrap();
+                let business =
+                    eta_manager(&open).ok_or_else(|| manager_only("sets up e-invoicing"))?;
+                let mut input = args.first().cloned().unwrap_or(Value::Null);
+                seal_fields(&mut input, &["clientSecret"])?;
+                let input = serde_json::from_value(input)
+                    .map_err(|e| BusinessError::new("unexpected", e.to_string()))?;
+                business.set_eta_settings(&input)?;
+                Ok(Value::Null)
+            })();
+            result(saved)
+        }
+        "saveEtaReceiptSettings" => {
+            let saved = (|| {
+                let open = state.open.lock().unwrap();
+                let business =
+                    eta_manager(&open).ok_or_else(|| manager_only("sets up e-receipts"))?;
+                let mut input = args.first().cloned().unwrap_or(Value::Null);
+                seal_fields(&mut input, &["posClientSecret", "presharedKey"])?;
+                let input = serde_json::from_value(input)
+                    .map_err(|e| BusinessError::new("unexpected", e.to_string()))?;
+                business.set_eta_receipt_settings(&input)?;
+                Ok(Value::Null)
+            })();
+            result(saved)
+        }
+        "sendEtaNow" => {
+            let file = {
+                let open = state.open.lock().unwrap();
+                eta_manager(&open)
+                    .and(open.file.as_ref())
+                    .map(Business::signed_out)
+            };
+            match file {
+                None => failure(manager_only("sends e-invoices")),
+                Some(file) => {
+                    let sent =
+                        tauri::async_runtime::spawn_blocking(move || crate::eta::cycle(&file))
+                            .await;
+                    match sent {
+                        Ok(r) => result(r.map(|n| json!(n))),
+                        Err(e) => failure(BusinessError::new("unexpected", e.to_string())),
+                    }
+                }
+            }
+        }
+        "cancelEta" => {
+            let cancelled = (|| {
+                let kind: String = arg(&args, 0)?;
+                let id: i64 = arg(&args, 1)?;
+                let reason: String = arg(&args, 2)?;
+                let file = {
+                    let open = state.open.lock().unwrap();
+                    eta_manager(&open)
+                        .and(open.file.as_ref())
+                        .map(Business::signed_out)
+                };
+                let Some(file) = file else {
+                    return Err(BusinessError::new(
+                        "eta_not_enabled",
+                        "E-invoicing is off here",
+                    ));
+                };
+                crate::eta::cancel(&file, &kind, id, &reason)?;
+                Ok(Value::Null)
+            })();
+            result(cancelled)
+        }
         "checkUpdate" => ok(json!({ "kind": "none" })),
         other => not_ported(other),
     })
