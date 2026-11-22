@@ -11,7 +11,7 @@
 
 ## النشر من GitHub (الطريقة المستخدمة)
 
-قاعدة البيانات `manager-plus-licences` اتعملت بالفعل على حساب Cloudflare، والجداول اتعملت فيها. النشر بيتم أوتوماتيك من GitHub Actions مع كل تعديل على `licence-server/` في main.
+العنوان: `https://licence.nileorbit.com` (Cloudflare بيعمل الـ DNS والشهادة وقت النشر). قاعدة البيانات `manager-plus-licences` اتعملت بالفعل على حساب Cloudflare، والجداول اتعملت فيها. النشر بيتم أوتوماتيك من GitHub Actions مع كل تعديل على `licence-server/` في main.
 
 المطلوب مرة واحدة بس:
 1. من Cloudflare ← My Profile ← API Tokens ← Create Token: اعمل توكن فيه صلاحية «Workers Scripts: Edit» و«D1: Edit» على حسابك.
@@ -55,7 +55,7 @@
    ```
    هيطبع العنوان، زي `https://manager-plus-licences.<اسمك>.workers.dev`.
 7. (اختياري، ومستحسن) اربطه بدومين ليك، زي `licence.example.com`: من Cloudflare ← Workers ← manager-plus-licences ← Settings ← Domains & Routes.
-8. ابعتلي العنوان النهائي عشان أحطه في البرنامج (`LICENCE_SERVER` في `src/main/licence.ts`).
+8. العنوان المستخدم دلوقتي `https://licence.nileorbit.com` (في `wrangler.toml` و`LICENCE_SERVER` في `src/main/licence.ts`).
 
 ## الاستخدام
 

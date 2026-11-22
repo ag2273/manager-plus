@@ -133,6 +133,13 @@ describe("activation", () => {
 });
 
 describe("the admin page", () => {
+  test("the bare address goes to the admin page", async () => {
+    const e = freshEnv();
+    const response = await handle(new Request("https://licence.example/"), e);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://licence.example/admin");
+  });
+
   test("needs the password", async () => {
     const e = freshEnv();
     expect((await call(e, "/admin")).status).toBe(401);
