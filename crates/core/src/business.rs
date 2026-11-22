@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -25,6 +25,10 @@ use crate::ledger::{
     self, Account, AccountChanges, JournalEntryInput, JournalLine, NewAccount, TrialBalance,
 };
 use crate::migrations::{run_pending, LATEST_SCHEMA_VERSION};
+use crate::money::{
+    self, AccountLine, Expense, ExpenseInput, MoneyAccount, MoneyTransfer, MoneyTransferInput,
+    PostedDocument, Reconciliation,
+};
 use crate::purchases::{
     self, DebitNote, DebitNoteInput, PostedNote, PricedPurchase, PurchaseInvoice,
     PurchaseInvoiceInput, PurchaseLineInput, PurchaseMoney, Supplier, SupplierAccount,
@@ -37,9 +41,13 @@ use crate::sales::{
     SaleLineInput, SaleResult,
 };
 use crate::serials::{self, SerialHistory, SerialSettings};
+use crate::settlements::{
+    self, Aging, OpenDocument, PartyKind, PaymentInput, PaymentResult, Statement,
+};
 use crate::shifts::{self, CashInOut, CloseShiftInput, Shift, ZReport};
 use crate::stock::{self, OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse};
 use crate::users::{self, AuditEntry, Credentials, NewUser, User, UserChanges};
+use crate::withholding::{self, WithholdingCategory, WithholdingRateInput, WithholdingReport};
 
 pub const IN_MEMORY: &str = ":memory:";
 /** Marks a SQLite file as a Manager+ business file ("MPLS"). */
@@ -627,37 +635,6 @@ impl Business {
     pub fn trial_balance(&self, as_of: &str) -> Result<TrialBalance> {
         self.read("trialBalance", |c| ledger::trial_balance(c, as_of))
     }
-
-    /** Nothing can be posted on or before this date. */
-    pub fn lock_date(&self) -> Result<Option<String>> {
-        self.read("lockDate", |c| {
-            Ok(c.query_row(
-                "SELECT lock_date FROM business_settings WHERE id = 1",
-                [],
-                |r| r.get(0),
-            )
-            .optional()?
-            .flatten())
-        })
-    }
-
-    pub fn set_lock_date(&self, date: Option<&str>) -> Result<()> {
-        self.write(
-            "setLockDate",
-            serde_json::json!({ "date": date }),
-            None,
-            |c| {
-                if let Some(d) = date {
-                    crate::dates::assert_iso_date(d)?;
-                }
-                c.execute(
-                    "UPDATE business_settings SET lock_date = ? WHERE id = 1",
-                    [date],
-                )?;
-                Ok(())
-            },
-        )
-    }
 }
 
 // Tax codes, items, warehouses and stock
@@ -1150,6 +1127,159 @@ impl Business {
         self.read("findQuotation", |c| {
             quotations::find_quotation(c, number, today)
         })
+    }
+
+    // Money accounts, expenses, transfers, reconciliation and the lock date
+
+    /** Cash, bank and wallet accounts with their balances on a date. */
+    pub fn money_accounts(&self, as_of: &str) -> Result<Vec<MoneyAccount>> {
+        self.read("moneyAccounts", |c| money::list_money_accounts(c, as_of))
+    }
+
+    pub fn record_expense(&self, expense: &ExpenseInput) -> Result<PostedDocument> {
+        let user_id = self.allow("recordExpense")?.id;
+        self.write("recordExpense", to_json(expense), None, |c| {
+            money::record_expense(c, expense, user_id)
+        })
+    }
+
+    /** Expenses, newest first. */
+    pub fn expenses(&self) -> Result<Vec<Expense>> {
+        self.read("expenses", money::list_expenses)
+    }
+
+    pub fn transfer_money(&self, transfer: &MoneyTransferInput) -> Result<PostedDocument> {
+        let user_id = self.allow("transferMoney")?.id;
+        self.write("transferMoney", to_json(transfer), None, |c| {
+            money::transfer_money(c, transfer, user_id)
+        })
+    }
+
+    /** Transfers between money accounts, newest first. */
+    pub fn money_transfers(&self) -> Result<Vec<MoneyTransfer>> {
+        self.read("moneyTransfers", money::list_money_transfers)
+    }
+
+    /** Every posting to an account between two dates, with its reconciled tick. */
+    pub fn account_lines(&self, account_id: i64, from: &str, to: &str) -> Result<Vec<AccountLine>> {
+        self.read("accountLines", |c| {
+            money::account_lines(c, account_id, from, to)
+        })
+    }
+
+    /** Ticks (or unticks) ledger lines of an account as on the bank statement. */
+    pub fn set_cleared(&self, account_id: i64, line_ids: &[i64], cleared: bool) -> Result<()> {
+        self.write(
+            "setCleared",
+            json!({ "lineIds": line_ids, "cleared": cleared }),
+            Some(account_id),
+            |c| money::set_cleared(c, account_id, line_ids, cleared),
+        )
+    }
+
+    /** The account's balance and its ticked lines' balance against a statement balance. */
+    pub fn reconciliation(&self, account_id: i64, statement: f64) -> Result<Reconciliation> {
+        self.read("reconciliation", |c| {
+            money::reconciliation(c, account_id, statement)
+        })
+    }
+
+    pub fn lock_date(&self) -> Result<Option<String>> {
+        self.read("lockDate", money::lock_date)
+    }
+
+    /** Nothing can be posted on or before this date; None unlocks. */
+    pub fn set_lock_date(&self, date: Option<&str>) -> Result<()> {
+        self.write("setLockDate", json!({ "date": date }), None, |c| {
+            money::set_lock_date(c, date)
+        })
+    }
+
+    /** Voids a journal entry, expense or transfer by posting its reverse on `date`; returns the reversing entry. */
+    pub fn void_entry(&self, entry_id: i64, date: &str) -> Result<i64> {
+        self.write("voidEntry", json!({ "date": date }), Some(entry_id), |c| {
+            money::void_entry(c, entry_id, date)
+        })
+    }
+
+    // Withholding tax
+
+    pub fn withholding_categories(&self) -> Result<Vec<WithholdingCategory>> {
+        self.read(
+            "withholdingCategories",
+            withholding::list_withholding_categories,
+        )
+    }
+
+    /** Adds a withholding rate that applies from `from` onwards. */
+    pub fn add_withholding_rate(
+        &self,
+        category_id: i64,
+        rate: &WithholdingRateInput,
+    ) -> Result<()> {
+        self.write(
+            "addWithholdingRate",
+            to_json(rate),
+            Some(category_id),
+            |c| withholding::add_withholding_rate(c, category_id, rate),
+        )
+    }
+
+    /** The withholding on `base` (the documents' value before VAT) at the category's rate on `date`. */
+    pub fn withholding_tax(&self, category_id: i64, date: &str, base: f64) -> Result<Piastres> {
+        self.read("withholdingTax", |c| {
+            withholding::withholding_tax(c, category_id, date, base)
+        })
+    }
+
+    /** Withholding taken on payments and receipts between two dates, for the quarterly form. */
+    pub fn withholding_report(&self, from: &str, to: &str) -> Result<WithholdingReport> {
+        self.read("withholdingReport", |c| {
+            withholding::withholding_report(c, from, to)
+        })
+    }
+
+    // Payments, statements and aging
+
+    /** Money in from a customer, into a cash, bank or wallet account. */
+    pub fn receive_customer_payment(&self, payment: &PaymentInput) -> Result<PaymentResult> {
+        let user_id = self.allow("receiveCustomerPayment")?.id;
+        self.write("receiveCustomerPayment", to_json(payment), None, |c| {
+            settlements::record_payment(c, PartyKind::Customer, payment, user_id)
+        })
+    }
+
+    /** Money out to a supplier, from a cash, bank or wallet account. */
+    pub fn pay_supplier(&self, payment: &PaymentInput) -> Result<PaymentResult> {
+        let user_id = self.allow("paySupplier")?.id;
+        self.write("paySupplier", to_json(payment), None, |c| {
+            settlements::record_payment(c, PartyKind::Supplier, payment, user_id)
+        })
+    }
+
+    /** A party's documents with something not yet allocated, oldest first. */
+    pub fn open_documents(&self, kind: PartyKind, party_id: i64) -> Result<Vec<OpenDocument>> {
+        self.read("openDocuments", |c| {
+            settlements::open_documents(c, kind, party_id)
+        })
+    }
+
+    /** A customer's or supplier's statement of account between two dates. */
+    pub fn statement(
+        &self,
+        kind: PartyKind,
+        party_id: i64,
+        from: &str,
+        to: &str,
+    ) -> Result<Statement> {
+        self.read("statement", |c| {
+            settlements::statement(c, kind, party_id, from, to)
+        })
+    }
+
+    /** Aged receivables or payables on a date. */
+    pub fn aging(&self, kind: PartyKind, as_of: &str) -> Result<Aging> {
+        self.read("aging", |c| settlements::aging(c, kind, as_of))
     }
 }
 

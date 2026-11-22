@@ -1,5 +1,4 @@
-//! The parts of `src/core/currency.test.ts` without payments; paying a foreign supplier, its
-//! exchange differences and its statement move with payments (#77).
+//! Ported from `src/core/currency.test.ts`.
 mod common;
 
 use common::*;
@@ -8,6 +7,7 @@ use manager_core::purchases::{
     DebitNoteInput, PurchaseInvoiceInput, PurchaseLineInput, PurchaseMoney, ReturnedLine,
     SupplierAccount, SupplierChanges, SupplierInput,
 };
+use manager_core::settlements::{PartyKind, PaymentInput};
 use manager_core::Business;
 
 struct Setup {
@@ -55,8 +55,17 @@ fn routers(item_id: i64, units: i64) -> Vec<PurchaseLineInput> {
 impl Setup {
     /** Routers at USD 100.00 each. */
     fn buy(&self, units: i64, rate: Option<f64>, supplier_id: i64) -> manager_core::Result<i64> {
+        self.buy_on("2026-02-01", units, rate, supplier_id)
+    }
+    fn buy_on(
+        &self,
+        date: &str,
+        units: i64,
+        rate: Option<f64>,
+        supplier_id: i64,
+    ) -> manager_core::Result<i64> {
         self.business.post_purchase_invoice(&PurchaseInvoiceInput {
-            date: "2026-02-01".into(),
+            date: date.into(),
             supplier_id,
             warehouse_id: self.main,
             reference: "SZ-1".into(),
@@ -64,6 +73,92 @@ impl Setup {
             lines: routers(self.router, units),
         })
     }
+    fn pay(&self, amount: i64, rate: i64, allocations: &[(i64, i64)]) {
+        let mut payment = PaymentInput::new(
+            "2026-03-01",
+            self.shenzhen,
+            role_account(&self.business, "bank"),
+            amount,
+        )
+        .at_rate(rate);
+        for &(entry, part) in allocations {
+            payment = payment.allocate(entry, part);
+        }
+        self.business.pay_supplier(&payment).unwrap();
+    }
+    fn account(&self) -> SupplierAccount {
+        self.business.supplier_account(self.shenzhen).unwrap()
+    }
+    fn open(&self) -> Vec<(i64, i64, i64)> {
+        self.business
+            .open_documents(PartyKind::Supplier, self.shenzhen)
+            .unwrap()
+            .iter()
+            .map(|d| (d.entry_id, d.amount, d.open))
+            .collect()
+    }
+}
+
+fn usd(owed: i64, owed_egp: i64) -> SupplierAccount {
+    SupplierAccount {
+        currency: "USD".into(),
+        owed,
+        owed_egp,
+    }
+}
+
+#[test]
+fn usd_1000_bought_at_48_50_and_paid_at_49_20_posts_an_exchange_loss_of_egp_700() {
+    let s = setup();
+    s.buy(10, Some(48_500_000.0), s.shenzhen).unwrap();
+    let open = s.open();
+    assert_eq!((open[0].1, open[0].2), (100_000, 100_000));
+
+    s.pay(100_000, 49_200_000, &[(open[0].0, 100_000)]);
+
+    assert_eq!(balance_of(&s.business, "bank"), -4_920_000);
+    assert_eq!(balance_of(&s.business, "exchange_loss"), 70_000);
+    assert_eq!(balance_of(&s.business, "payables"), 0);
+    assert_eq!(s.account(), usd(0, 0));
+    assert!(s.open().is_empty());
+}
+
+#[test]
+fn a_payment_at_a_lower_rate_is_a_gain_and_part_payments_leave_nothing_once_settled() {
+    let s = setup();
+    s.buy(3, Some(48_333_333.0), s.shenzhen).unwrap(); // USD 300 = EGP 14,500.00 (14,499.9999)
+    assert_eq!(s.account().owed_egp, 1_450_000);
+    s.pay(10_000, 47_000_000, &[]); // USD 100 at 47 (carrying 4,833.33)
+    s.pay(20_000, 47_000_000, &[]); // USD 200 at 47 (carrying the rest, 9,666.67)
+    assert_eq!(
+        balance_of(&s.business, "exchange_gain"),
+        -(1_450_000 - 1_410_000)
+    );
+    assert_eq!(balance_of(&s.business, "payables"), 0);
+    assert_eq!(s.account(), usd(0, 0));
+}
+
+#[test]
+fn an_unallocated_payment_settles_the_oldest_invoices_first_each_at_its_own_rate() {
+    let s = setup();
+    s.buy_on("2026-01-10", 1, Some(48_000_000.0), s.shenzhen)
+        .unwrap();
+    s.buy_on("2026-01-20", 1, Some(50_000_000.0), s.shenzhen)
+        .unwrap();
+    s.pay(15_000, 49_000_000, &[]); // USD 100 of the first, USD 50 of the second
+                                    // carrying 4,800 + 2,500 = 7,300; paid 7,350 → loss 50
+    assert_eq!(balance_of(&s.business, "exchange_loss"), 5_000);
+    let open: Vec<i64> = s.open().iter().map(|d| d.2).collect();
+    assert_eq!(open, vec![5_000]);
+    assert_eq!(s.account(), usd(5_000, 250_000));
+}
+
+#[test]
+fn money_paid_before_any_invoice_is_an_advance_at_its_own_rate() {
+    let s = setup();
+    s.pay(10_000, 49_000_000, &[]);
+    assert_eq!(balance_of(&s.business, "exchange_loss"), 0);
+    assert_eq!(s.account(), usd(-10_000, -490_000));
 }
 
 #[test]
@@ -92,7 +187,7 @@ fn a_foreign_invoice_is_owed_in_its_currency_and_carried_in_egp_at_its_rate() {
 }
 
 #[test]
-fn goods_sent_back_go_at_the_invoices_rate() {
+fn goods_sent_back_go_at_the_invoices_rate_and_the_statement_is_in_the_suppliers_currency() {
     let s = setup();
     let id = s.buy(10, Some(48_500_000.0), s.shenzhen).unwrap();
     let invoice = s
@@ -136,6 +231,18 @@ fn goods_sent_back_go_at_the_invoices_rate() {
     );
     let returned = &s.business.purchase_invoices().unwrap()[0].lines[0];
     assert_eq!(returned.returned, 2_000);
+    let statement = s
+        .business
+        .statement(PartyKind::Supplier, s.shenzhen, "2026-01-01", "2026-12-31")
+        .unwrap();
+    assert_eq!(statement.currency, "USD");
+    let lines: Vec<(i64, i64)> = statement
+        .lines
+        .iter()
+        .map(|l| (l.debit, l.credit))
+        .collect();
+    assert_eq!(lines, vec![(0, 100_000), (20_000, 0)]);
+    assert_eq!(statement.closing, 80_000);
 }
 
 #[test]
