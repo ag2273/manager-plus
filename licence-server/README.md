@@ -14,7 +14,7 @@
 العنوان: `https://licence.nileorbit.com` (Cloudflare بيعمل الـ DNS والشهادة وقت النشر). قاعدة البيانات `manager-plus-licences` اتعملت بالفعل على حساب Cloudflare، والجداول اتعملت فيها. النشر بيتم أوتوماتيك من GitHub Actions مع كل تعديل على `licence-server/` في main.
 
 المطلوب مرة واحدة بس:
-1. من Cloudflare ← My Profile ← API Tokens ← Create Token: اعمل توكن فيه صلاحية «Workers Scripts: Edit» و«D1: Edit» على حسابك.
+1. من Cloudflare ← My Profile ← API Tokens ← Create Token: اعمل توكن فيه صلاحية «Workers Scripts: Edit» و«D1: Edit» على حسابك، و«Zone: Read» و«DNS: Edit» و«Workers Routes: Edit» على دومين nileorbit.com.
 2. من GitHub ← الريبو ← Settings ← Secrets and variables ← Actions، ضيف 3 secrets:
    - `CLOUDFLARE_API_TOKEN`: التوكن.
    - `CLOUDFLARE_ACCOUNT_ID`: رقم الحساب. هتلاقيه في Cloudflare على يمين صفحة Workers & Pages.
