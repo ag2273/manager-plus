@@ -28,9 +28,11 @@ jobs:
       - if: runner.os == 'Windows'
         run: npm run e2e
 
-  # The Windows installer, unsigned (no code-signing certificate), kept as a build artifact.
+  # The Windows installer, unsigned (no code-signing certificate).
   installer:
     needs: check
+    permissions:
+      contents: write
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,11 +45,14 @@ jobs:
       - name: The installer was built
         shell: bash
         run: ls -l dist/Manager-Plus-Setup-*.exe
-      # Kept from main only, for a week: artifact storage is shared and limited.
+      # From main, the newest installer replaces the one on the "latest-build" pre-release.
+      # Releases don't count against the Actions artifact storage quota, which a 130 MB exe fills.
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: dist/*.exe
-          if-no-files-found: error
-          retention-days: 7
+        name: Publish to the latest-build pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest-build >/dev/null 2>&1 || gh release create latest-build --prerelease --title "Latest build (main)" --notes "The installer built from the newest commit on main. Not a customer release."
+          gh release upload latest-build dist/Manager-Plus-Setup-*.exe --clobber
+          gh release edit latest-build --notes "The installer built from main at $GITHUB_SHA. Not a customer release."
