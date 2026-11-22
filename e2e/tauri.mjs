@@ -5,6 +5,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { connect as tlsConnect } from "node:tls";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -270,6 +271,34 @@ try {
   check(backedUp === true, "a backup is made and restored through the Rust core, signed out after");
   // The backup, the file just before the restore, and the restored file's own daily backup (its copy had none yet).
   check(readdirSync(backups).length === 3, "the file as it was before the restore is backed up too");
+
+  // Serving the file to other PCs (ADR 0002): a manager turns it on, and a TLS client gets the business's hello.
+  const port = 47_000 + Math.floor(Math.random() * 1_000);
+  const serving = await run(
+    session,
+    async (port) => {
+      const signed = await window.api.signIn({ name: "أيمن", password: "strong-password-1" });
+      const on = await window.api.setServing(true, port);
+      return { signed: signed.ok, on };
+    },
+    port,
+  );
+  check(serving.signed && serving.on.ok && serving.on.value.serving && serving.on.value.port === port, "a manager turns on serving the file");
+  check(/^([0-9A-F]{2}:){7}[0-9A-F]{2}$/.test(serving.on.value.fingerprint), "the server shows a short certificate fingerprint");
+  const hello = await new Promise((resolve, reject) => {
+    const socket = tlsConnect({ host: "127.0.0.1", port, rejectUnauthorized: false }, () => socket.write(`${JSON.stringify({ id: 1, op: "hello" })}\n`));
+    let text = "";
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk) => {
+      text += chunk;
+      if (text.includes("\n")) {
+        socket.destroy();
+        resolve(JSON.parse(text));
+      }
+    });
+    socket.on("error", reject);
+  });
+  check(hello.ok && hello.value.app === "manager-plus" && hello.value.settings.name === "بقالة النور", "another PC reaches the Rust server over TLS");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);

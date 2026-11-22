@@ -1,0 +1,22 @@
+[package]
+name = "manager-lan"
+description = "Server mode (ADR 0002): one PC serves the open business to the others over TLS on the office network."
+edition.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+getrandom = "0.3"
+if-addrs = "0.15"
+manager-core = { path = "../core" }
+mdns-sd = { version = "0.22", default-features = false }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+socket2 = { version = "0.6", features = ["all"] }
+
+[dev-dependencies]
+tempfile = "3"

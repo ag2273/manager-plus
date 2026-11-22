@@ -1,9 +1,13 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use manager_core::file_lock::{self, LockInfo, Me};
 use manager_core::users::Credentials;
 use manager_core::{Business, BusinessError, BusinessSettings};
+use manager_lan::discovery::{self, Advertiser, FoundServer};
+use manager_lan::protocol::DEFAULT_PORT;
+use manager_lan::{certificate, server, RemoteBusiness, RunningServer};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
@@ -26,6 +30,15 @@ struct Open {
     path: Option<String>,
     /** Another PC that had the open file when this one opened it. */
     elsewhere: Option<LockInfo>,
+    /** The business on another PC, when this one is a client (ADR 0002). */
+    remote: Option<Arc<RemoteBusiness>>,
+    /** This PC serving its open file to others. */
+    serving: Option<Serving>,
+}
+
+struct Serving {
+    server: RunningServer,
+    _announcing: Option<Advertiser>,
 }
 
 impl Open {
@@ -73,9 +86,11 @@ impl State {
         backup_if_due(&open);
     }
 
-    /** Lets go of the open file's lock when the app closes. */
+    /** Lets go of the open file's lock, stops serving and leaves any server when the app closes. */
     pub fn release(&self) {
         let mut open = self.open.lock().unwrap();
+        open.serving = None;
+        open.remote = None;
         if let Some(path) = &open.path {
             file_lock::release_lock(path, &me());
         }
@@ -204,6 +219,8 @@ fn switch_to(
     signed_in: bool,
 ) -> Result<Value, BusinessError> {
     let settings = business.settings()?;
+    open.serving = None;
+    open.remote = None;
     if let Some(old) = open.current.take() {
         old.sign_out();
     }
@@ -220,7 +237,88 @@ fn switch_to(
     open.elsewhere = file_lock::take_lock(path, &me(), chrono::Utc::now());
     backup_if_due(open);
     remember_recent(app, path);
+    if let Some(serve) = read_network(app).serve.filter(|s| s.path == path) {
+        if let Err(error) = start_serving(app, open, serve.port) {
+            eprintln!("Serving the file failed: {error}");
+        }
+    }
     Ok(serde_json::to_value(settings).expect("settings serialize"))
+}
+
+// Server mode (ADR 0002)
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NetworkFile {
+    /** Certificate fingerprints pinned on first connect, by "host:port". */
+    #[serde(default)]
+    known_servers: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    last_server: Option<FoundServer>,
+    /** The file this PC serves whenever it is open, and on which port. */
+    #[serde(default)]
+    serve: Option<Serve>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct Serve {
+    path: String,
+    port: u16,
+}
+
+fn read_network(app: &AppHandle) -> NetworkFile {
+    serde_json::from_value(read_json(app, "network.json")).unwrap_or_default()
+}
+
+fn write_network(app: &AppHandle, network: &NetworkFile) {
+    write_json(
+        app,
+        "network.json",
+        &serde_json::to_value(network).expect("serializes"),
+    );
+}
+
+fn server_status(app: &AppHandle, open: &Open) -> Value {
+    match &open.serving {
+        Some(serving) => json!({
+            "serving": true,
+            "port": serving.server.port,
+            "fingerprint": certificate::short_fingerprint(&serving.server.fingerprint),
+            "addresses": discovery::lan_addresses(),
+            "clients": serving.server.clients(),
+        }),
+        None => json!({
+            "serving": false,
+            "port": read_network(app).serve.map_or(DEFAULT_PORT, |s| s.port),
+            "fingerprint": "",
+            "addresses": discovery::lan_addresses(),
+            "clients": 0,
+        }),
+    }
+}
+
+fn start_serving(app: &AppHandle, open: &mut Open, port: u16) -> Result<(), BusinessError> {
+    let Some(file) = &open.file else {
+        return Err(BusinessError::new(
+            "sign_in_required",
+            "No business is open",
+        ));
+    };
+    open.serving = None;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| BusinessError::new("unexpected", e.to_string()))?
+        .join("server");
+    let host = me().host;
+    let identity = certificate::load_or_create(&dir, &host)?;
+    let running = server::start(file, &identity, "0.0.0.0", port)?;
+    let announcing = discovery::advertise(&file.settings()?.name, &host, running.port);
+    open.serving = Some(Serving {
+        server: running,
+        _announcing: announcing,
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -297,6 +395,15 @@ pub async fn desktop(
         }
         "recentFiles" => json!(recent(&app)),
         "signIn" => {
+            let remote = state.open.lock().unwrap().remote.clone();
+            if let Some(remote) = remote {
+                let signed = (|| {
+                    let credentials: Credentials = arg(&args, 0)?;
+                    let user = remote.sign_in(&credentials.name, &credentials.password)?;
+                    Ok(serde_json::to_value(user).expect("user serializes"))
+                })();
+                return Ok(result(signed));
+            }
             let mut open = state.open.lock().unwrap();
             let signed = (|| {
                 let credentials: Credentials = arg(&args, 0)?;
@@ -320,6 +427,11 @@ pub async fn desktop(
                 old.sign_out();
             }
             open.current_is_file = false;
+            let remote = open.remote.clone();
+            drop(open);
+            if let Some(remote) = remote {
+                remote.sign_out();
+            }
             Value::Null
         }
         "call" => {
@@ -333,6 +445,10 @@ pub async fn desktop(
                 Some(Value::Array(a)) => a.clone(),
                 _ => vec![],
             };
+            if let Some(remote) = open.remote.clone() {
+                drop(open);
+                return Ok(result(remote.call(&method, &call_args)));
+            }
             match open.current() {
                 None => failure(BusinessError::new("sign_in_required", "Sign in first")),
                 Some(business) => result(business.call(&method, &call_args)),
@@ -356,10 +472,91 @@ pub async fn desktop(
         }
         "connection" => {
             let open = state.open.lock().unwrap();
-            match (&open.path, &open.file) {
-                (Some(path), Some(_)) => json!({ "mode": "local", "path": path }),
+            match (&open.remote, &open.path, &open.file) {
+                (Some(r), _, _) => {
+                    json!({ "mode": "client", "host": r.host, "port": r.port, "name": r.hello.settings.name })
+                }
+                (None, Some(path), Some(_)) => json!({ "mode": "local", "path": path }),
                 _ => json!({ "mode": "none" }),
             }
+        }
+        "discoverServers" => json!(discovery::discover(Duration::from_millis(1500))),
+        "lastServer" => json!(read_network(&app).last_server),
+        "serverStatus" => server_status(&app, &state.open.lock().unwrap()),
+        "connectServer" => {
+            let connected = (|| {
+                let host: String = arg(&args, 0)?;
+                let port: u16 = arg(&args, 1)?;
+                let key = format!("{host}:{port}");
+                let mut network = read_network(&app);
+                let remote = RemoteBusiness::connect(
+                    &host,
+                    port,
+                    network.known_servers.get(&key).map(String::as_str),
+                )?;
+                let settings = remote.hello.settings.clone();
+                let mut open = state.open.lock().unwrap();
+                open.serving = None;
+                if let Some(old) = open.current.take() {
+                    old.sign_out();
+                }
+                if let Some(old) = open.file.take() {
+                    old.close();
+                }
+                if let Some(old) = open.path.take() {
+                    file_lock::release_lock(&old, &me());
+                }
+                open.current_is_file = false;
+                open.elsewhere = None;
+                network
+                    .known_servers
+                    .insert(key, remote.fingerprint.clone());
+                network.last_server = Some(FoundServer {
+                    name: settings.name.clone(),
+                    host,
+                    port,
+                });
+                open.remote = Some(Arc::new(remote));
+                write_network(&app, &network);
+                Ok(serde_json::to_value(settings).expect("settings serialize"))
+            })();
+            result(connected)
+        }
+        "setServing" => {
+            let set = (|| {
+                let on: bool = arg(&args, 0)?;
+                let port: f64 = arg::<Option<f64>>(&args, 1)?.unwrap_or(0.0);
+                let mut open = state.open.lock().unwrap();
+                let manager = open
+                    .current()
+                    .and_then(|b| b.current_user())
+                    .is_some_and(|u| u.role == "manager");
+                let Some(path) = open
+                    .path
+                    .clone()
+                    .filter(|_| manager && open.remote.is_none())
+                else {
+                    return Err(BusinessError::new(
+                        "not_allowed",
+                        "Only a manager on the PC that holds the file can serve it",
+                    ));
+                };
+                let chosen = if port.fract() == 0.0 && port > 1023.0 && port < 65536.0 {
+                    port as u16
+                } else {
+                    DEFAULT_PORT
+                };
+                if on {
+                    start_serving(&app, &mut open, chosen)?;
+                } else {
+                    open.serving = None;
+                }
+                let mut network = read_network(&app);
+                network.serve = on.then_some(Serve { path, port: chosen });
+                write_network(&app, &network);
+                Ok(server_status(&app, &open))
+            })();
+            result(set)
         }
         "chooseFolder" => match app.dialog().file().blocking_pick_folder() {
             Some(folder) => match folder.into_path() {
@@ -402,6 +599,8 @@ pub async fn desktop(
                 };
                 let mut open = state.open.lock().unwrap();
                 let path = open.path.clone().expect("checked above");
+                // Clients would see the file change under them; serving starts again on the restored file.
+                open.serving = None;
                 let restored = open.current().expect("checked above").restore(&backup)?;
                 // The old handles now hold nothing; the restored file opens signed out.
                 if let Some(old) = open.current.take() {
@@ -413,7 +612,7 @@ pub async fn desktop(
             result(restored)
         }
         "appVersion" => json!(app.package_info().version.to_string()),
-        "licenceStatus" | "lastServer" => Value::Null,
+        "licenceStatus" => Value::Null,
         "printers" => json!(crate::printing::installed()),
         "printRaw" => {
             let sent = (|| {
@@ -425,11 +624,8 @@ pub async fn desktop(
             })();
             result(sent)
         }
-        "discoverServers" | "etaCertificates" => json!([]),
+        "etaCertificates" => json!([]),
         "checkUpdate" => ok(json!({ "kind": "none" })),
-        "serverStatus" => {
-            json!({ "serving": false, "port": 0, "fingerprint": "", "addresses": [], "clients": 0 })
-        }
         other => not_ported(other),
     })
 }

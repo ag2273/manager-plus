@@ -16,6 +16,7 @@ pub mod inventory;
 pub mod invoices;
 pub mod items;
 pub mod ledger;
+pub mod methods;
 pub mod migrations;
 pub mod money;
 pub mod num;

@@ -15,6 +15,7 @@ tauri-build = { version = "2.7", features = [] }
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 manager-core = { path = "../crates/core" }
+manager-lan = { path = "../crates/lan" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tauri = { version = "2.12", features = [] }

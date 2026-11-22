@@ -217,10 +217,11 @@ impl Business {
                 &arg::<String>(args, 3)?,
             )?),
             "aging" => json(self.aging(arg(args, 0)?, &arg::<String>(args, 1)?)?),
-            _ => refuse(
+            _ if crate::methods::is_business_method(method) => refuse(
                 "not_ported",
                 format!("{method} is not in the Rust core yet"),
             ),
+            _ => refuse("not_allowed", format!("Not a business method: {method}")),
         }
     }
 }
