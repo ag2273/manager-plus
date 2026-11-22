@@ -1,5 +1,6 @@
 import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
 import type { EtaReceiptSettingsInput } from "../core/eta/receipts-store";
+import type { LicenceStatus } from "../core/licence/licence";
 import type { Lang, ReportTable } from "./report-tables";
 import type { ReadSheet } from "./spreadsheet-read";
 import type { Business, BusinessSettings } from "../core/business";
@@ -93,6 +94,7 @@ export const BUSINESS_METHODS = [
   "etaReceipts",
   "retryEtaReceipt",
   "etaReceiptQr",
+  "licenceMode",
   "transferStock",
   "transfers",
   "averageCost",
@@ -261,6 +263,10 @@ export interface DesktopApi {
   etaCertificates(): Promise<TokenCertificate[]>;
   /** Saves the e-invoice settings, sealing the client secret for this PC; the secret is left as it was when empty. */
   saveEtaSettings(settings: EtaSettingsInput): Promise<Result<null>>;
+  /** This PC's licence: trial, licensed or read-only; null on a PC using another's file. */
+  licenceStatus(): Promise<LicenceStatus | null>;
+  /** Activates a licence key on this PC, the one that holds the file. */
+  activateLicence(key: string): Promise<Result<LicenceStatus>>;
   /** Saves the POS registration for e-receipts, sealing its client secret and pre-shared key on this PC. */
   saveEtaReceiptSettings(settings: EtaReceiptSettingsInput): Promise<Result<null>>;
   /** Asks the ETA for news on submitted documents, then signs and sends the pending ones; returns how many were accepted. */
@@ -298,6 +304,8 @@ export const CHANNELS = {
   etaCertificates: "eta:certificates",
   saveEtaSettings: "eta:save-settings",
   saveEtaReceiptSettings: "eta:save-receipt-settings",
+  licenceStatus: "licence:status",
+  activateLicence: "licence:activate",
   sendEtaNow: "eta:send",
   cancelEta: "eta:cancel",
 } as const;
