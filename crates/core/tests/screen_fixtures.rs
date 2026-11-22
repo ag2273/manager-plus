@@ -63,8 +63,10 @@ fn keep(name: &str, value: Value) {
         std::fs::write(&path, text).unwrap();
         return;
     }
+    // A Windows checkout may have turned the file's line ends into CRLF.
     let kept = std::fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("{path} is missing; run with MANAGER_PLUS_WRITE_FIXTURES=1"));
+        .unwrap_or_else(|_| panic!("{path} is missing; run with MANAGER_PLUS_WRITE_FIXTURES=1"))
+        .replace("\r\n", "\n");
     assert_eq!(
         kept, text,
         "{name}: the core's answer changed; run with MANAGER_PLUS_WRITE_FIXTURES=1 and check the screens' tests"

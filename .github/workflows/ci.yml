@@ -44,7 +44,7 @@ jobs:
       - run: cargo fmt --all --check
       - run: npm run build:web
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo test --workspace --no-fail-fast
       - run: npx tauri build --debug --no-bundle
       - run: cargo install tauri-driver --locked
       - run: xvfb-run -a node e2e/tauri.mjs target/debug/manager-plus
@@ -69,7 +69,7 @@ jobs:
       - run: npm ci
       - run: npm run build:web
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo test --workspace --no-fail-fast
       - run: npx tauri build
       - name: Size and memory
         shell: pwsh
