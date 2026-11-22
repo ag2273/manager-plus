@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::backup::{self, BackupFile, BackupStatus};
 use crate::customers::{self, Customer, CustomerChanges, CustomerInput};
 use crate::error::{refuse, BusinessError, Result};
 use crate::import::{self, ImportInput, ImportReport};
@@ -108,7 +109,6 @@ struct Gate {
 struct File {
     conn: Mutex<Connection>,
     /** Where the file lives; backups are named after it. */
-    #[allow(dead_code)]
     path: String,
     gate: Mutex<Gate>,
 }
@@ -1134,6 +1134,107 @@ impl Business {
         self.read("findQuotation", |c| {
             quotations::find_quotation(c, number, today)
         })
+    }
+
+    // Backups
+
+    /** Where the file lives. */
+    pub fn path(&self) -> &str {
+        &self.file.path
+    }
+
+    /** The backup folder, when the last backup ran, and the backups kept there. */
+    pub fn backup_status(&self) -> Result<BackupStatus> {
+        self.read("backupStatus", |c| {
+            backup::backup_status(c, &self.file.path)
+        })
+    }
+
+    pub fn set_backup_folder(&self, folder: Option<&str>) -> Result<()> {
+        self.write("setBackupFolder", json!({ "folder": folder }), None, |c| {
+            backup::set_backup_folder(c, folder)
+        })
+    }
+
+    pub fn backup_now(&self) -> Result<BackupFile> {
+        self.allow("backupNow")?;
+        backup::backup_now(&self.conn(), &self.file.path, chrono::Utc::now())
+    }
+
+    /**
+     * The daily backup, run by the app on the PC that holds the file whether or not anyone is signed
+     * in; None when no folder is set or today's backup is done.
+     */
+    pub fn scheduled_backup(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<BackupFile>> {
+        let conn = self.conn();
+        if backup::daily_backup_due(&conn, &self.file.path, now)? {
+            backup::backup_now(&conn, &self.file.path, now).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /**
+     * A copy of the file before an app update installs: a backup in the backup folder when one is
+     * set, otherwise a copy beside the file. Returns where it went.
+     */
+    pub fn backup_before_update(&self, version: &str) -> Result<String> {
+        self.allow("installUpdate")?;
+        let conn = self.conn();
+        let path = &self.file.path;
+        if backup::backup_status(&conn, path)?.folder.is_some() {
+            return Ok(backup::backup_now(&conn, path, chrono::Utc::now())?.path);
+        }
+        let base = strip_extension(path);
+        let mut target = format!("{base} قبل تحديث البرنامج {version}.mplus");
+        let mut n = 2;
+        while Path::new(&target).exists() {
+            target = format!("{base} قبل تحديث البرنامج {version} ({n}).mplus");
+            n += 1;
+        }
+        copy_database(&conn, &target)?;
+        Ok(target)
+    }
+
+    /**
+     * Puts a backup in place of this file: the file as it is now is backed up first (to the backup
+     * folder, or beside it when none is set), then this file closes and the backup opens, signed out.
+     * Every other handle on the file is left on an empty database, to be dropped.
+     */
+    pub fn restore(&self, backup_path: &str) -> Result<Business> {
+        self.allow("restoreBackup")?;
+        let path = self.file.path.clone();
+        if path == IN_MEMORY {
+            return refuse(
+                "file_not_found",
+                "An in-memory business has no file to restore into",
+            );
+        }
+        Business::check(backup_path)?;
+        {
+            let mut conn = self.conn();
+            let now = chrono::Utc::now();
+            if backup::backup_status(&conn, &path)?.folder.is_some() {
+                backup::backup_now(&conn, &path, now)?;
+            } else {
+                let target = format!(
+                    "{} قبل الاسترجاع {}.mplus",
+                    strip_extension(&path),
+                    backup::stamp(now)
+                );
+                copy_database(&conn, &target)?;
+            }
+            // Close the file: what is left in its place is an empty database.
+            let closed = std::mem::replace(&mut *conn, Connection::open_in_memory()?);
+            closed
+                .close()
+                .map_err(|(_, e)| BusinessError::new("internal", e.to_string()))?;
+        }
+        replace_file(backup_path, &path)?;
+        Business::open(&path)
     }
 
     // Reports

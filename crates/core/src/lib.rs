@@ -2,6 +2,7 @@
 //! SQLite file format as the TypeScript core it replaces (#72). Money is whole piastres, and
 //! every command writes all its rows and its audit entry in one transaction, or nothing.
 
+pub mod backup;
 pub mod business;
 pub mod chart;
 pub mod currency;
@@ -9,6 +10,7 @@ pub mod customers;
 pub mod dates;
 mod dispatch;
 pub mod error;
+pub mod file_lock;
 pub mod import;
 pub mod inventory;
 pub mod invoices;
