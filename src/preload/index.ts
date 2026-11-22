@@ -27,6 +27,7 @@ const api: DesktopApi = {
   setServing: (on, port) => ipcRenderer.invoke(CHANNELS.setServing, on, port),
   etaCertificates: () => ipcRenderer.invoke(CHANNELS.etaCertificates),
   saveEtaSettings: (settings) => ipcRenderer.invoke(CHANNELS.saveEtaSettings, settings),
+  saveEtaReceiptSettings: (settings) => ipcRenderer.invoke(CHANNELS.saveEtaReceiptSettings, settings),
   sendEtaNow: () => ipcRenderer.invoke(CHANNELS.sendEtaNow),
   cancelEta: (kind, documentId, reason) => ipcRenderer.invoke(CHANNELS.cancelEta, kind, documentId, reason),
 };

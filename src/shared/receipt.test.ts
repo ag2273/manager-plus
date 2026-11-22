@@ -57,6 +57,14 @@ describe("printed receipts", () => {
     await expect(documentHtml({ ...ret, when: "2026-11-20 20:15" })).toMatchFileSnapshot("__golden__/return-receipt.html");
   });
 
+  test("an e-receipt carries its ETA link as a QR code", async () => {
+    const business = sampleBusiness();
+    const doc = saleDocument(fixed(business.findReceipt(1)), business.settings(), { footer: "", copy: false });
+    const link = "https://preprod.invoicing.eta.gov.eg/receipts/search/abc/share/2026-11-20T18:15:00Z#Total:121,IssuerRIN:123456789";
+    await expect(documentHtml({ ...doc, when: "2026-11-20 20:15", qr: link })).toMatchFileSnapshot("__golden__/sale-receipt-qr.html");
+    expect(documentHtml(doc)).not.toContain("<svg");
+  });
+
   test("the sale receipt in English", async () => {
     const business = sampleBusiness();
     const doc = saleDocument(fixed(business.findReceipt(1)), business.settings(), { footer: "Thank you for your visit", copy: true }, "en");

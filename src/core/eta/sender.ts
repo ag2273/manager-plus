@@ -1,6 +1,7 @@
 import { BusinessError } from "../errors";
 import { type Signer, cadesBes } from "./cades";
 import type { EtaDocumentRow, EtaKind, EtaOutcome } from "./store";
+import type { EtaReceiptKind, EtaReceiptOutcome, EtaReceiptRow } from "./receipts-store";
 
 /** What the ETA says about one document. */
 export type EtaVerdict = { status: "submitted" | "valid" | "invalid" | "cancelled"; error?: string };
@@ -79,4 +80,72 @@ export async function cancelDocument(books: EtaBooks, client: EtaClient, kind: E
   }
   await client.cancel(row.uuid, reason);
   books.etaRecord(kind, documentId, { status: "cancelled" });
+}
+
+/** The ETA's e-receipt API for the registered POS, injected like the invoice client. */
+export type EtaReceiptClient = {
+  submitReceipts(receipts: Record<string, unknown>[]): Promise<{ accepted: { uuid: string }[]; rejected: { uuid: string; error: string }[] }>;
+  receiptStatus(uuid: string): Promise<EtaVerdict>;
+};
+
+export type EtaReceiptBooks = {
+  etaReceipts(statuses?: EtaReceiptRow["status"][]): EtaReceiptRow[];
+  etaPrepareReceipt(kind: EtaReceiptKind, id: number): { receipt: Record<string, unknown>; uuid: string };
+  etaRecordReceipt(kind: EtaReceiptKind, id: number, outcome: EtaReceiptOutcome): void;
+};
+
+/**
+ * Sends pending e-receipts in the order the till issued them, each naming the one before it.
+ * They got their UUIDs when posted; one sent again after a fix gets the next UUID now, or fails
+ * again with the reason. When the ETA can't be reached they all stay pending, so sales made
+ * offline go later, in order, as the same receipts.
+ */
+export async function sendReceipts(books: EtaReceiptBooks, client: EtaReceiptClient): Promise<number> {
+  const batch: { row: EtaReceiptRow; receipt: Record<string, unknown>; uuid: string }[] = [];
+  for (const row of books.etaReceipts(["pending"])) {
+    try {
+      batch.push({ row, ...books.etaPrepareReceipt(row.kind, row.id) });
+    } catch (error) {
+      books.etaRecordReceipt(row.kind, row.id, { status: "failed", error: reason(error) });
+    }
+  }
+  if (batch.length === 0) return 0;
+  const ordered = chainOrder(batch);
+  let result: Awaited<ReturnType<EtaReceiptClient["submitReceipts"]>>;
+  try {
+    result = await client.submitReceipts(ordered.map((b) => b.receipt));
+  } catch (error) {
+    throw new BusinessError("eta_unreachable", `The ETA could not be reached: ${message(error)}`);
+  }
+  for (const { row, uuid } of batch) {
+    const rejected = result.rejected.find((r) => r.uuid === uuid);
+    if (rejected) books.etaRecordReceipt(row.kind, row.id, { status: "failed", error: `eta_rejected: ${rejected.error}` });
+    else if (result.accepted.some((a) => a.uuid === uuid)) books.etaRecordReceipt(row.kind, row.id, { status: "submitted" });
+  }
+  return result.accepted.length;
+}
+
+/** Puts receipts after the one each names, so a receipt sent again after a fix goes after those issued while it waited. */
+function chainOrder<T extends { receipt: Record<string, unknown>; uuid: string }>(batch: T[]): T[] {
+  const previous = (b: T) => (b.receipt["header"] as { previousUUID: string }).previousUUID;
+  const next = new Map(batch.map((b) => [previous(b), b]));
+  const ordered: T[] = [];
+  const placed = new Set<string>();
+  for (const start of batch.filter((b) => !batch.some((o) => o.uuid === previous(b)))) {
+    for (let b: T | undefined = start; b && !placed.has(b.uuid); b = next.get(b.uuid)) {
+      ordered.push(b);
+      placed.add(b.uuid);
+    }
+  }
+  return [...ordered, ...batch.filter((b) => !placed.has(b.uuid))];
+}
+
+/** Asks the ETA for its verdict on every submitted e-receipt. */
+export async function refreshReceiptStatuses(books: EtaReceiptBooks, client: EtaReceiptClient): Promise<void> {
+  for (const row of books.etaReceipts(["submitted"])) {
+    const verdict = await client.receiptStatus(row.uuid);
+    if (verdict.status === "valid" || verdict.status === "invalid") {
+      books.etaRecordReceipt(row.kind, row.id, { status: verdict.status, error: verdict.error ? `eta_rejected: ${verdict.error}` : "" });
+    }
+  }
 }

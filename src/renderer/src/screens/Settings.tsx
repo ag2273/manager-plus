@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { DEFAULT_PREFERENCES, NO_PRINTER, THEMES, type Connection, type Preferences, type PrinterSettings, type ServerStatus, type ThemeId } from "../../../shared/api";
 import type { BackupStatus } from "../../../core/backup";
 import type { EtaSettings } from "../../../core/eta/store";
+import type { EtaReceiptSettings } from "../../../core/eta/receipts-store";
 import type { TokenCertificate } from "../../../shared/api";
 import type { BusinessSettings } from "../../../shared/api";
 import { business, errorText } from "../api";
@@ -73,6 +74,7 @@ export function Settings({
       <ServerSetup />
       {isManager && <BackupSetup onRestored={onRestored} />}
       {isManager && <EtaSetup />}
+      {isManager && <EtaReceiptSetup />}
     </>
   );
 }
@@ -546,6 +548,95 @@ function EtaSetup() {
             {ar.eta.sendNow}
           </button>
         )}
+      </div>
+    </form>
+  );
+}
+
+/** The POS registration for e-receipts, on top of e-invoicing's account and address. */
+function EtaReceiptSetup() {
+  const [local, setLocal] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
+  const [settings, setSettings] = useState<EtaReceiptSettings | null>(null);
+  const [secrets, setSecrets] = useState({ posClientSecret: "", presharedKey: "" });
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const t = ar.eta.receipts;
+
+  function load() {
+    void business.etaSettings().then((r) => r.ok && setInvoicing(r.value.enabled));
+    void business.etaReceiptSettings().then((r) => r.ok && setSettings(r.value));
+  }
+  useEffect(() => {
+    void window.api.fileStatus().then((f) => setLocal(f !== null));
+    load();
+  }, []);
+  if (!settings) return null;
+  const s = settings;
+  const set = (changes: Partial<EtaReceiptSettings>) => setSettings({ ...s, ...changes });
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const input = {
+      enabled: s.enabled,
+      posSerial: s.posSerial,
+      posOsVersion: s.posOsVersion,
+      posModel: s.posModel,
+      posClientId: s.posClientId,
+      ...(secrets.posClientSecret.trim() ? { posClientSecret: secrets.posClientSecret } : {}),
+      ...(secrets.presharedKey.trim() ? { presharedKey: secrets.presharedKey } : {}),
+    };
+    const result = await window.api.saveEtaReceiptSettings(input);
+    setMessage(result.ok ? { ok: true, text: t.saved } : { ok: false, text: errorText(result)! });
+    if (result.ok) {
+      setSecrets({ posClientSecret: "", presharedKey: "" });
+      load();
+    }
+  }
+
+  const field = (label: string, value: string, change: (v: string) => void, secret = false) => (
+    <label className="field narrow">
+      {label}
+      <input
+        dir="ltr"
+        type={secret ? "password" : "text"}
+        autoComplete="off"
+        value={value}
+        disabled={!local}
+        placeholder={secret && s.hasPosSecrets ? ar.eta.secretKept : ""}
+        onChange={(e) => change(e.target.value)}
+      />
+    </label>
+  );
+
+  return (
+    <form className="card printer-card" onSubmit={save} aria-label={t.title}>
+      <div className="stack">
+        <h2>{t.title}</h2>
+        <span className="muted">{!local ? ar.eta.localOnly : invoicing ? t.hint : t.needsInvoicing}</span>
+      </div>
+      {message && (
+        <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
+          {message.text}
+        </div>
+      )}
+      <label className="check">
+        <input type="checkbox" checked={s.enabled} disabled={!local || (!invoicing && !s.enabled)} onChange={(e) => set({ enabled: e.target.checked })} />
+        {t.enabled}
+      </label>
+      {s.enabled && (
+        <div className="row">
+          {field(t.posSerial, s.posSerial, (v) => set({ posSerial: v }))}
+          {field(t.posOsVersion, s.posOsVersion, (v) => set({ posOsVersion: v }))}
+          {field(t.posModel, s.posModel, (v) => set({ posModel: v }))}
+          {field(t.posClientId, s.posClientId, (v) => set({ posClientId: v }))}
+          {field(t.posClientSecret, secrets.posClientSecret, (v) => setSecrets({ ...secrets, posClientSecret: v }), true)}
+          {field(t.presharedKey, secrets.presharedKey, (v) => setSecrets({ ...secrets, presharedKey: v }), true)}
+        </div>
+      )}
+      <div className="row">
+        <button type="submit" className="btn btn-primary" disabled={!local}>
+          {ar.save}
+        </button>
       </div>
     </form>
   );

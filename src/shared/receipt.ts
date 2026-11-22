@@ -1,3 +1,4 @@
+import { qrSvg } from "./qr";
 import type { BusinessSettings } from "../core/business";
 import type { SaleReturn } from "../core/returns";
 import type { Receipt } from "../core/sales";
@@ -23,6 +24,8 @@ export type PrintDocument = {
   lines: { name: string; detail: string; amount: string }[];
   totals: { label: string; value: string; strong?: boolean }[];
   footer: string;
+  /** The ETA e-receipt link, printed as a QR code, when the receipt is an e-receipt. */
+  qr?: string;
 };
 
 export type DocLang = "ar" | "en";
@@ -273,6 +276,7 @@ body { font-family: ${lang === "en" ? '"Segoe UI", Tahoma, sans-serif' : '"IBM P
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .strong { font-size: 30px; font-weight: 700; }
 .footer { margin-top: 10px; white-space: pre-line; }
+.qr svg { display: block; margin: 4px auto; }
 </style></head><body>
 <div class="center shop">${escape(doc.shop.name)}</div>
 ${doc.shop.address ? `<div class="center">${escape(doc.shop.address)}</div>` : ""}
@@ -284,6 +288,6 @@ ${doc.reference ? `<div class="center">${escape(doc.reference)}</div>` : ""}
 <div class="rule"></div>
 ${rows ? `${rows}\n<div class="rule"></div>` : ""}
 ${totals}
-${doc.footer ? `<div class="rule"></div><div class="center footer">${escape(doc.footer)}</div>` : ""}
+${doc.qr ? `<div class="rule"></div><div class="center qr">${qrSvg(doc.qr)}</div>\n` : ""}${doc.footer ? `<div class="rule"></div><div class="center footer">${escape(doc.footer)}</div>` : ""}
 </body></html>`;
 }

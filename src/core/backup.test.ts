@@ -69,6 +69,9 @@ function downgradeTo18(path: string): void {
   const db = new Database(path);
   db.exec(`
     DROP TABLE eta_documents; DROP TABLE eta_settings;
+    ALTER TABLE sales_returns DROP COLUMN eta_previous_uuid;
+    ALTER TABLE sales_receipts DROP COLUMN eta_error;
+    ALTER TABLE sales_returns DROP COLUMN eta_error;
     ALTER TABLE customers DROP COLUMN governate;
     ALTER TABLE customers DROP COLUMN region_city;
     ALTER TABLE customers DROP COLUMN building_number;
