@@ -9,7 +9,20 @@
 - حساب Cloudflare. الخطة المجانية كفاية: Workers وD1 مجانيين للحجم ده.
 - Node.js 20 أو أحدث على جهازك، ونسخة من الريبو.
 
-## خطوات النشر (مرة واحدة)
+## النشر من GitHub (الطريقة المستخدمة)
+
+قاعدة البيانات `manager-plus-licences` اتعملت بالفعل على حساب Cloudflare، والجداول اتعملت فيها. النشر بيتم أوتوماتيك من GitHub Actions مع كل تعديل على `licence-server/` في main.
+
+المطلوب مرة واحدة بس:
+1. من Cloudflare ← My Profile ← API Tokens ← Create Token: اعمل توكن فيه صلاحية «Workers Scripts: Edit» و«D1: Edit» على حسابك.
+2. من GitHub ← الريبو ← Settings ← Secrets and variables ← Actions، ضيف 3 secrets:
+   - `CLOUDFLARE_API_TOKEN`: التوكن.
+   - `CLOUDFLARE_ACCOUNT_ID`: رقم الحساب. هتلاقيه في Cloudflare على يمين صفحة Workers & Pages.
+   - `ADMIN_PASSWORD`: كلمة سر صفحة الإدارة.
+3. من GitHub ← Actions، شغّل «Licence server» (Run workflow).
+4. بعده شغّل «Licence signing key (run once)» واكتب `make a new key`. المفتاح الخاص بيتحط في Cloudflare على طول، ومش بيظهر لحد. المفتاح العام بيظهر في ملخص التشغيل، وأنا بحطه في البرنامج.
+
+## خطوات النشر من جهازك (بديل)
 
 كل الأوامر دي من فولدر الريبو.
 
