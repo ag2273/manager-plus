@@ -5,13 +5,23 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::error::{refuse, BusinessError, Result};
+use crate::inventory::{
+    self, ItemMovement, LowStockRow, StockCount, StockCountInput, WriteOff, WriteOffInput,
+};
+use crate::items::{
+    self, BasisPoints, Item, ItemChanges, ItemInput, ItemsOptions, ScannedUnit, TaxCode,
+    TaxRateInput,
+};
+use crate::ledger::Piastres;
 use crate::ledger::{
     self, Account, AccountChanges, JournalEntryInput, JournalLine, NewAccount, TrialBalance,
 };
 use crate::migrations::{run_pending, LATEST_SCHEMA_VERSION};
+use crate::serials::{self, SerialHistory, SerialSettings};
+use crate::stock::{self, OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse};
 use crate::users::{self, AuditEntry, Credentials, NewUser, User, UserChanges};
 
 pub const IN_MEMORY: &str = ":memory:";
@@ -460,11 +470,19 @@ impl Business {
         }
         let mut conn = self.conn();
         let tx = conn.transaction()?;
+        let since = crate::stock::last_movement_id(&tx)?;
         let result = work(&tx)?;
-        // Stock movements dated before ones already there reprice the issues after them (#74).
+        // Anything moved on a date before movements already there reprices the issues after it.
+        crate::inventory::reprice_backdated(&tx, since)?;
         let entity =
             entity_id.or_else(|| id_of(&serde_json::to_value(&result).unwrap_or(Value::Null)));
-        users::write_audit(&tx, user.id, method, entity, &detail.to_string())?;
+        users::write_audit(
+            &tx,
+            user.id,
+            method,
+            entity,
+            &crate::num::tidy(detail).to_string(),
+        )?;
         tx.commit()?;
         Ok(result)
     }
@@ -623,6 +641,197 @@ impl Business {
             },
         )
     }
+}
+
+// Tax codes, items, warehouses and stock
+impl Business {
+    pub fn tax_codes(&self) -> Result<Vec<TaxCode>> {
+        self.read("taxCodes", items::list_tax_codes)
+    }
+
+    /** Adds a rate that applies from `from` onwards, for example when the law changes. */
+    pub fn add_tax_rate(&self, tax_code_id: i64, rate: &TaxRateInput) -> Result<()> {
+        self.write("addTaxRate", to_json(rate), Some(tax_code_id), |c| {
+            items::add_tax_rate(c, tax_code_id, rate)
+        })
+    }
+
+    /** The VAT rate (basis points) in force on a document date; zero when the business is not VAT-registered. */
+    pub fn vat_rate(&self, tax_code_id: i64, date: &str) -> Result<BasisPoints> {
+        self.allow("vatRate")?;
+        let registered = self.settings()?.vat_registered;
+        self.read("vatRate", |c| {
+            items::vat_rate(c, tax_code_id, date, registered)
+        })
+    }
+
+    /** Active items by Arabic name; `search` matches Arabic or English name, code or barcode. */
+    pub fn items(&self, options: &ItemsOptions) -> Result<Vec<Item>> {
+        self.read("items", |c| items::list_items(c, options))
+    }
+
+    pub fn add_item(&self, item: &ItemInput) -> Result<i64> {
+        self.write("addItem", to_json(item), None, |c| items::add_item(c, item))
+    }
+
+    /** Changes an item; `pack: Some(None)` removes its pack unit. */
+    pub fn update_item(&self, id: i64, changes: &ItemChanges) -> Result<()> {
+        self.write("updateItem", to_json(changes), Some(id), |c| {
+            items::update_item(c, id, changes)
+        })
+    }
+
+    /** Hides an item from lists and the till; its history stays. */
+    pub fn deactivate_item(&self, id: i64) -> Result<()> {
+        self.write("deactivateItem", Value::Null, Some(id), |c| {
+            items::set_item_active(c, id, false)
+        })
+    }
+
+    pub fn reactivate_item(&self, id: i64) -> Result<()> {
+        self.write("reactivateItem", Value::Null, Some(id), |c| {
+            items::set_item_active(c, id, true)
+        })
+    }
+
+    pub fn find_by_barcode(&self, barcode: &str) -> Result<Option<ScannedUnit>> {
+        self.read("findByBarcode", |c| items::find_by_barcode(c, barcode))
+    }
+
+    pub fn warehouses(&self) -> Result<Vec<Warehouse>> {
+        self.read("warehouses", stock::list_warehouses)
+    }
+
+    pub fn add_warehouse(&self, name: &str) -> Result<i64> {
+        self.write("addWarehouse", json!({ "name": name }), None, |c| {
+            stock::add_warehouse(c, name)
+        })
+    }
+
+    pub fn rename_warehouse(&self, id: i64, name: &str) -> Result<()> {
+        self.write("renameWarehouse", json!({ "name": name }), Some(id), |c| {
+            stock::rename_warehouse(c, id, name)
+        })
+    }
+
+    /** Stops a warehouse that holds no stock. */
+    pub fn deactivate_warehouse(&self, id: i64) -> Result<()> {
+        self.write("deactivateWarehouse", Value::Null, Some(id), |c| {
+            stock::set_warehouse_active(c, id, false)
+        })
+    }
+
+    pub fn reactivate_warehouse(&self, id: i64) -> Result<()> {
+        self.write("reactivateWarehouse", Value::Null, Some(id), |c| {
+            stock::set_warehouse_active(c, id, true)
+        })
+    }
+
+    /** Quantity of an item in thousandths of its base unit: in total and per warehouse. */
+    pub fn stock_on_hand(&self, item_id: i64) -> Result<StockOnHand> {
+        self.read("stockOnHand", |c| stock::stock_on_hand(c, item_id))
+    }
+
+    /** Stock held on the day the business starts using the app, at its cost. */
+    pub fn post_opening_stock(
+        &self,
+        date: &str,
+        warehouse_id: i64,
+        lines: &[OpeningStockLine],
+    ) -> Result<i64> {
+        let detail = json!({ "date": date, "warehouseId": warehouse_id, "lines": lines });
+        self.write("postOpeningStock", detail, None, |c| {
+            stock::post_opening_stock(c, date, warehouse_id, lines)
+        })
+    }
+
+    /** Moves stock from one warehouse to another and returns the transfer's id. */
+    pub fn transfer_stock(&self, transfer: &TransferInput) -> Result<i64> {
+        self.write("transferStock", to_json(transfer), None, |c| {
+            stock::transfer_stock(c, transfer)
+        })
+    }
+
+    /** Transfers, newest first. */
+    pub fn transfers(&self) -> Result<Vec<Transfer>> {
+        self.read("transfers", stock::list_transfers)
+    }
+
+    /** Weighted average cost of one base unit of an item, in piastres, across all warehouses. */
+    pub fn average_cost(&self, item_id: i64) -> Result<Piastres> {
+        self.read("averageCost", |c| stock::average_cost(c, item_id))
+    }
+
+    /** Value at cost of all stock held of an item, in piastres. */
+    pub fn stock_value(&self, item_id: i64) -> Result<Piastres> {
+        self.read("stockValue", |c| stock::stock_value(c, item_id))
+    }
+
+    /** Turns serial tracking on or off for an item, with its warranty in months. */
+    pub fn set_item_serials(&self, item_id: i64, settings: &SerialSettings) -> Result<()> {
+        self.write("setItemSerials", to_json(settings), Some(item_id), |c| {
+            serials::set_item_serials(c, item_id, settings)
+        })
+    }
+
+    /** Where a serial number came from and went, and whether it is under warranty on `today`. */
+    pub fn find_serial(&self, serial: &str, today: &str) -> Result<Vec<SerialHistory>> {
+        self.read("findSerial", |c| serials::find_serial(c, serial, today))
+    }
+
+    /** Posts a stock count for one warehouse; differences go to Stock gain or Stock loss at average cost. */
+    pub fn post_stock_count(&self, count: &StockCountInput) -> Result<i64> {
+        let user_id = self.allow("postStockCount")?.id;
+        self.write("postStockCount", to_json(count), None, |c| {
+            inventory::post_stock_count(c, count, user_id)
+        })
+    }
+
+    pub fn stock_counts(&self) -> Result<Vec<StockCount>> {
+        self.read("stockCounts", inventory::list_stock_counts)
+    }
+
+    /** Damaged or expired stock taken out of a warehouse with a reason. */
+    pub fn write_off_stock(&self, write_off: &WriteOffInput) -> Result<i64> {
+        let user_id = self.allow("writeOffStock")?.id;
+        self.write("writeOffStock", to_json(write_off), None, |c| {
+            inventory::write_off_stock(c, write_off, user_id)
+        })
+    }
+
+    pub fn write_offs(&self) -> Result<Vec<WriteOff>> {
+        self.read("writeOffs", inventory::list_write_offs)
+    }
+
+    /** The quantity (base thousandths) below which the item is low on stock; None for none. */
+    pub fn set_item_minimum(&self, item_id: i64, minimum: Option<f64>) -> Result<()> {
+        self.write(
+            "setItemMinimum",
+            json!({ "minimum": minimum }),
+            Some(item_id),
+            |c| inventory::set_item_minimum(c, item_id, minimum),
+        )
+    }
+
+    /** Items below their minimum, in total or in one warehouse. */
+    pub fn low_stock(&self, warehouse_id: Option<i64>) -> Result<Vec<LowStockRow>> {
+        self.read("lowStock", |c| inventory::low_stock(c, warehouse_id))
+    }
+
+    /** An item's stock movements with a running balance, in all warehouses or one. */
+    pub fn item_movements(
+        &self,
+        item_id: i64,
+        warehouse_id: Option<i64>,
+    ) -> Result<Vec<ItemMovement>> {
+        self.read("itemMovements", |c| {
+            inventory::item_movements(c, item_id, warehouse_id)
+        })
+    }
+}
+
+fn to_json<T: Serialize>(value: &T) -> Value {
+    serde_json::to_value(value).expect("inputs serialize")
 }
 
 impl std::fmt::Debug for Business {

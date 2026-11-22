@@ -1,7 +1,7 @@
-// The Tauri app end to end (#73): create a business, post a journal entry through the Rust core, and
-// read it on the Accounts screen's trial balance. Needs tauri-driver and the platform's WebDriver
+// The Tauri app end to end (#73, #74): create a business, post a journal entry and stock an item
+// through the Rust core, and see them on the Accounts, Items and Warehouses screens. Needs tauri-driver and the platform's WebDriver
 // (WebKitWebDriver on Linux, msedgedriver on Windows). Run after `npx tauri build --debug --no-bundle`:
-//   node e2e/tauri-ledger.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
+//   node e2e/tauri.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -87,7 +87,7 @@ try {
       capabilities: { alwaysMatch: { "tauri:options": { application: app }, "webkitgtk:browserOptions": { args: [] } } },
     })
   ).sessionId;
-  console.log("the ledger on Tauri");
+  console.log("the ledger, items and stock on Tauri");
 
   await until(session, "the welcome screen", fill, "اسم النشاط", "بقالة النور");
   check(await run(session, () => document.documentElement.dir === "rtl"), "the screens run right to left");
@@ -112,6 +112,26 @@ try {
   await run(session, click, "ميزان المراجعة");
   await until(session, "the trial balance", () => /5[,٬.]?000/.test(document.body.textContent) || document.body.textContent.includes("٥٬٠٠٠"));
   check(true, "the trial balance shows the entry");
+
+  // Items and stock, from the Rust core to the screens.
+  const stocked = await run(session, async () => {
+    const tax = (await window.api.call("taxCodes", [])).value[0].id;
+    const item = await window.api.call("addItem", [{ nameAr: "راوتر واي فاي", baseUnit: "قطعة", barcode: "6221", salePrice: 150000, taxCodeId: tax }]);
+    const main = (await window.api.call("warehouses", [])).value[0].id;
+    const stock = await window.api.call("postOpeningStock", ["2026-01-01", main, [{ itemId: item.value, quantity: 3000, unitCost: 120000 }]]);
+    await window.api.call("setItemMinimum", [item.value, 5000]);
+    const scanned = await window.api.call("findByBarcode", ["6221"]);
+    return stock.ok && scanned.ok && scanned.value.itemId === item.value;
+  });
+  check(stocked === true, "an item, its opening stock and its minimum go through the Rust core");
+  await run(session, click, "الأصناف والمخزون");
+  await until(session, "the item list", () => document.body.textContent.includes("راوتر واي فاي"));
+  check(true, "the Items screen lists the item");
+  await run(session, click, "المخازن والتحويلات");
+  await until(session, "the warehouses", () => document.body.textContent.includes("المخزن الرئيسي"));
+  await run(session, click, "النواقص");
+  await until(session, "the low-stock list", () => document.body.textContent.includes("راوتر واي فاي"));
+  check(true, "the low-stock tab lists the item under its minimum");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);
