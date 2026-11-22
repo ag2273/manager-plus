@@ -501,4 +501,19 @@ fn the_screens_call_the_facade_by_name_with_json() {
         .unwrap();
     assert_eq!(tb["totalDebit"], 100);
     assert_eq!(code(business.call("etaSettings", &[])), "not_ported");
+    assert_eq!(code(business.call("close", &[])), "not_allowed");
+}
+
+#[test]
+fn the_rust_method_list_is_the_screens_list() {
+    let api = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../src/shared/api.ts"
+    ))
+    .unwrap();
+    let start = api.find("BUSINESS_METHODS").unwrap();
+    let list = &api[start..];
+    let list = &list[list.find('[').unwrap() + 1..list.find(']').unwrap()];
+    let names: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+    assert_eq!(names, manager_core::methods::BUSINESS_METHODS);
 }

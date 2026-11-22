@@ -378,6 +378,11 @@ impl Business {
         self.sign_out();
     }
 
+    /** Another handle on the same open file, signed out; the LAN server signs its clients in through it. */
+    pub fn signed_out(&self) -> Business {
+        Business::new(self.file.clone(), None)
+    }
+
     /**
      * Returns this business acting for the user with these credentials. The licence's number of
      * users counts different people signed in at once; signing in again as yourself is not another.
