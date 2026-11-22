@@ -212,6 +212,20 @@ try {
   });
   check(imported === true, "an item sheet imports through the Rust core with its opening stock");
 
+  // Reports and the VAT return read the books through the Rust core.
+  const reported = await run(session, async () => {
+    const pnl = (await window.api.call("profitAndLoss", ["2026-01-01", "2026-12-31"])).value;
+    const bs = (await window.api.call("balanceSheet", ["2026-12-31"])).value;
+    const vat = await window.api.call("vatReturn", ["2026-01-01", "2026-12-31"]);
+    return pnl.totalIncome > 0 && bs.totalAssets === bs.totalLiabilitiesAndEquity && vat.ok && vat.value.outputVat > 0;
+  });
+  check(reported === true, "profit and loss, the balance sheet and the VAT return come from the Rust core");
+  await run(session, click, "التقارير");
+  await until(session, "the reports screen", () => document.body.textContent.includes("الأرباح والخسائر"));
+  await run(session, click, "إقرار القيمة المضافة");
+  await until(session, "the VAT return", () => document.body.textContent.includes("ضريبة"));
+  check(true, "the Reports screen shows the VAT return");
+
   // The receipt, drawn by WebView2 and sent as ESC/POS to a network printer (here a socket of ours).
   const printer = await new Promise((listening) => {
     const got = [];

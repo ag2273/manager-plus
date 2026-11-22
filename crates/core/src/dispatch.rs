@@ -146,6 +146,33 @@ impl Business {
             "saveQuotation" => json(self.save_quotation(&arg(args, 0)?)?),
             "quotations" => json(self.quotations(&arg::<String>(args, 0)?)?),
             "findQuotation" => json(self.find_quotation(arg(args, 0)?, &arg::<String>(args, 1)?)?),
+            "profitAndLoss" => {
+                json(self.profit_and_loss(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
+            }
+            "balanceSheet" => json(self.balance_sheet(&arg::<String>(args, 0)?)?),
+            "generalLedger" => json(self.general_ledger(
+                arg(args, 0)?,
+                &arg::<String>(args, 1)?,
+                &arg::<String>(args, 2)?,
+            )?),
+            "journalEntry" => json(self.journal_entry(arg(args, 0)?)?),
+            "salesByItem" => {
+                json(self.sales_by_item(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
+            }
+            "salesByDay" => {
+                json(self.sales_by_day(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
+            }
+            "salesByPaymentMethod" => json(
+                self.sales_by_payment_method(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?,
+            ),
+            "salesDocuments" => {
+                json(self.sales_documents(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
+            }
+            "stockAt" => json(self.stock_at(&arg::<String>(args, 0)?)?),
+            "vatReturn" => {
+                json(self.vat_return(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
+            }
+            "dashboard" => json(self.dashboard(&arg::<String>(args, 0)?)?),
             "checkImport" => json(self.check_import(&arg(args, 0)?)?),
             "importData" => json(self.import_data(&arg(args, 0)?)?),
             "postImportShipment" => json(self.post_import_shipment(&arg(args, 0)?)?),

@@ -36,6 +36,10 @@ use crate::purchases::{
     SupplierChanges, SupplierInput,
 };
 use crate::quotations::{self, Quotation, QuotationInput, SavedQuotation};
+use crate::reports::{
+    self, BalanceSheet, Dashboard, DaySalesRow, EntryDetail, GeneralLedger, ItemSalesRow,
+    MethodSalesRow, ProfitAndLoss, SalesDocument, StockReport,
+};
 use crate::returns::{self, ReturnInput, ReturnResult, SaleReturn};
 use crate::sales::{
     self, CashSaleInput, Discount, HeldSale, HeldSaleInput, PricedSale, Receipt, SaleInput,
@@ -49,6 +53,7 @@ use crate::shifts::{self, CashInOut, CloseShiftInput, Shift, ZReport};
 use crate::shipments::{self, ImportShipment, ImportShipmentInput};
 use crate::stock::{self, OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse};
 use crate::users::{self, AuditEntry, Credentials, NewUser, User, UserChanges};
+use crate::vat_return::{self, VatReturn};
 use crate::withholding::{self, WithholdingCategory, WithholdingRateInput, WithholdingReport};
 
 pub const IN_MEMORY: &str = ":memory:";
@@ -1129,6 +1134,68 @@ impl Business {
         self.read("findQuotation", |c| {
             quotations::find_quotation(c, number, today)
         })
+    }
+
+    // Reports
+
+    /** Income and expenses between two dates, and the net profit. */
+    pub fn profit_and_loss(&self, from: &str, to: &str) -> Result<ProfitAndLoss> {
+        self.read("profitAndLoss", |c| reports::profit_and_loss(c, from, to))
+    }
+
+    /** Assets, liabilities and equity on a date, with the profit not yet closed. */
+    pub fn balance_sheet(&self, as_of: &str) -> Result<BalanceSheet> {
+        self.read("balanceSheet", |c| reports::balance_sheet(c, as_of))
+    }
+
+    /** One account's postings between two dates with a running balance. */
+    pub fn general_ledger(&self, account_id: i64, from: &str, to: &str) -> Result<GeneralLedger> {
+        self.read("generalLedger", |c| {
+            reports::general_ledger(c, account_id, from, to)
+        })
+    }
+
+    /** One journal entry with its lines: where every report figure drills down to. */
+    pub fn journal_entry(&self, entry_id: i64) -> Result<EntryDetail> {
+        self.read("journalEntry", |c| reports::journal_entry(c, entry_id))
+    }
+
+    /** Quantity, net sales, cost and gross profit per item. */
+    pub fn sales_by_item(&self, from: &str, to: &str) -> Result<Vec<ItemSalesRow>> {
+        self.read("salesByItem", |c| reports::sales_by_item(c, from, to))
+    }
+
+    /** Sales documents and totals per day. */
+    pub fn sales_by_day(&self, from: &str, to: &str) -> Result<Vec<DaySalesRow>> {
+        self.read("salesByDay", |c| reports::sales_by_day(c, from, to))
+    }
+
+    /** Till takings by method, and what sales left on customers' accounts. */
+    pub fn sales_by_payment_method(&self, from: &str, to: &str) -> Result<Vec<MethodSalesRow>> {
+        self.read("salesByPaymentMethod", |c| {
+            reports::sales_by_payment_method(c, from, to)
+        })
+    }
+
+    /** Sales documents in the period, newest first. */
+    pub fn sales_documents(&self, from: &str, to: &str) -> Result<Vec<SalesDocument>> {
+        self.read("salesDocuments", |c| reports::sales_documents(c, from, to))
+    }
+
+    /** Each item's quantity and value at the end of a date. */
+    pub fn stock_at(&self, as_of: &str) -> Result<StockReport> {
+        self.read("stockAt", |c| reports::stock_at(c, as_of))
+    }
+
+    /** The VAT return for a period, with every document behind it. */
+    pub fn vat_return(&self, from: &str, to: &str) -> Result<VatReturn> {
+        self.read("vatReturn", |c| vat_return::vat_return(c, from, to))
+    }
+
+    /** The day's sales and profit, the cash expected in the signed-in user's drawer, and low stock. */
+    pub fn dashboard(&self, date: &str) -> Result<Dashboard> {
+        let user_id = self.allow("dashboard")?.id;
+        self.read("dashboard", |c| reports::dashboard(c, date, user_id))
     }
 
     // Importing from spreadsheets
