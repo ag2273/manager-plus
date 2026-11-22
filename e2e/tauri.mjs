@@ -3,7 +3,8 @@
 // (WebKitWebDriver on Linux, msedgedriver on Windows). Run after `npx tauri build --debug --no-bundle`:
 //   node e2e/tauri.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -167,6 +168,31 @@ try {
     return report.receipts === 1 && report.sales.total === 150000 && report.expectedCash === 150000;
   });
   check(z === true, "the Z report counts the sale and the cash in the drawer");
+
+  // The receipt, drawn by WebView2 and sent as ESC/POS to a network printer (here a socket of ours).
+  const printer = await new Promise((listening) => {
+    const got = [];
+    const server = createServer((socket) => socket.on("data", (d) => got.push(d)));
+    server.listen(0, "127.0.0.1", () => listening({ server, got, port: server.address().port }));
+  });
+  const printed = await run(
+    session,
+    async (port) => {
+      await window.api.setPreferences({ printer: { kind: "network", host: "127.0.0.1", port, openDrawer: true, autoPrint: false, footer: "شكرًا لزيارتكم" } });
+      return window.api.print({ kind: "sale", number: 1, copy: true, openDrawer: true });
+    },
+    printer.port,
+  );
+  await sleep(300);
+  printer.server.close();
+  const job = Buffer.concat(printer.got);
+  const raster = job.indexOf(Buffer.from([0x1d, 0x76, 0x30, 0x00]));
+  const rowBytes = job[raster + 4] + job[raster + 5] * 256;
+  const inked = job.subarray(raster + 8, job.length - 9).filter((b) => b !== 0).length;
+  if (process.env.RECEIPT_OUT) writeFileSync(process.env.RECEIPT_OUT, job);
+  check(printed.ok === true && job[0] === 0x1b && job[1] === 0x40 && rowBytes === 72, "the receipt prints as an 80 mm ESC/POS raster");
+  check(inked > 2000, `the receipt has ink on it (${inked} dark bytes)`);
+  check(job.subarray(-5).equals(Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa])), "a cash sale opens the drawer");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);
