@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use manager_core::file_lock::{self, LockInfo, Me};
 use manager_core::users::Credentials;
 use manager_core::{Business, BusinessError, BusinessSettings};
 use serde_json::{json, Value};
@@ -23,6 +24,8 @@ struct Open {
     current: Option<Business>,
     current_is_file: bool,
     path: Option<String>,
+    /** Another PC that had the open file when this one opened it. */
+    elsewhere: Option<LockInfo>,
 }
 
 impl Open {
@@ -32,6 +35,51 @@ impl Open {
         } else {
             self.current.as_ref()
         }
+    }
+}
+
+/** This PC in the lock file next to the open business file. */
+fn me() -> Me {
+    let host = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .or_else(|| std::fs::read_to_string("/etc/hostname").ok())
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "unknown".into());
+    Me {
+        host,
+        pid: std::process::id(),
+    }
+}
+
+/** The daily backup of the open file, and its lock kept fresh; failures are logged and tried again later. */
+fn backup_if_due(open: &Open) {
+    let Some(file) = &open.file else { return };
+    match file.scheduled_backup(chrono::Utc::now()) {
+        Ok(Some(done)) => println!("Backed up to {}", done.path),
+        Ok(None) => {}
+        Err(error) => eprintln!("Scheduled backup failed: {error}"),
+    }
+}
+
+impl State {
+    /** Every five minutes while the app runs, as the Electron main process does. */
+    pub fn tick(&self) {
+        let open = self.open.lock().unwrap();
+        if let Some(path) = &open.path {
+            file_lock::refresh_lock(path, &me(), chrono::Utc::now());
+        }
+        backup_if_due(&open);
+    }
+
+    /** Lets go of the open file's lock when the app closes. */
+    pub fn release(&self) {
+        let mut open = self.open.lock().unwrap();
+        if let Some(path) = &open.path {
+            file_lock::release_lock(path, &me());
+        }
+        open.elsewhere = None;
     }
 }
 
@@ -162,9 +210,15 @@ fn switch_to(
     if let Some(old) = open.file.take() {
         old.close();
     }
+    if let Some(old) = &open.path {
+        file_lock::release_lock(old, &me());
+    }
     open.file = Some(business);
     open.current_is_file = signed_in;
     open.path = Some(path.to_string());
+    // A read-only folder gets no lock, but the file still opens.
+    open.elsewhere = file_lock::take_lock(path, &me(), chrono::Utc::now());
+    backup_if_due(open);
     remember_recent(app, path);
     Ok(serde_json::to_value(settings).expect("settings serialize"))
 }
@@ -292,9 +346,11 @@ pub async fn desktop(
         "fileStatus" => {
             let open = state.open.lock().unwrap();
             match (&open.path, &open.file) {
-                (Some(path), Some(_)) => {
-                    json!({ "path": path, "syncFolder": null, "openElsewhere": null })
-                }
+                (Some(path), Some(_)) => json!({
+                    "path": path,
+                    "syncFolder": file_lock::sync_folder(path),
+                    "openElsewhere": open.elsewhere,
+                }),
                 _ => Value::Null,
             }
         }
@@ -304,6 +360,57 @@ pub async fn desktop(
                 (Some(path), Some(_)) => json!({ "mode": "local", "path": path }),
                 _ => json!({ "mode": "none" }),
             }
+        }
+        "chooseFolder" => match app.dialog().file().blocking_pick_folder() {
+            Some(folder) => match folder.into_path() {
+                Ok(p) => json!(p.to_string_lossy()),
+                Err(_) => Value::Null,
+            },
+            None => Value::Null,
+        },
+        "restoreBackup" => {
+            let restored = (|| {
+                let given: Option<String> = arg(&args, 0)?;
+                {
+                    let open = state.open.lock().unwrap();
+                    let manager = open
+                        .current()
+                        .and_then(|b| b.current_user())
+                        .is_some_and(|u| u.role == "manager");
+                    if !manager || open.path.is_none() {
+                        return Err(BusinessError::new(
+                            "restore_needs_manager",
+                            "Only a manager on the PC that holds the file can restore",
+                        ));
+                    }
+                }
+                let backup = match given {
+                    Some(p) => p,
+                    None => match app
+                        .dialog()
+                        .file()
+                        .add_filter(filter.0, filter.1)
+                        .blocking_pick_file()
+                    {
+                        None => return Ok(Value::Null),
+                        Some(p) => p
+                            .into_path()
+                            .map_err(|e| BusinessError::new("unexpected", e.to_string()))?
+                            .to_string_lossy()
+                            .into_owned(),
+                    },
+                };
+                let mut open = state.open.lock().unwrap();
+                let path = open.path.clone().expect("checked above");
+                let restored = open.current().expect("checked above").restore(&backup)?;
+                // The old handles now hold nothing; the restored file opens signed out.
+                if let Some(old) = open.current.take() {
+                    old.sign_out();
+                }
+                open.current_is_file = false;
+                switch_to(&app, &mut open, restored, &path, false)
+            })();
+            result(restored)
         }
         "appVersion" => json!(app.package_info().version.to_string()),
         "licenceStatus" | "lastServer" => Value::Null,

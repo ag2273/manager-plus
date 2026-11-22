@@ -3,7 +3,7 @@
 // (WebKitWebDriver on Linux, msedgedriver on Windows). Run after `npx tauri build --debug --no-bundle`:
 //   node e2e/tauri.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -250,6 +250,26 @@ try {
   check(printed.ok === true && job[0] === 0x1b && job[1] === 0x40 && rowBytes === 72, "the receipt prints as an 80 mm ESC/POS raster");
   check(inked > 2000, `the receipt has ink on it (${inked} dark bytes)`);
   check(job.subarray(-5).equals(Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa])), "a cash sale opens the drawer");
+
+  // The lock beside the file, a backup into a folder, and restoring it (which signs out).
+  check(existsSync(`${file}.lock`), "the open file has a lock beside it");
+  const backups = join(dir, "backups");
+  mkdirSync(backups);
+  const backedUp = await run(
+    session,
+    async (folder) => {
+      await window.api.call("setBackupFolder", [folder]);
+      const made = await window.api.call("backupNow", []);
+      const status = (await window.api.call("backupStatus", [])).value;
+      const restored = await window.api.restoreBackup(made.value.path);
+      const after = await window.api.call("backupStatus", []);
+      return made.ok && status.backups.length === 1 && restored.ok && after.code === "sign_in_required";
+    },
+    backups,
+  );
+  check(backedUp === true, "a backup is made and restored through the Rust core, signed out after");
+  // The backup, the file just before the restore, and the restored file's own daily backup (its copy had none yet).
+  check(readdirSync(backups).length === 3, "the file as it was before the restore is backed up too");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);

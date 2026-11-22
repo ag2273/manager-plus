@@ -146,6 +146,11 @@ impl Business {
             "saveQuotation" => json(self.save_quotation(&arg(args, 0)?)?),
             "quotations" => json(self.quotations(&arg::<String>(args, 0)?)?),
             "findQuotation" => json(self.find_quotation(arg(args, 0)?, &arg::<String>(args, 1)?)?),
+            "backupStatus" => json(self.backup_status()?),
+            "setBackupFolder" => {
+                json(self.set_backup_folder(arg::<Option<String>>(args, 0)?.as_deref())?)
+            }
+            "backupNow" => json(self.backup_now()?),
             "profitAndLoss" => {
                 json(self.profit_and_loss(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
             }

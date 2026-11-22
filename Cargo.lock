@@ -1965,6 +1965,7 @@ dependencies = [
 name = "manager-plus"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "manager-core",
  "serde",
  "serde_json",
