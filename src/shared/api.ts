@@ -1,3 +1,4 @@
+import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
 import type { Lang, ReportTable } from "./report-tables";
 import type { ReadSheet } from "./spreadsheet-read";
 import type { Business, BusinessSettings } from "../core/business";
@@ -83,6 +84,10 @@ export const BUSINESS_METHODS = [
   "backupStatus",
   "setBackupFolder",
   "backupNow",
+  "etaSettings",
+  "etaDocuments",
+  "etaState",
+  "retryEta",
   "transferStock",
   "transfers",
   "averageCost",
@@ -247,7 +252,17 @@ export interface DesktopApi {
   serverStatus(): Promise<ServerStatus>;
   /** Starts or stops serving the open business to other PCs (managers only); remembered for this file. */
   setServing(on: boolean, port: number): Promise<Result<ServerStatus>>;
+  /** Signing certificates on this PC (the USB token's, while it is plugged in). */
+  etaCertificates(): Promise<TokenCertificate[]>;
+  /** Saves the e-invoice settings, sealing the client secret for this PC; the secret is left as it was when empty. */
+  saveEtaSettings(settings: EtaSettingsInput): Promise<Result<null>>;
+  /** Asks the ETA for news on submitted documents, then signs and sends the pending ones; returns how many were accepted. */
+  sendEtaNow(): Promise<Result<number>>;
+  /** Cancels a submitted or valid document at the ETA. */
+  cancelEta(kind: EtaKind, documentId: number, reason: string): Promise<Result<null>>;
 }
+
+export type TokenCertificate = { thumbprint: string; subject: string; issuer: string; notAfter: string };
 
 export const CHANNELS = {
   createBusiness: "business:create",
@@ -273,4 +288,8 @@ export const CHANNELS = {
   connection: "network:connection",
   serverStatus: "network:status",
   setServing: "network:serve",
+  etaCertificates: "eta:certificates",
+  saveEtaSettings: "eta:save-settings",
+  sendEtaNow: "eta:send",
+  cancelEta: "eta:cancel",
 } as const;

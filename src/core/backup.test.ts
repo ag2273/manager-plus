@@ -68,6 +68,10 @@ function reports(business: Business) {
 function downgradeTo18(path: string): void {
   const db = new Database(path);
   db.exec(`
+    DROP TABLE eta_documents; DROP TABLE eta_settings;
+    ALTER TABLE customers DROP COLUMN governate;
+    ALTER TABLE customers DROP COLUMN region_city;
+    ALTER TABLE customers DROP COLUMN building_number;
     DROP TABLE stock_count_lines; DROP TABLE stock_counts; DROP TABLE write_off_lines; DROP TABLE write_offs;
     ALTER TABLE items DROP COLUMN min_quantity;
     ALTER TABLE business_settings DROP COLUMN backup_folder;

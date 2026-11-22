@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DEFAULT_PREFERENCES, NO_PRINTER, THEMES, type Connection, type Preferences, type PrinterSettings, type ServerStatus, type ThemeId } from "../../../shared/api";
 import type { BackupStatus } from "../../../core/backup";
+import type { EtaSettings } from "../../../core/eta/store";
+import type { TokenCertificate } from "../../../shared/api";
 import type { BusinessSettings } from "../../../shared/api";
 import { business, errorText } from "../api";
 import { ar, locale } from "../strings";
@@ -70,6 +72,7 @@ export function Settings({
       <PrinterSetup />
       <ServerSetup />
       {isManager && <BackupSetup onRestored={onRestored} />}
+      {isManager && <EtaSetup />}
     </>
   );
 }
@@ -414,5 +417,136 @@ function ServerSetup() {
       </div>
       <span className="small muted">{ar.network.managerOnly}</span>
     </section>
+  );
+}
+
+/** E-invoicing with the ETA: off unless turned on; set up by a manager on the PC that holds the file and the token. */
+function EtaSetup() {
+  const [local, setLocal] = useState(false);
+  const [settings, setSettings] = useState<EtaSettings | null>(null);
+  const [secret, setSecret] = useState("");
+  const [certificates, setCertificates] = useState<TokenCertificate[]>([]);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function loadCertificates() {
+    setCertificates(await window.api.etaCertificates());
+  }
+  useEffect(() => {
+    void window.api.fileStatus().then((f) => setLocal(f !== null));
+    void business.etaSettings().then((r) => r.ok && setSettings(r.value));
+    void loadCertificates();
+  }, []);
+  if (!settings) return null;
+  const s = settings;
+  const set = (changes: Partial<EtaSettings>) => setSettings({ ...s, ...changes });
+  const setAddress = (changes: Partial<EtaSettings["address"]>) => set({ address: { ...s.address, ...changes } });
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const input = {
+      enabled: s.enabled,
+      environment: s.environment,
+      clientId: s.clientId,
+      activityCode: s.activityCode,
+      address: s.address,
+      certificate: s.certificate,
+    };
+    const result = await window.api.saveEtaSettings(secret.trim() ? { ...input, clientSecret: secret } : input);
+    setMessage(result.ok ? { ok: true, text: ar.eta.saved } : { ok: false, text: errorText(result)! });
+    if (result.ok) {
+      setSecret("");
+      void business.etaSettings().then((r) => r.ok && setSettings(r.value));
+    }
+  }
+
+  async function sendNow() {
+    const result = await window.api.sendEtaNow();
+    setMessage(result.ok ? { ok: true, text: ar.eta.sent(result.value) } : { ok: false, text: errorText(result)! });
+  }
+
+  const text = (label: string, value: string, change: (v: string) => void, ltr = false) => (
+    <label className="field narrow">
+      {label}
+      <input dir={ltr ? "ltr" : undefined} value={value} disabled={!local} onChange={(e) => change(e.target.value)} />
+    </label>
+  );
+
+  return (
+    <form className="card printer-card" onSubmit={save} aria-label={ar.eta.title}>
+      <div className="stack">
+        <h2>{ar.eta.title}</h2>
+        <span className="muted">{local ? ar.eta.hint : ar.eta.localOnly}</span>
+      </div>
+      {message && (
+        <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
+          {message.text}
+        </div>
+      )}
+      <label className="check">
+        <input type="checkbox" checked={s.enabled} disabled={!local} onChange={(e) => set({ enabled: e.target.checked })} />
+        {ar.eta.enabled}
+      </label>
+      {s.enabled && (
+        <>
+          <div className="row">
+            <label className="field narrow">
+              {ar.eta.environment}
+              <select value={s.environment} disabled={!local} onChange={(e) => set({ environment: e.target.value as EtaSettings["environment"] })}>
+                <option value="preprod">{ar.eta.environments.preprod}</option>
+                <option value="production">{ar.eta.environments.production}</option>
+              </select>
+            </label>
+            {text(ar.eta.clientId, s.clientId, (v) => set({ clientId: v }), true)}
+            <label className="field narrow">
+              {ar.eta.clientSecret}
+              <input
+                dir="ltr"
+                type="password"
+                autoComplete="off"
+                value={secret}
+                disabled={!local}
+                placeholder={s.hasSecret ? ar.eta.secretKept : ""}
+                onChange={(e) => setSecret(e.target.value)}
+              />
+            </label>
+            {text(ar.eta.activityCode, s.activityCode, (v) => set({ activityCode: v }), true)}
+          </div>
+          <span className="small muted">{ar.eta.issuerAddress}</span>
+          <div className="row">
+            {text(ar.eta.governate, s.address.governate, (v) => setAddress({ governate: v }))}
+            {text(ar.eta.regionCity, s.address.regionCity, (v) => setAddress({ regionCity: v }))}
+            {text(ar.eta.street, s.address.street, (v) => setAddress({ street: v }))}
+            {text(ar.eta.buildingNumber, s.address.buildingNumber, (v) => setAddress({ buildingNumber: v }))}
+          </div>
+          <div className="row">
+            <label className="field">
+              {ar.eta.certificate}
+              <select value={s.certificate} disabled={!local} onChange={(e) => set({ certificate: e.target.value })}>
+                <option value="">{certificates.length === 0 ? ar.eta.noCertificates : "—"}</option>
+                {certificates.map((c) => (
+                  <option key={c.thumbprint} value={c.thumbprint}>
+                    {c.subject} · {c.notAfter}
+                  </option>
+                ))}
+                {s.certificate && !certificates.some((c) => c.thumbprint === s.certificate) && <option value={s.certificate}>{s.certificate}</option>}
+              </select>
+            </label>
+            <button type="button" className="btn" disabled={!local} onClick={() => void loadCertificates()}>
+              {ar.eta.refresh}
+            </button>
+          </div>
+        </>
+      )}
+      <div className="row">
+        <button type="submit" className="btn btn-primary" disabled={!local}>
+          {ar.save}
+        </button>
+        {s.enabled && (
+          <button type="button" className="btn" disabled={!local} onClick={() => void sendNow()}>
+            {ar.eta.sendNow}
+          </button>
+        )}
+      </div>
+    </form>
   );
 }

@@ -54,16 +54,33 @@ type Draft = {
   phone: string;
   taxRegistrationNumber: string;
   address: string;
+  governate: string;
+  regionCity: string;
+  buildingNumber: string;
   priceLevel: PriceLevel;
   creditLimit: string;
   withholdingCategoryId: number | null;
 };
-const emptyDraft: Draft = { name: "", phone: "", taxRegistrationNumber: "", address: "", priceLevel: "retail", creditLimit: "", withholdingCategoryId: null };
+const emptyDraft: Draft = {
+  name: "",
+  phone: "",
+  taxRegistrationNumber: "",
+  address: "",
+  governate: "",
+  regionCity: "",
+  buildingNumber: "",
+  priceLevel: "retail",
+  creditLimit: "",
+  withholdingCategoryId: null,
+};
 const draftOf = (c: Customer): Draft => ({
   name: c.name,
   phone: c.phone,
   taxRegistrationNumber: c.taxRegistrationNumber,
   address: c.address,
+  governate: c.governate,
+  regionCity: c.regionCity,
+  buildingNumber: c.buildingNumber,
   priceLevel: c.priceLevel,
   creditLimit: c.creditLimit === null ? "" : formatMoney(c.creditLimit),
   withholdingCategoryId: c.withholdingCategoryId,
@@ -157,6 +174,23 @@ function CustomerList({ customers, onChange, keepsBooks }: { customers: Customer
               {ar.withholding.category}
               <WithholdingSelect categories={categories} value={draft.withholdingCategoryId} onChange={(id) => setDraft({ ...draft, withholdingCategoryId: id })} />
             </label>
+          </div>
+        )}
+        {keepsBooks && (
+          <div className="row" aria-label={ar.customers.etaAddress}>
+            <label className="field narrow">
+              {ar.customers.governate}
+              <input value={draft.governate} onChange={(e) => setDraft({ ...draft, governate: e.target.value })} />
+            </label>
+            <label className="field narrow">
+              {ar.customers.regionCity}
+              <input value={draft.regionCity} onChange={(e) => setDraft({ ...draft, regionCity: e.target.value })} />
+            </label>
+            <label className="field narrow">
+              {ar.customers.buildingNumber}
+              <input value={draft.buildingNumber} onChange={(e) => setDraft({ ...draft, buildingNumber: e.target.value })} />
+            </label>
+            <span className="small muted">{ar.customers.etaAddress}</span>
           </div>
         )}
         <div className="row">

@@ -90,6 +90,8 @@ td input, td select { height: 38px; }
 .chip-warn { background: var(--warn-soft); color: var(--warn); }
 .card.warn { border-color: var(--warn); background: var(--warn-soft); }
 .badge { align-self: flex-start; padding: 2px 10px; border-radius: 999px; font-size: 12px; background: var(--soft); color: var(--soft-text); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.muted { background: var(--surface-2); color: var(--muted); }
 .error { padding: 10px 14px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }
 .ok { padding: 10px 14px; border-radius: 8px; background: var(--ok-soft); color: var(--ok); }
 
