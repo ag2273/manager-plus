@@ -1,0 +1,37 @@
+# Makes the release (update) signing key pair ONCE, inside GitHub: the private key goes straight
+# into the repo secret RELEASE_PRIVATE_KEY and is never printed or stored elsewhere; the public key
+# is printed in the log, to be put into src/core/update-key.ts.
+# Writing a repo secret needs a token that may: SECRETS_TOKEN, a fine-grained token for this repo
+# with "Secrets: Read and write". It refuses to run when RELEASE_PRIVATE_KEY already exists, since
+# a new key would stop every installed copy from accepting updates.
+name: Release signing key (run once)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "make the release key" to confirm.'
+        required: true
+
+jobs:
+  key:
+    if: inputs.confirm == 'make the release key'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Make the pair and store the private key as a repo secret
+        env:
+          GH_TOKEN: ${{ secrets.SECRETS_TOKEN }}
+          ALREADY_SET: ${{ secrets.RELEASE_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$ALREADY_SET" = "true" ]; then echo "RELEASE_PRIVATE_KEY already exists; not replacing it." >&2; exit 1; fi
+          if [ -z "$GH_TOKEN" ]; then echo "The SECRETS_TOKEN secret is missing." >&2; exit 1; fi
+          key="$RUNNER_TEMP/release.pem"
+          node scripts/release.mjs keygen "$key"
+          gh secret set RELEASE_PRIVATE_KEY --repo "$GITHUB_REPOSITORY" < "$key"
+          shred -u "$key"
+          # The public key is public: print it in the log, where the API can read it.
+          sed -n '/BEGIN PUBLIC KEY/,/END PUBLIC KEY/p' src/core/update-key.ts
