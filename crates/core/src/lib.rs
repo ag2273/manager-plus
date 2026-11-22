@@ -4,6 +4,7 @@
 
 pub mod business;
 pub mod chart;
+pub mod currency;
 pub mod dates;
 mod dispatch;
 pub mod error;
@@ -12,9 +13,12 @@ pub mod items;
 pub mod ledger;
 pub mod migrations;
 pub mod num;
+pub mod purchases;
 pub mod serials;
+pub mod shares;
 pub mod stock;
 pub mod users;
+pub mod withholding;
 
 pub use business::{Business, BusinessSettings, LicenceLimits, LicenceMode};
 pub use error::{BusinessError, Result};

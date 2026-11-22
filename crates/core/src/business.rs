@@ -20,6 +20,11 @@ use crate::ledger::{
     self, Account, AccountChanges, JournalEntryInput, JournalLine, NewAccount, TrialBalance,
 };
 use crate::migrations::{run_pending, LATEST_SCHEMA_VERSION};
+use crate::purchases::{
+    self, DebitNote, DebitNoteInput, PostedNote, PricedPurchase, PurchaseInvoice,
+    PurchaseInvoiceInput, PurchaseLineInput, PurchaseMoney, Supplier, SupplierAccount,
+    SupplierChanges, SupplierInput,
+};
 use crate::serials::{self, SerialHistory, SerialSettings};
 use crate::stock::{self, OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse};
 use crate::users::{self, AuditEntry, Credentials, NewUser, User, UserChanges};
@@ -154,7 +159,7 @@ pub fn replace_file(backup: &str, target: &str) -> Result<()> {
     Ok(())
 }
 
-fn to_western_digits(text: &str) -> String {
+pub(crate) fn to_western_digits(text: &str) -> String {
     text.chars()
         .map(|c| match c {
             '\u{0660}'..='\u{0669}' => char::from(b'0' + (c as u32 - 0x0660) as u8),
@@ -827,6 +832,84 @@ impl Business {
         self.read("itemMovements", |c| {
             inventory::item_movements(c, item_id, warehouse_id)
         })
+    }
+}
+
+// Suppliers, purchases and debit notes
+impl Business {
+    pub fn suppliers(&self) -> Result<Vec<Supplier>> {
+        self.read("suppliers", purchases::list_suppliers)
+    }
+
+    pub fn add_supplier(&self, supplier: &SupplierInput) -> Result<i64> {
+        self.write("addSupplier", to_json(supplier), None, |c| {
+            purchases::add_supplier(c, supplier)
+        })
+    }
+
+    pub fn update_supplier(&self, id: i64, changes: &SupplierChanges) -> Result<()> {
+        self.write("updateSupplier", to_json(changes), Some(id), |c| {
+            purchases::update_supplier(c, id, changes)
+        })
+    }
+
+    pub fn deactivate_supplier(&self, id: i64) -> Result<()> {
+        self.write("deactivateSupplier", Value::Null, Some(id), |c| {
+            purchases::set_supplier_active(c, id, false)
+        })
+    }
+
+    pub fn reactivate_supplier(&self, id: i64) -> Result<()> {
+        self.write("reactivateSupplier", Value::Null, Some(id), |c| {
+            purchases::set_supplier_active(c, id, true)
+        })
+    }
+
+    /** What the business owes a supplier, in piastres. */
+    pub fn supplier_balance(&self, id: i64) -> Result<Piastres> {
+        self.read("supplierBalance", |c| purchases::supplier_balance(c, id))
+    }
+
+    /** What the business owes a supplier in their own currency, and in EGP as the books carry it. */
+    pub fn supplier_account(&self, id: i64) -> Result<SupplierAccount> {
+        self.read("supplierAccount", |c| purchases::supplier_account(c, id))
+    }
+
+    /** Net, VAT and total of purchase lines on a date, without posting anything. */
+    pub fn price_purchase(
+        &self,
+        date: &str,
+        lines: &[PurchaseLineInput],
+        money: Option<&PurchaseMoney>,
+    ) -> Result<PricedPurchase> {
+        self.read("pricePurchase", |c| {
+            Ok(purchases::price_purchase(c, date, lines, money)?.summary())
+        })
+    }
+
+    /** Posts a supplier's invoice into a warehouse and returns its id. */
+    pub fn post_purchase_invoice(&self, invoice: &PurchaseInvoiceInput) -> Result<i64> {
+        let user_id = self.allow("postPurchaseInvoice")?.id;
+        self.write("postPurchaseInvoice", to_json(invoice), None, |c| {
+            purchases::post_purchase_invoice(c, invoice, user_id)
+        })
+    }
+
+    /** Purchase invoices, newest first. */
+    pub fn purchase_invoices(&self) -> Result<Vec<PurchaseInvoice>> {
+        self.read("purchaseInvoices", purchases::list_purchase_invoices)
+    }
+
+    /** Sends goods back to a supplier against their invoice. */
+    pub fn post_debit_note(&self, note: &DebitNoteInput) -> Result<PostedNote> {
+        let user_id = self.allow("postDebitNote")?.id;
+        self.write("postDebitNote", to_json(note), None, |c| {
+            purchases::post_debit_note(c, note, user_id)
+        })
+    }
+
+    pub fn debit_notes(&self) -> Result<Vec<DebitNote>> {
+        self.read("debitNotes", purchases::list_debit_notes)
     }
 }
 
