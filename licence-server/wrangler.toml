@@ -6,5 +6,5 @@ compatibility_date = "2026-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "manager-plus-licences"
-# Put the id that `wrangler d1 create manager-plus-licences` prints here.
-database_id = "REPLACE_WITH_DATABASE_ID"
+# Created 2026-11-22 in the EEUR region; the tables are in schema.sql.
+database_id = "219cbbef-0fef-4f77-99bf-d902f1923f2e"

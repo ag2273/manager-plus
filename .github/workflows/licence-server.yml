@@ -1,0 +1,39 @@
+# Deploys the licence server to Cloudflare whenever it changes on main, or by hand.
+# Needs these repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   a Cloudflare API token with "Workers Scripts: Edit" and "D1: Edit"
+#   CLOUDFLARE_ACCOUNT_ID  the Cloudflare account ID
+#   ADMIN_PASSWORD         the admin page's password
+name: Licence server
+
+on:
+  push:
+    branches: [main]
+    paths: ["licence-server/**", ".github/workflows/licence-server.yml"]
+  workflow_dispatch:
+
+concurrency: licence-server
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply the schema (only adds what's missing)
+        run: npx --yes wrangler@4.155.0 d1 execute manager-plus-licences --remote --file licence-server/schema.sql --config licence-server/wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Deploy
+        run: npx --yes wrangler@4.155.0 deploy --config licence-server/wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Set the admin password
+        run: printf '%s' "$ADMIN_PASSWORD" | npx --yes wrangler@4.155.0 secret put ADMIN_PASSWORD --config licence-server/wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}

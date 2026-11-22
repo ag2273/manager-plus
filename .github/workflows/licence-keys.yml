@@ -1,0 +1,35 @@
+# Makes the licence signing key pair ONCE, inside GitHub: the private key goes straight
+# into the Worker's secret and is never printed or stored; the public key is shown in the
+# run's summary, to be put into src/core/licence/public-key.ts.
+# Running it again makes every licence issued before it invalid, hence the confirmation.
+name: Licence signing key (run once)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "make a new key" to confirm. Every licence already issued stops working.'
+        required: true
+
+jobs:
+  keys:
+    if: inputs.confirm == 'make a new key'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Make the pair and store the private key in the Worker
+        run: |
+          node licence-server/make-keys.mjs 2>/dev/null | npx --yes wrangler@4.155.0 secret put LICENCE_PRIVATE_KEY --config licence-server/wrangler.toml
+          {
+            echo "### Licence public key"
+            echo "Put this in \`src/core/licence/public-key.ts\`:"
+            echo '```'
+            sed -n '/BEGIN PUBLIC KEY/,/END PUBLIC KEY/p' src/core/licence/public-key.ts
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
