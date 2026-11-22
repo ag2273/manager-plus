@@ -2,6 +2,8 @@
 name = "manager-plus-licences"
 main = "src/worker.ts"
 compatibility_date = "2026-11-01"
+# Served on Ayman's domain. Cloudflare creates the DNS record and the certificate on deploy.
+routes = [{ pattern = "licence.nileorbit.com", custom_domain = true }]
 
 [[d1_databases]]
 binding = "DB"

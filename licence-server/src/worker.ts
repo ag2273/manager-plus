@@ -85,6 +85,9 @@ export async function handle(request: Request, env: Env, now = new Date()): Prom
       return release ? json(release) : json({ error: "none" }, 404);
     }
 
+    // The bare address opens the admin page, so the owner can type just the domain.
+    if (url.pathname === "/" && request.method === "GET") return Response.redirect(new URL("/admin", url).toString(), 302);
+
     if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
       if (!(await isAdmin(request, env))) {
         if (!(await withinLimit(env.DB, `admin:${ip}`, ADMIN_FAILURES_PER_HOUR, HOUR, now))) return json({ error: "rate_limited" }, 429);
