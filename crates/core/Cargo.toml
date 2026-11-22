@@ -1,0 +1,19 @@
+[package]
+name = "manager-core"
+description = "The Manager+ books: every business rule, behind one Business facade."
+edition.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+getrandom = "0.3"
+rusqlite = { version = "0.37", features = ["bundled"] }
+scrypt = { version = "0.11", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+subtle = "2"
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+tempfile = "3"

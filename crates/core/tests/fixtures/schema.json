@@ -1,0 +1,584 @@
+[
+ {
+  "type": "index",
+  "name": "credit_note_lines_by_invoice_line",
+  "tbl_name": "credit_note_lines",
+  "sql": "CREATE INDEX credit_note_lines_by_invoice_line ON credit_note_lines (invoice_line_id)"
+ },
+ {
+  "type": "index",
+  "name": "debit_note_lines_by_purchase_line",
+  "tbl_name": "debit_note_lines",
+  "sql": "CREATE INDEX debit_note_lines_by_purchase_line ON debit_note_lines (purchase_line_id)"
+ },
+ {
+  "type": "index",
+  "name": "journal_entries_by_date",
+  "tbl_name": "journal_entries",
+  "sql": "CREATE INDEX journal_entries_by_date ON journal_entries (date)"
+ },
+ {
+  "type": "index",
+  "name": "ledger_lines_by_account",
+  "tbl_name": "ledger_lines",
+  "sql": "CREATE INDEX ledger_lines_by_account ON ledger_lines (account_id)"
+ },
+ {
+  "type": "index",
+  "name": "ledger_lines_by_customer",
+  "tbl_name": "ledger_lines",
+  "sql": "CREATE INDEX ledger_lines_by_customer ON ledger_lines (customer_id) WHERE customer_id IS NOT NULL"
+ },
+ {
+  "type": "index",
+  "name": "ledger_lines_by_supplier",
+  "tbl_name": "ledger_lines",
+  "sql": "CREATE INDEX ledger_lines_by_supplier ON ledger_lines (supplier_id) WHERE supplier_id IS NOT NULL"
+ },
+ {
+  "type": "index",
+  "name": "payment_allocations_by_entry",
+  "tbl_name": "payment_allocations",
+  "sql": "CREATE INDEX payment_allocations_by_entry ON payment_allocations (entry_id)"
+ },
+ {
+  "type": "index",
+  "name": "sales_receipt_payments_by_receipt",
+  "tbl_name": "sales_receipt_payments",
+  "sql": "CREATE INDEX sales_receipt_payments_by_receipt ON sales_receipt_payments (receipt_id)"
+ },
+ {
+  "type": "index",
+  "name": "sales_receipts_by_date",
+  "tbl_name": "sales_receipts",
+  "sql": "CREATE INDEX sales_receipts_by_date ON sales_receipts (date)"
+ },
+ {
+  "type": "index",
+  "name": "sales_receipts_by_shift",
+  "tbl_name": "sales_receipts",
+  "sql": "CREATE INDEX sales_receipts_by_shift ON sales_receipts (shift_id)"
+ },
+ {
+  "type": "index",
+  "name": "sales_return_lines_by_receipt_line",
+  "tbl_name": "sales_return_lines",
+  "sql": "CREATE INDEX sales_return_lines_by_receipt_line ON sales_return_lines (receipt_line_id)"
+ },
+ {
+  "type": "index",
+  "name": "sales_returns_by_shift",
+  "tbl_name": "sales_returns",
+  "sql": "CREATE INDEX sales_returns_by_shift ON sales_returns (shift_id)"
+ },
+ {
+  "type": "index",
+  "name": "serial_movements_by_serial",
+  "tbl_name": "serial_movements",
+  "sql": "CREATE INDEX serial_movements_by_serial ON serial_movements (serial_id)"
+ },
+ {
+  "type": "index",
+  "name": "serial_movements_by_source",
+  "tbl_name": "serial_movements",
+  "sql": "CREATE INDEX serial_movements_by_source ON serial_movements (source, source_id)"
+ },
+ {
+  "type": "index",
+  "name": "serials_by_serial",
+  "tbl_name": "serials",
+  "sql": "CREATE INDEX serials_by_serial ON serials (serial)"
+ },
+ {
+  "type": "index",
+  "name": "shifts_one_open_per_user",
+  "tbl_name": "shifts",
+  "sql": "CREATE UNIQUE INDEX shifts_one_open_per_user ON shifts (user_id) WHERE closed_at IS NULL"
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_accounts_1",
+  "tbl_name": "accounts",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_accounts_2",
+  "tbl_name": "accounts",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_credit_notes_1",
+  "tbl_name": "credit_notes",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_debit_notes_1",
+  "tbl_name": "debit_notes",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_eta_documents_1",
+  "tbl_name": "eta_documents",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_expenses_1",
+  "tbl_name": "expenses",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_import_shipment_invoices_1",
+  "tbl_name": "import_shipment_invoices",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_import_shipments_1",
+  "tbl_name": "import_shipments",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_item_units_1",
+  "tbl_name": "item_units",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_item_units_2",
+  "tbl_name": "item_units",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_items_1",
+  "tbl_name": "items",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_money_transfers_1",
+  "tbl_name": "money_transfers",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_payments_1",
+  "tbl_name": "payments",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_quotations_1",
+  "tbl_name": "quotations",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_quotations_2",
+  "tbl_name": "quotations",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_sales_invoices_1",
+  "tbl_name": "sales_invoices",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_sales_receipts_1",
+  "tbl_name": "sales_receipts",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_sales_returns_1",
+  "tbl_name": "sales_returns",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_serials_1",
+  "tbl_name": "serials",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_suppliers_1",
+  "tbl_name": "suppliers",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_tax_codes_1",
+  "tbl_name": "tax_codes",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_tax_rates_1",
+  "tbl_name": "tax_rates",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_users_1",
+  "tbl_name": "users",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_warehouses_1",
+  "tbl_name": "warehouses",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_withholding_categories_1",
+  "tbl_name": "withholding_categories",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_withholding_rates_1",
+  "tbl_name": "withholding_rates",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "stock_movements_by_item",
+  "tbl_name": "stock_movements",
+  "sql": "CREATE INDEX stock_movements_by_item ON stock_movements (item_id, warehouse_id)"
+ },
+ {
+  "type": "index",
+  "name": "stock_movements_by_source",
+  "tbl_name": "stock_movements",
+  "sql": "CREATE INDEX stock_movements_by_source ON stock_movements (source, source_id)"
+ },
+ {
+  "type": "table",
+  "name": "accounts",
+  "tbl_name": "accounts",
+  "sql": "CREATE TABLE accounts (\n          id INTEGER PRIMARY KEY,\n          code TEXT NOT NULL UNIQUE,\n          name TEXT NOT NULL,\n          type TEXT NOT NULL CHECK (type IN ('asset', 'liability', 'equity', 'income', 'expense')),\n          role TEXT UNIQUE,\n          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "audit_log",
+  "tbl_name": "audit_log",
+  "sql": "CREATE TABLE audit_log (\n          id INTEGER PRIMARY KEY,\n          at TEXT NOT NULL,\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          action TEXT NOT NULL,\n          entity_id INTEGER,\n          detail TEXT NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "business_settings",
+  "tbl_name": "business_settings",
+  "sql": "CREATE TABLE business_settings (\n          id INTEGER PRIMARY KEY CHECK (id = 1),\n          name TEXT NOT NULL,\n          address TEXT NOT NULL,\n          tax_registration_number TEXT NOT NULL,\n          vat_registered INTEGER NOT NULL CHECK (vat_registered IN (0, 1)),\n          fiscal_year_start_month INTEGER NOT NULL CHECK (fiscal_year_start_month BETWEEN 1 AND 12)\n        , lock_date TEXT, backup_folder TEXT, last_backup_at TEXT) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "cash_movements",
+  "tbl_name": "cash_movements",
+  "sql": "CREATE TABLE cash_movements (\n          id INTEGER PRIMARY KEY,\n          shift_id INTEGER NOT NULL REFERENCES shifts (id),\n          at TEXT NOT NULL,\n          direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),\n          amount INTEGER NOT NULL CHECK (amount > 0),\n          account_id INTEGER NOT NULL REFERENCES accounts (id),\n          reason TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "credit_note_lines",
+  "tbl_name": "credit_note_lines",
+  "sql": "CREATE TABLE credit_note_lines (\n          id INTEGER PRIMARY KEY,\n          note_id INTEGER NOT NULL REFERENCES credit_notes (id),\n          invoice_line_id INTEGER NOT NULL REFERENCES sales_invoice_lines (id),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          net INTEGER NOT NULL,\n          vat INTEGER NOT NULL,\n          cost INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "credit_notes",
+  "tbl_name": "credit_notes",
+  "sql": "CREATE TABLE credit_notes (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          invoice_id INTEGER NOT NULL REFERENCES sales_invoices (id),\n          reason TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          eta_uuid TEXT NOT NULL DEFAULT '',\n          eta_status TEXT NOT NULL DEFAULT ''\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "customers",
+  "tbl_name": "customers",
+  "sql": "CREATE TABLE customers (\n          id INTEGER PRIMARY KEY,\n          name TEXT NOT NULL,\n          phone TEXT NOT NULL DEFAULT '',\n          tax_registration_number TEXT NOT NULL DEFAULT '',\n          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))\n        , address TEXT NOT NULL DEFAULT '', price_level TEXT NOT NULL DEFAULT 'retail' CHECK (price_level IN ('retail', 'wholesale')), credit_limit INTEGER CHECK (credit_limit IS NULL OR credit_limit >= 0), withholding_category_id INTEGER REFERENCES withholding_categories (id), governate TEXT NOT NULL DEFAULT '', region_city TEXT NOT NULL DEFAULT '', building_number TEXT NOT NULL DEFAULT '') STRICT"
+ },
+ {
+  "type": "table",
+  "name": "debit_note_lines",
+  "tbl_name": "debit_note_lines",
+  "sql": "CREATE TABLE debit_note_lines (\n          id INTEGER PRIMARY KEY,\n          note_id INTEGER NOT NULL REFERENCES debit_notes (id),\n          purchase_line_id INTEGER NOT NULL REFERENCES purchase_invoice_lines (id),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          net INTEGER NOT NULL,\n          vat INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "debit_notes",
+  "tbl_name": "debit_notes",
+  "sql": "CREATE TABLE debit_notes (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          purchase_invoice_id INTEGER NOT NULL REFERENCES purchase_invoices (id),\n          reason TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "eta_documents",
+  "tbl_name": "eta_documents",
+  "sql": "CREATE TABLE eta_documents (\n          id INTEGER PRIMARY KEY,\n          kind TEXT NOT NULL CHECK (kind IN ('invoice', 'credit_note')),\n          document_id INTEGER NOT NULL,\n          status TEXT NOT NULL CHECK (status IN ('pending', 'failed', 'submitted', 'valid', 'invalid', 'cancelled')),\n          uuid TEXT NOT NULL DEFAULT '',\n          error TEXT NOT NULL DEFAULT '',\n          issued_at TEXT,\n          updated_at TEXT NOT NULL,\n          UNIQUE (kind, document_id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "eta_settings",
+  "tbl_name": "eta_settings",
+  "sql": "CREATE TABLE eta_settings (\n          id INTEGER PRIMARY KEY CHECK (id = 1),\n          enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),\n          environment TEXT NOT NULL DEFAULT 'preprod' CHECK (environment IN ('preprod', 'production')),\n          client_id TEXT NOT NULL DEFAULT '',\n          client_secret TEXT NOT NULL DEFAULT '',\n          activity_code TEXT NOT NULL DEFAULT '',\n          governate TEXT NOT NULL DEFAULT '',\n          region_city TEXT NOT NULL DEFAULT '',\n          street TEXT NOT NULL DEFAULT '',\n          building_number TEXT NOT NULL DEFAULT '',\n          certificate TEXT NOT NULL DEFAULT ''\n        , receipts_enabled INTEGER NOT NULL DEFAULT 0 CHECK (receipts_enabled IN (0, 1)), pos_serial TEXT NOT NULL DEFAULT '', pos_os_version TEXT NOT NULL DEFAULT '', pos_model TEXT NOT NULL DEFAULT '', pos_client_id TEXT NOT NULL DEFAULT '', pos_client_secret TEXT NOT NULL DEFAULT '', pos_preshared_key TEXT NOT NULL DEFAULT '', pos_last_uuid TEXT NOT NULL DEFAULT '') STRICT"
+ },
+ {
+  "type": "table",
+  "name": "expenses",
+  "tbl_name": "expenses",
+  "sql": "CREATE TABLE expenses (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          account_id INTEGER NOT NULL REFERENCES accounts (id),\n          amount INTEGER NOT NULL CHECK (amount > 0),\n          vat INTEGER NOT NULL CHECK (vat >= 0),\n          -- Paid from a money account, or owed to a supplier.\n          money_account_id INTEGER REFERENCES accounts (id),\n          supplier_id INTEGER REFERENCES suppliers (id),\n          memo TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          CHECK ((money_account_id IS NULL) <> (supplier_id IS NULL))\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "held_sales",
+  "tbl_name": "held_sales",
+  "sql": "CREATE TABLE held_sales (\n          id INTEGER PRIMARY KEY,\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          at TEXT NOT NULL,\n          note TEXT NOT NULL,\n          cart TEXT NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "import_shipment_costs",
+  "tbl_name": "import_shipment_costs",
+  "sql": "CREATE TABLE import_shipment_costs (\n          id INTEGER PRIMARY KEY,\n          shipment_id INTEGER NOT NULL REFERENCES import_shipments (id),\n          kind TEXT NOT NULL CHECK (kind IN ('customs_duty', 'freight', 'clearance', 'insurance', 'other')),\n          supplier_id INTEGER NOT NULL REFERENCES suppliers (id),\n          amount INTEGER NOT NULL CHECK (amount >= 0),\n          vat INTEGER NOT NULL CHECK (vat >= 0)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "import_shipment_invoices",
+  "tbl_name": "import_shipment_invoices",
+  "sql": "CREATE TABLE import_shipment_invoices (\n          shipment_id INTEGER NOT NULL REFERENCES import_shipments (id),\n          purchase_invoice_id INTEGER NOT NULL UNIQUE REFERENCES purchase_invoices (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "import_shipment_lines",
+  "tbl_name": "import_shipment_lines",
+  "sql": "CREATE TABLE import_shipment_lines (\n          id INTEGER PRIMARY KEY,\n          shipment_id INTEGER NOT NULL REFERENCES import_shipments (id),\n          purchase_line_id INTEGER NOT NULL REFERENCES purchase_invoice_lines (id),\n          allocated INTEGER NOT NULL,\n          to_stock INTEGER NOT NULL,\n          to_cost_of_sales INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "import_shipments",
+  "tbl_name": "import_shipments",
+  "sql": "CREATE TABLE import_shipments (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          reference TEXT NOT NULL,\n          spread_by TEXT NOT NULL CHECK (spread_by IN ('value', 'quantity')),\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "item_units",
+  "tbl_name": "item_units",
+  "sql": "CREATE TABLE item_units (\n          id INTEGER PRIMARY KEY,\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          kind TEXT NOT NULL CHECK (kind IN ('base', 'pack')),\n          name TEXT NOT NULL,\n          size INTEGER NOT NULL CHECK (size > 0),\n          barcode TEXT UNIQUE,\n          sale_price INTEGER NOT NULL CHECK (sale_price >= 0), wholesale_price INTEGER CHECK (wholesale_price >= 0),\n          UNIQUE (item_id, kind),\n          CHECK (kind = 'pack' OR size = 1000)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "items",
+  "tbl_name": "items",
+  "sql": "CREATE TABLE items (\n          id INTEGER PRIMARY KEY,\n          name_ar TEXT NOT NULL,\n          name_en TEXT NOT NULL DEFAULT '',\n          code TEXT UNIQUE,\n          tax_code_id INTEGER NOT NULL REFERENCES tax_codes (id),\n          egs_code TEXT NOT NULL DEFAULT '',\n          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))\n        , serialised INTEGER NOT NULL DEFAULT 0 CHECK (serialised IN (0, 1)), warranty_months INTEGER NOT NULL DEFAULT 0 CHECK (warranty_months >= 0), min_quantity INTEGER CHECK (min_quantity >= 0)) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "journal_entries",
+  "tbl_name": "journal_entries",
+  "sql": "CREATE TABLE journal_entries (\n          id INTEGER PRIMARY KEY,\n          date TEXT NOT NULL,\n          memo TEXT NOT NULL,\n          kind TEXT NOT NULL\n        , voided_by INTEGER REFERENCES journal_entries (id)) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "ledger_lines",
+  "tbl_name": "ledger_lines",
+  "sql": "CREATE TABLE ledger_lines (\n          id INTEGER PRIMARY KEY,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          account_id INTEGER NOT NULL REFERENCES accounts (id),\n          debit INTEGER NOT NULL CHECK (debit >= 0),\n          credit INTEGER NOT NULL CHECK (credit >= 0),\n          memo TEXT NOT NULL DEFAULT '', supplier_id INTEGER REFERENCES suppliers (id), customer_id INTEGER REFERENCES customers (id), foreign_amount INTEGER CHECK (foreign_amount >= 0), cleared INTEGER NOT NULL DEFAULT 0 CHECK (cleared IN (0, 1)),\n          CHECK ((debit = 0) <> (credit = 0))\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "money_transfers",
+  "tbl_name": "money_transfers",
+  "sql": "CREATE TABLE money_transfers (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          from_account_id INTEGER NOT NULL REFERENCES accounts (id),\n          to_account_id INTEGER NOT NULL REFERENCES accounts (id),\n          amount INTEGER NOT NULL CHECK (amount > 0),\n          memo TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "payment_allocations",
+  "tbl_name": "payment_allocations",
+  "sql": "CREATE TABLE payment_allocations (\n          id INTEGER PRIMARY KEY,\n          payment_id INTEGER NOT NULL REFERENCES payments (id),\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          amount INTEGER NOT NULL CHECK (amount > 0)\n        , egp_amount INTEGER) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "payments",
+  "tbl_name": "payments",
+  "sql": "CREATE TABLE payments (\n          id INTEGER PRIMARY KEY,\n          kind TEXT NOT NULL CHECK (kind IN ('customer', 'supplier')),\n          number INTEGER NOT NULL,\n          date TEXT NOT NULL,\n          customer_id INTEGER REFERENCES customers (id),\n          supplier_id INTEGER REFERENCES suppliers (id),\n          account_id INTEGER NOT NULL REFERENCES accounts (id),\n          amount INTEGER NOT NULL CHECK (amount > 0),\n          reference TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id), currency TEXT NOT NULL DEFAULT 'EGP', rate INTEGER NOT NULL DEFAULT 1000000 CHECK (rate > 0), withholding_category_id INTEGER REFERENCES withholding_categories (id), withholding_rate INTEGER NOT NULL DEFAULT 0, withholding_base INTEGER NOT NULL DEFAULT 0 CHECK (withholding_base >= 0), withholding_amount INTEGER NOT NULL DEFAULT 0 CHECK (withholding_amount >= 0),\n          UNIQUE (kind, number),\n          CHECK ((kind = 'customer') = (customer_id IS NOT NULL) AND (kind = 'supplier') = (supplier_id IS NOT NULL))\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "purchase_invoice_lines",
+  "tbl_name": "purchase_invoice_lines",
+  "sql": "CREATE TABLE purchase_invoice_lines (\n          id INTEGER PRIMARY KEY,\n          invoice_id INTEGER NOT NULL REFERENCES purchase_invoices (id),\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          unit TEXT NOT NULL CHECK (unit IN ('base', 'pack')),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          unit_price INTEGER NOT NULL CHECK (unit_price >= 0),\n          net INTEGER NOT NULL,\n          vat_rate INTEGER NOT NULL,\n          vat INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "purchase_invoices",
+  "tbl_name": "purchase_invoices",
+  "sql": "CREATE TABLE purchase_invoices (\n          id INTEGER PRIMARY KEY,\n          date TEXT NOT NULL,\n          supplier_id INTEGER NOT NULL REFERENCES suppliers (id),\n          warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          reference TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id)\n        , currency TEXT NOT NULL DEFAULT 'EGP', rate INTEGER NOT NULL DEFAULT 1000000 CHECK (rate > 0)) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "quotation_lines",
+  "tbl_name": "quotation_lines",
+  "sql": "CREATE TABLE quotation_lines (\n          id INTEGER PRIMARY KEY,\n          quotation_id INTEGER NOT NULL REFERENCES quotations (id),\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          unit TEXT NOT NULL CHECK (unit IN ('base', 'pack')),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          unit_price INTEGER NOT NULL CHECK (unit_price >= 0),\n          discount INTEGER NOT NULL CHECK (discount >= 0)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "quotations",
+  "tbl_name": "quotations",
+  "sql": "CREATE TABLE quotations (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          valid_until TEXT NOT NULL,\n          customer_id INTEGER NOT NULL REFERENCES customers (id),\n          reference TEXT NOT NULL,\n          notes TEXT NOT NULL,\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          invoice_id INTEGER UNIQUE REFERENCES sales_invoices (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "sales_invoice_lines",
+  "tbl_name": "sales_invoice_lines",
+  "sql": "CREATE TABLE sales_invoice_lines (\n          id INTEGER PRIMARY KEY,\n          invoice_id INTEGER NOT NULL REFERENCES sales_invoices (id),\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          unit TEXT NOT NULL CHECK (unit IN ('base', 'pack')),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          unit_price INTEGER NOT NULL CHECK (unit_price >= 0),\n          discount INTEGER NOT NULL CHECK (discount >= 0),\n          net INTEGER NOT NULL CHECK (net >= 0),\n          vat_rate INTEGER NOT NULL,\n          vat INTEGER NOT NULL CHECK (vat >= 0),\n          cost INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "sales_invoices",
+  "tbl_name": "sales_invoices",
+  "sql": "CREATE TABLE sales_invoices (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          customer_id INTEGER NOT NULL REFERENCES customers (id),\n          warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          reference TEXT NOT NULL,\n          notes TEXT NOT NULL,\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          eta_uuid TEXT NOT NULL DEFAULT '',\n          eta_status TEXT NOT NULL DEFAULT ''\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "sales_receipt_lines",
+  "tbl_name": "sales_receipt_lines",
+  "sql": "CREATE TABLE sales_receipt_lines (\n          id INTEGER PRIMARY KEY,\n          receipt_id INTEGER NOT NULL REFERENCES sales_receipts (id),\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          unit TEXT NOT NULL CHECK (unit IN ('base', 'pack')),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          unit_price INTEGER NOT NULL CHECK (unit_price >= 0),\n          gross INTEGER NOT NULL,\n          net INTEGER NOT NULL,\n          vat_rate INTEGER NOT NULL,\n          vat INTEGER NOT NULL,\n          cost INTEGER NOT NULL\n        , discount INTEGER NOT NULL DEFAULT 0 CHECK (discount >= 0)) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "sales_receipt_payments",
+  "tbl_name": "sales_receipt_payments",
+  "sql": "CREATE TABLE sales_receipt_payments (\n          id INTEGER PRIMARY KEY,\n          receipt_id INTEGER NOT NULL REFERENCES sales_receipts (id),\n          method TEXT NOT NULL CHECK (method IN ('cash', 'card', 'wallet')),\n          amount INTEGER NOT NULL CHECK (amount > 0)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "sales_receipts",
+  "tbl_name": "sales_receipts",
+  "sql": "CREATE TABLE sales_receipts (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          at TEXT NOT NULL,\n          warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          cash_received INTEGER NOT NULL CHECK (cash_received >= 0),\n          eta_uuid TEXT NOT NULL DEFAULT '',\n          eta_previous_uuid TEXT NOT NULL DEFAULT '',\n          eta_status TEXT NOT NULL DEFAULT ''\n        , shift_id INTEGER REFERENCES shifts (id), customer_id INTEGER REFERENCES customers (id), eta_error TEXT NOT NULL DEFAULT '') STRICT"
+ },
+ {
+  "type": "table",
+  "name": "sales_return_lines",
+  "tbl_name": "sales_return_lines",
+  "sql": "CREATE TABLE sales_return_lines (\n          id INTEGER PRIMARY KEY,\n          return_id INTEGER NOT NULL REFERENCES sales_returns (id),\n          receipt_line_id INTEGER NOT NULL REFERENCES sales_receipt_lines (id),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          amount INTEGER NOT NULL,\n          net INTEGER NOT NULL,\n          vat INTEGER NOT NULL,\n          cost INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "sales_returns",
+  "tbl_name": "sales_returns",
+  "sql": "CREATE TABLE sales_returns (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          at TEXT NOT NULL,\n          receipt_id INTEGER NOT NULL REFERENCES sales_receipts (id),\n          shift_id INTEGER NOT NULL REFERENCES shifts (id),\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          entry_id INTEGER NOT NULL REFERENCES journal_entries (id),\n          refund TEXT NOT NULL CHECK (refund IN ('cash', 'account')),\n          eta_uuid TEXT NOT NULL DEFAULT '',\n          eta_status TEXT NOT NULL DEFAULT ''\n        , eta_previous_uuid TEXT NOT NULL DEFAULT '', eta_error TEXT NOT NULL DEFAULT '') STRICT"
+ },
+ {
+  "type": "table",
+  "name": "serial_movements",
+  "tbl_name": "serial_movements",
+  "sql": "CREATE TABLE serial_movements (\n          id INTEGER PRIMARY KEY,\n          serial_id INTEGER NOT NULL REFERENCES serials (id),\n          date TEXT NOT NULL,\n          warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          quantity INTEGER NOT NULL CHECK (quantity IN (-1, 1)),\n          source TEXT NOT NULL,\n          source_id INTEGER NOT NULL,\n          line_id INTEGER\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "serials",
+  "tbl_name": "serials",
+  "sql": "CREATE TABLE serials (\n          id INTEGER PRIMARY KEY,\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          serial TEXT NOT NULL,\n          UNIQUE (item_id, serial)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "shifts",
+  "tbl_name": "shifts",
+  "sql": "CREATE TABLE shifts (\n          id INTEGER PRIMARY KEY,\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          opened_at TEXT NOT NULL,\n          opening_float INTEGER NOT NULL CHECK (opening_float >= 0),\n          closed_at TEXT,\n          counted_cash INTEGER,\n          close_entry_id INTEGER REFERENCES journal_entries (id),\n          CHECK ((closed_at IS NULL) = (counted_cash IS NULL))\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "stock_count_lines",
+  "tbl_name": "stock_count_lines",
+  "sql": "CREATE TABLE stock_count_lines (\n          id INTEGER PRIMARY KEY,\n          count_id INTEGER NOT NULL REFERENCES stock_counts (id),\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          expected INTEGER NOT NULL,\n          counted INTEGER NOT NULL CHECK (counted >= 0),\n          value INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "stock_counts",
+  "tbl_name": "stock_counts",
+  "sql": "CREATE TABLE stock_counts (\n          id INTEGER PRIMARY KEY,\n          date TEXT NOT NULL,\n          warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          memo TEXT NOT NULL,\n          entry_id INTEGER REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "stock_movements",
+  "tbl_name": "stock_movements",
+  "sql": "CREATE TABLE \"stock_movements\" (\n          id INTEGER PRIMARY KEY,\n          date TEXT NOT NULL,\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          quantity INTEGER NOT NULL,\n          value INTEGER NOT NULL,\n          source TEXT NOT NULL,\n          source_id INTEGER NOT NULL,\n          CHECK (quantity <> 0 OR value <> 0)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "stock_transfers",
+  "tbl_name": "stock_transfers",
+  "sql": "CREATE TABLE stock_transfers (\n          id INTEGER PRIMARY KEY,\n          date TEXT NOT NULL,\n          from_warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          to_warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          memo TEXT NOT NULL,\n          CHECK (from_warehouse_id <> to_warehouse_id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "suppliers",
+  "tbl_name": "suppliers",
+  "sql": "CREATE TABLE suppliers (\n          id INTEGER PRIMARY KEY,\n          name TEXT NOT NULL UNIQUE,\n          phone TEXT NOT NULL DEFAULT '',\n          tax_registration_number TEXT NOT NULL DEFAULT '',\n          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))\n        , currency TEXT NOT NULL DEFAULT 'EGP' CHECK (currency IN ('EGP', 'USD', 'EUR', 'CNY')), withholding_category_id INTEGER REFERENCES withholding_categories (id)) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "tax_codes",
+  "tbl_name": "tax_codes",
+  "sql": "CREATE TABLE tax_codes (\n          id INTEGER PRIMARY KEY,\n          kind TEXT NOT NULL UNIQUE CHECK (kind IN ('standard', 'zero_rated', 'exempt')),\n          name TEXT NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "tax_rates",
+  "tbl_name": "tax_rates",
+  "sql": "CREATE TABLE tax_rates (\n          tax_code_id INTEGER NOT NULL REFERENCES tax_codes (id),\n          effective_from TEXT NOT NULL,\n          rate INTEGER NOT NULL CHECK (rate BETWEEN 0 AND 10000),\n          PRIMARY KEY (tax_code_id, effective_from)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "users",
+  "tbl_name": "users",
+  "sql": "CREATE TABLE users (\n          id INTEGER PRIMARY KEY,\n          name TEXT NOT NULL UNIQUE,\n          role TEXT NOT NULL CHECK (role IN ('manager', 'accountant', 'cashier', 'storekeeper')),\n          password_hash TEXT NOT NULL,\n          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "warehouses",
+  "tbl_name": "warehouses",
+  "sql": "CREATE TABLE warehouses (\n          id INTEGER PRIMARY KEY,\n          name TEXT NOT NULL UNIQUE,\n          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "withholding_categories",
+  "tbl_name": "withholding_categories",
+  "sql": "CREATE TABLE withholding_categories (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "withholding_rates",
+  "tbl_name": "withholding_rates",
+  "sql": "CREATE TABLE withholding_rates (\n          category_id INTEGER NOT NULL REFERENCES withholding_categories (id),\n          effective_from TEXT NOT NULL,\n          rate INTEGER NOT NULL CHECK (rate BETWEEN 0 AND 10000),\n          PRIMARY KEY (category_id, effective_from)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "write_off_lines",
+  "tbl_name": "write_off_lines",
+  "sql": "CREATE TABLE write_off_lines (\n          id INTEGER PRIMARY KEY,\n          write_off_id INTEGER NOT NULL REFERENCES write_offs (id),\n          item_id INTEGER NOT NULL REFERENCES items (id),\n          quantity INTEGER NOT NULL CHECK (quantity > 0),\n          value INTEGER NOT NULL\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "write_offs",
+  "tbl_name": "write_offs",
+  "sql": "CREATE TABLE write_offs (\n          id INTEGER PRIMARY KEY,\n          date TEXT NOT NULL,\n          warehouse_id INTEGER NOT NULL REFERENCES warehouses (id),\n          reason TEXT NOT NULL,\n          entry_id INTEGER REFERENCES journal_entries (id),\n          user_id INTEGER NOT NULL REFERENCES users (id)\n        ) STRICT"
+ },
+ {
+  "type": "trigger",
+  "name": "audit_log_no_removal",
+  "tbl_name": "audit_log",
+  "sql": "CREATE TRIGGER audit_log_no_removal BEFORE DELETE ON audit_log\n          BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END"
+ },
+ {
+  "type": "trigger",
+  "name": "audit_log_no_update",
+  "tbl_name": "audit_log",
+  "sql": "CREATE TRIGGER audit_log_no_update BEFORE UPDATE ON audit_log\n          BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END"
+ }
+]
