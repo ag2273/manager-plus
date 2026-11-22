@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { Item } from "../../../core/items";
-import { CURRENCIES, type Currency, type PricedPurchase, type PurchaseInvoice, type PurchaseLineInput, type Supplier, type SupplierAccount } from "../../../core/purchases";
-import type { Warehouse } from "../../../core/stock";
+import type { Item } from "../../../shared/books/items";
+import { CURRENCIES } from "../../../shared/currencies";
+import type { Currency, PricedPurchase, PurchaseInvoice, PurchaseLineInput, Supplier, SupplierAccount } from "../../../shared/books/purchases";
+import type { Warehouse } from "../../../shared/books/stock";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";

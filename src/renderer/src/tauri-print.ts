@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import qrcode from "qrcode-generator";
-import type { BusinessSettings } from "../../core/business";
-import type { SaleReturn } from "../../core/returns";
-import type { Receipt } from "../../core/sales";
-import type { ZReport } from "../../core/shifts";
+import type { BusinessSettings } from "../../shared/books/business";
+import type { SaleReturn } from "../../shared/books/returns";
+import type { Receipt } from "../../shared/books/sales";
+import type { ZReport } from "../../shared/books/shifts";
 import type { BusinessMethod, Preferences, PrintRequest, Result } from "../../shared/api";
 import { setDigitStyle } from "../../shared/digits";
 import { type Bitmap, receiptJob } from "../../shared/escpos";

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import type { SerialHistory } from "../../../core/serials";
-import type { Warehouse } from "../../../core/stock";
+import type { SerialHistory } from "../../../shared/books/serials";
+import type { Warehouse } from "../../../shared/books/stock";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 

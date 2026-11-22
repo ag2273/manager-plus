@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AuditEntry } from "../../../core/users";
+import type { AuditEntry } from "../../../shared/books/users";
 import { business } from "../api";
 import { ar, locale } from "../strings";
 

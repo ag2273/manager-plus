@@ -6,13 +6,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    // The end-to-end journeys are plain Node scripts that drive the built app.
-    files: ["e2e/**/*.cjs"],
-    languageOptions: { sourceType: "commonjs", globals: { require: "readonly", __dirname: "readonly", process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
-    rules: { "@typescript-eslint/no-require-imports": "off" },
-  },
-  {
-    // The Tauri journey: a Node script that drives the app over WebDriver.
+    // The end-to-end journeys: Node scripts that drive the built app over WebDriver.
     files: ["e2e/**/*.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", fetch: "readonly", setTimeout: "readonly", URL: "readonly", Buffer: "readonly", window: "readonly", document: "readonly", Event: "readonly" } },
   },
@@ -22,12 +16,9 @@ export default tseslint.config(
     languageOptions: { globals: { process: "readonly", URL: "readonly", Buffer: "readonly" } },
   },
   {
-    files: ["src/core/**/*.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        { patterns: ["electron", "react", "react-dom", "*/main/*", "*/renderer/*", "*/preload/*"] },
-      ],
-    },
+    // The screens' contract with the Rust core is types only; the core's rules never run here.
+    files: ["src/shared/**/*.ts", "src/renderer/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.ts"],
+    rules: { "no-restricted-imports": ["error", { patterns: ["node:*", "better-sqlite3"] }] },
   },
 );

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { Account } from "../../../core/ledger";
-import type { EntryDetail, GeneralLedger } from "../../../core/reports";
-import type { VatBox, VatTransaction } from "../../../core/vat-return";
+import type { Account } from "../../../shared/books/ledger";
+import type { EntryDetail, GeneralLedger } from "../../../shared/books/reports";
+import type { VatBox, VatTransaction } from "../../../shared/books/vat-return";
 import { formatMoney } from "../../../shared/money";
 import { formatQuantity } from "../../../shared/quantity";
 import {

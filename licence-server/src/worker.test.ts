@@ -1,11 +1,19 @@
-import { generateKeyPairSync } from "node:crypto";
+import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
-import { verifyLicence } from "../../src/core/licence/licence";
 import type { D1Like, D1Statement } from "./licences";
 import { type Env, handle } from "./worker";
+
+/** The licence's payload once its signature checks out, as the app checks it (crates/core/src/licence.rs). */
+function verifyLicence(file: { payload: string; signature: string }, publicKeyPem: string, machine: string) {
+  const data = Buffer.from(file.payload, "base64");
+  if (!verify(null, data, createPublicKey(publicKeyPem), Buffer.from(file.signature, "base64"))) throw new Error("licence_invalid");
+  const payload = JSON.parse(data.toString("utf8")) as { company: string; machine: string; users: number; supportUntil: string };
+  if (payload.machine !== machine) throw new Error("licence_other_machine");
+  return payload;
+}
 
 /** D1 on an in-memory SQLite database, as far as the server uses it. */
 function sqliteD1(): D1Like {

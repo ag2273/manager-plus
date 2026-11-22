@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { Customer, CustomerInput, PriceLevel } from "../../../core/customers";
+import type { Customer, CustomerInput, PriceLevel } from "../../../shared/books/customers";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText } from "../api";

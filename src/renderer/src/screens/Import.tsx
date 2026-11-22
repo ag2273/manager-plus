@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { ImportReport, ImportSheet } from "../../../core/import";
-import type { Warehouse } from "../../../core/stock";
+import type { ImportReport, ImportSheet } from "../../../shared/books/import";
+import type { Warehouse } from "../../../shared/books/stock";
 import { BALANCE_COLUMNS, ITEM_COLUMNS } from "../../../shared/import-columns";
 import { formatMoney } from "../../../shared/money";
 import type { Lang } from "../../../shared/report-tables";

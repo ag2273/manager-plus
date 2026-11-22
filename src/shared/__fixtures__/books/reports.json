@@ -1,0 +1,70 @@
+{
+  "settings": {
+    "name": "شركة النور للكمبيوتر",
+    "address": "الدقي، الجيزة",
+    "taxRegistrationNumber": "123456789",
+    "vatRegistered": true,
+    "fiscalYearStartMonth": 1
+  },
+  "profitAndLoss": {
+    "from": "2026-03-01",
+    "to": "2026-03-31",
+    "income": [],
+    "expenses": [
+      {
+        "accountId": 27,
+        "code": "6100",
+        "name": "الإيجار",
+        "amount": 50000
+      }
+    ],
+    "totalIncome": 0,
+    "totalExpenses": 50000,
+    "netProfit": -50000
+  },
+  "cashLedger": {
+    "accountId": 2,
+    "code": "1110",
+    "name": "الخزينة الرئيسية",
+    "from": "2026-03-01",
+    "to": "2026-03-31",
+    "opening": 0,
+    "lines": [
+      {
+        "entryId": 1,
+        "date": "2026-03-01",
+        "memo": "رأس المال",
+        "debit": 1000000,
+        "credit": 0,
+        "balance": 1000000
+      },
+      {
+        "entryId": 2,
+        "date": "2026-03-05",
+        "memo": "مصروف رقم 1 - الخزينة الرئيسية - إيجار مارس",
+        "debit": 0,
+        "credit": 50000,
+        "balance": 950000
+      }
+    ],
+    "closing": 950000
+  },
+  "salesByPaymentMethod": [
+    {
+      "method": "cash",
+      "total": 0
+    },
+    {
+      "method": "card",
+      "total": 0
+    },
+    {
+      "method": "wallet",
+      "total": 0
+    },
+    {
+      "method": "credit",
+      "total": 0
+    }
+  ]
+}

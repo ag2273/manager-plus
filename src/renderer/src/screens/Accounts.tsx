@@ -5,8 +5,8 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import type { AccountType } from "../../../core/chart-of-accounts";
-import type { Account, JournalLine, TrialBalance } from "../../../core/ledger";
+import type { AccountType } from "../../../shared/books/chart-of-accounts";
+import type { Account, JournalLine, TrialBalance } from "../../../shared/books/ledger";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText, today } from "../api";

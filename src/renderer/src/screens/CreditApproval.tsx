@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Credentials } from "../../../core/users";
+import type { Credentials } from "../../../shared/books/users";
 import { formatMoney } from "../../../shared/money";
 import { ar } from "../strings";
 

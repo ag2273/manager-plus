@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { Credentials } from "../../../core/users";
-import type { Account } from "../../../core/ledger";
-import type { Shift, ZReport } from "../../../core/shifts";
-import type { Item } from "../../../core/items";
-import type { Customer } from "../../../core/customers";
-import type { CashSaleResult, Discount, HeldSale, Payment, PricedSale, Receipt, SaleLineInput } from "../../../core/sales";
-import type { Warehouse } from "../../../core/stock";
+import type { Credentials } from "../../../shared/books/users";
+import type { Account } from "../../../shared/books/ledger";
+import type { Shift, ZReport } from "../../../shared/books/shifts";
+import type { Item } from "../../../shared/books/items";
+import type { Customer } from "../../../shared/books/customers";
+import type { CashSaleResult, Discount, HeldSale, Payment, PricedSale, Receipt, SaleLineInput } from "../../../shared/books/sales";
+import type { Warehouse } from "../../../shared/books/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";

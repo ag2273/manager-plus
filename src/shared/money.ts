@@ -1,4 +1,4 @@
-import type { Piastres } from "../core/ledger";
+import type { Piastres } from "./books/ledger";
 import { inDigits } from "./digits";
 
 const ARABIC_INDIC = /[٠-٩]/g;

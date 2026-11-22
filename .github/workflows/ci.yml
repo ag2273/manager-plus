@@ -6,11 +6,9 @@ on:
   pull_request:
 
 jobs:
-  check:
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+  # The screens' own checks: types, lint, and the printed documents against the golden files.
+  web:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,38 +19,93 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - run: npm run build
-      # The checkout journey in Arabic and in English, in the built app.
-      - if: runner.os == 'Linux'
-        run: xvfb-run -a npm run e2e
-      - if: runner.os == 'Windows'
-        run: npm run e2e
 
-  # The Windows installer, unsigned (no code-signing certificate).
-  installer:
-    needs: check
-    permissions:
-      contents: write
-    runs-on: windows-latest
+  # The Rust core's tests, and the journeys in the built app: the books, and a till checkout in each language.
+  linux:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: WebKitGTK and its WebDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev xvfb
+          # Newer Ubuntu renamed the WebDriver package.
+          sudo apt-get install -y webkitgtk-webdriver || sudo apt-get install -y webkit2gtk-driver
+          which WebKitWebDriver
       - run: npm ci
-      - run: npm run dist
-      - name: The installer was built
-        shell: bash
-        run: ls -l dist/Manager-Plus-Setup-*.exe
+      - run: cargo fmt --all --check
+      - run: npm run build:web
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace --no-fail-fast
+      - run: npx tauri build --debug --no-bundle
+      - run: cargo install tauri-driver --locked
+      - run: xvfb-run -a node e2e/tauri.mjs target/debug/manager-plus
+      - run: xvfb-run -a node e2e/checkout.mjs target/debug/manager-plus
+
+  # The Windows-only code (DPAPI, the USB token, the printers, the machine id), the installer
+  # (unsigned: there is no code-signing certificate), and how much memory the app takes there.
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run build:web
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace --no-fail-fast
+      - run: npx tauri build
+      - name: Size and memory
+        shell: pwsh
+        run: |
+          $exe = Get-Item target/release/manager-plus.exe
+          $setup = Get-Item target/release/bundle/nsis/*-setup.exe
+          $p = Start-Process $exe.FullName -PassThru
+          Start-Sleep -Seconds 20
+          $procs = @(Get-Process -Id $p.Id) + @(Get-Process msedgewebview2 -ErrorAction SilentlyContinue)
+          $ws = ($procs | Measure-Object WorkingSet64 -Sum).Sum / 1MB
+          $priv = ($procs | Measure-Object PrivateMemorySize64 -Sum).Sum / 1MB
+          $app = (Get-Process -Id $p.Id).WorkingSet64 / 1MB
+          Stop-Process -Id $p.Id
+          $lines = @(
+            "| | |", "|---|---|",
+            ("| Installer | {0:N1} MB |" -f ($setup.Length / 1MB)),
+            ("| App exe | {0:N1} MB |" -f ($exe.Length / 1MB)),
+            ("| Working set, app process | {0:N0} MB |" -f $app),
+            ("| Working set, app + WebView2 ({1} processes) | {0:N0} MB |" -f $ws, $procs.Count),
+            ("| Private memory, app + WebView2 | {0:N0} MB |" -f $priv)
+          )
+          $lines | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          $lines | Write-Output
       # From main, the newest installer replaces the one on the "latest-build" pre-release.
-      # Releases don't count against the Actions artifact storage quota, which a 130 MB exe fills.
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         name: Publish to the latest-build pre-release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view latest-build >/dev/null 2>&1 || gh release create latest-build --prerelease --title "Latest build (main)" --notes "The installer built from the newest commit on main. Not a customer release."
-          gh release upload latest-build dist/Manager-Plus-Setup-*.exe --clobber
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cp target/release/bundle/nsis/*-setup.exe "Manager-Plus-Setup-$version.exe"
+          gh release view latest-build >/dev/null 2>&1 || gh release create latest-build --prerelease --title "Latest build (main)" --notes "Built from main. Not a customer release."
+          # The Electron installer and the side-by-side Tauri one are gone; only this one is current.
+          for old in $(gh release view latest-build --json assets --jq '.assets[].name'); do
+            [ "$old" = "Manager-Plus-Setup-$version.exe" ] || gh release delete-asset latest-build "$old" --yes
+          done
+          gh release upload latest-build "Manager-Plus-Setup-$version.exe" --clobber
           gh release edit latest-build --notes "The installer built from main at $GITHUB_SHA. Not a customer release."

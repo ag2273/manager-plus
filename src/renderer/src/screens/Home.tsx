@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Dashboard } from "../../../core/reports";
+import type { Dashboard } from "../../../shared/books/reports";
 import type { BusinessSettings } from "../../../shared/api";
 import { formatMoney } from "../../../shared/money";
 import { business, today } from "../api";

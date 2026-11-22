@@ -1,11 +1,11 @@
-import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
-import type { EtaReceiptSettingsInput } from "../core/eta/receipts-store";
-import type { LicenceStatus } from "../core/licence/licence";
-import type { UpdateCheck } from "../core/updates";
+import type { EtaKind, EtaSettingsInput } from "./books/eta/store";
+import type { EtaReceiptSettingsInput } from "./books/eta/receipts-store";
+import type { LicenceStatus } from "./books/licence/licence";
+import type { UpdateCheck } from "./books/updates";
 import type { Lang, ReportTable } from "./report-tables";
 import type { ReadSheet } from "./spreadsheet-read";
-import type { Business, BusinessSettings } from "../core/business";
-import type { Credentials, User } from "../core/users";
+import type { Business, BusinessSettings } from "./books/business";
+import type { Credentials, User } from "./books/users";
 
 export type { BusinessSettings, Credentials, User };
 

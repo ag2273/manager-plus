@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { Item, ItemInput, TaxCode } from "../../../core/items";
-import type { Warehouse } from "../../../core/stock";
+import type { Item, ItemInput, TaxCode } from "../../../shared/books/items";
+import type { Warehouse } from "../../../shared/books/stock";
 import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
