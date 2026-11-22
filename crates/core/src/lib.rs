@@ -19,6 +19,7 @@ pub mod money;
 pub mod num;
 pub mod purchases;
 pub mod quotations;
+pub mod reports;
 pub mod returns;
 pub mod sales;
 pub mod serials;
@@ -28,6 +29,7 @@ pub mod shifts;
 pub mod shipments;
 pub mod stock;
 pub mod users;
+pub mod vat_return;
 pub mod withholding;
 
 pub use business::{Business, BusinessSettings, LicenceLimits, LicenceMode};
