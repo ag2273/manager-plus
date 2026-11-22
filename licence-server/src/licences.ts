@@ -280,3 +280,34 @@ export async function revokeLicence(db: D1Like, id: number, now: Date): Promise<
     db.prepare("UPDATE activations SET ended_at = ?, end_reason = 'revoke' WHERE licence_id = ? AND ended_at IS NULL").bind(at, id),
   ]);
 }
+
+// Releases
+
+export type SignedManifest = { manifest: string; signature: string };
+
+/** Publishes a signed update manifest; the app checks its signature, so the server can't make one up. */
+export async function publishRelease(db: D1Like, input: SignedManifest, now: Date): Promise<{ version: string }> {
+  let version: unknown;
+  try {
+    version = (JSON.parse(atob(input.manifest)) as { version?: unknown }).version;
+  } catch {
+    throw new Refused("invalid_input");
+  }
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version) || typeof input.signature !== "string" || input.signature === "") {
+    throw new Refused("invalid_input");
+  }
+  await db
+    .prepare("INSERT INTO releases (version, manifest, signature, published_at) VALUES (?, ?, ?, ?)")
+    .bind(version, input.manifest, input.signature, now.toISOString())
+    .run();
+  return { version };
+}
+
+/** The newest release's signed manifest, or null before the first. */
+export async function latestRelease(db: D1Like): Promise<SignedManifest | null> {
+  return db.prepare("SELECT manifest, signature FROM releases ORDER BY id DESC LIMIT 1").first<SignedManifest>();
+}
+
+export async function listReleases(db: D1Like): Promise<{ version: string; publishedAt: string }[]> {
+  return (await db.prepare("SELECT version, published_at AS publishedAt FROM releases ORDER BY id DESC").all<{ version: string; publishedAt: string }>()).results;
+}

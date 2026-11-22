@@ -4,6 +4,9 @@ import {
   Refused,
   activate,
   createLicence,
+  latestRelease,
+  listReleases,
+  publishRelease,
   listLicences,
   recordPayment,
   replaceKey,
@@ -77,6 +80,11 @@ export async function handle(request: Request, env: Env, now = new Date()): Prom
       return json({ licence: file });
     }
 
+    if (url.pathname === "/v1/update" && request.method === "GET") {
+      const release = await latestRelease(env.DB);
+      return release ? json(release) : json({ error: "none" }, 404);
+    }
+
     if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
       if (!(await isAdmin(request, env))) {
         if (!(await withinLimit(env.DB, `admin:${ip}`, ADMIN_FAILURES_PER_HOUR, HOUR, now))) return json({ error: "rate_limited" }, 429);
@@ -116,6 +124,8 @@ export async function handle(request: Request, env: Env, now = new Date()): Prom
 
 async function adminApi(path: string, request: Request, env: Env, now: Date): Promise<Response> {
   if (path === "/licences" && request.method === "GET") return json(await listLicences(env.DB, now));
+  if (path === "/releases" && request.method === "GET") return json(await listReleases(env.DB));
+  if (path === "/releases" && request.method === "POST") return json(await publishRelease(env.DB, await body(request), now), 201);
   if (path === "/licences" && request.method === "POST") {
     const input = await body<{ company: string; users: number; supportUntil: string; notes?: string }>(request);
     return json(await createLicence(env.DB, input, now), 201);

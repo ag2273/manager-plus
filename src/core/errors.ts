@@ -144,7 +144,10 @@ export type BusinessErrorCode =
   | "licence_moves_exhausted"
   | "licence_revoked"
   | "licence_unreachable"
-  | "licence_rate_limited";
+  | "licence_rate_limited"
+  | "update_invalid"
+  | "update_unreachable"
+  | "update_not_eligible";
 
 export class BusinessError extends Error {
   constructor(

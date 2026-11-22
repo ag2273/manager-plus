@@ -46,6 +46,15 @@ details { margin-top: 6px; }
   <p id="newKey" hidden></p>
 </section>
 <section class="card">
+  <h2>نشر تحديث</h2>
+  <p class="muted">الصق هنا اللي طبعه <span class="ltr">node scripts/release.mjs sign …</span>. البرنامج بيتأكد من التوقيع بنفسه، فالخادم مايقدرش يزوّر تحديث.</p>
+  <form id="release" class="row">
+    <label style="flex:1">الـ manifest الموقّع <textarea name="signed" rows="3" required class="ltr" style="width:100%;font:13px Consolas,monospace;white-space:pre-wrap"></textarea></label>
+    <button class="primary">نشر</button>
+  </form>
+  <ul id="releases" class="muted"></ul>
+</section>
+<section class="card">
   <h2>التراخيص</h2>
   <table><thead><tr><th>الشركة</th><th>المفتاح</th><th>المستخدمين</th><th>الدعم لحد</th><th class="hide-small">الجهاز</th><th>النقل</th><th class="hide-small">المدفوع</th><th></th></tr></thead>
   <tbody id="rows"></tbody></table>
@@ -92,6 +101,8 @@ function actions(l) {
   return box;
 }
 async function load() {
+  const releases = await api("/releases");
+  $("#releases").replaceChildren(...releases.map((r) => el("li", { textContent: "الإصدار " + r.version + " · اتنشر " + r.publishedAt.slice(0, 10) })));
   const licences = await api("/licences");
   $("#rows").replaceChildren(...licences.map((l) => el("tr", {},
     el("td", {}, el("strong", { textContent: l.company }), l.notes ? el("div", { className: "muted", textContent: l.notes }) : "", l.revokedAt ? el("span", { className: "badge warn", textContent: "ملغي" }) : "", actions(l)),
@@ -106,6 +117,10 @@ async function load() {
 $("#create").onsubmit = (e) => {
   e.preventDefault(); const f = new FormData(e.target);
   act(async () => { const r = await api("/licences", { company: f.get("company"), users: Number(f.get("users")), supportUntil: f.get("supportUntil"), notes: f.get("notes") }); showKey(f.get("company"), r.key); e.target.reset(); }, "اتعمل الترخيص.");
+};
+$("#release").onsubmit = (e) => {
+  e.preventDefault(); const f = new FormData(e.target);
+  act(async () => { let signed; try { signed = JSON.parse(String(f.get("signed"))); } catch { throw new Error("النص مش JSON سليم."); } const r = await api("/releases", signed); e.target.reset(); say("اتنشر الإصدار " + r.version + "."); }, "اتنشر.");
 };
 const nextYear = new Date(); nextYear.setFullYear(nextYear.getFullYear() + 1); $("#create [name=supportUntil]").value = nextYear.toISOString().slice(0, 10);
 load().catch((e) => say(e.message, true));

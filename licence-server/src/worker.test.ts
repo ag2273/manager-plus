@@ -178,3 +178,19 @@ describe("the admin page", () => {
     expect(JSON.stringify(licence)).not.toContain(replaced.key);
   });
 });
+
+describe("releases", () => {
+  test("the newest signed manifest is served as it was published; publishing needs the admin", async () => {
+    const e = freshEnv();
+    expect(await call(e, "/v1/update")).toEqual({ status: 404, data: { error: "none" } });
+    const first = { manifest: btoa(JSON.stringify({ version: "1.1.0" })), signature: "c2ln" };
+    const second = { manifest: btoa(JSON.stringify({ version: "1.2.0" })), signature: "c2lnMg==" };
+    expect((await call(e, "/admin/api/releases", { body: first })).status).toBe(401);
+    expect((await call(e, "/admin/api/releases", { headers: admin, body: { manifest: "not json", signature: "x" } })).status).toBe(400);
+    await call(e, "/admin/api/releases", { headers: admin, body: first });
+    expect((await call(e, "/admin/api/releases", { headers: admin, body: second })).data).toEqual({ version: "1.2.0" });
+    expect(await call(e, "/v1/update")).toEqual({ status: 200, data: second });
+    expect(((await call(e, "/admin/api/releases", { headers: admin })).data as unknown as { version: string }[]).map((r) => r.version)).toEqual(["1.2.0", "1.1.0"]);
+  });
+});
+

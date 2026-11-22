@@ -144,6 +144,9 @@ const errors = {
   licence_revoked: "This licence key was revoked. Contact us.",
   licence_unreachable: "The licence server couldn't be reached. Check the internet and try again.",
   licence_rate_limited: "Too many activation attempts. Wait an hour and try again.",
+  update_invalid: "The update isn't signed by us, or the file changed while downloading. It wasn't installed; try again.",
+  update_unreachable: "The update server couldn't be reached. Check the internet and try again.",
+  update_not_eligible: "This update came out after your support plan ended. Renew support to install it; your version keeps working.",
   unexpected: "Something unexpected went wrong.",
 } satisfies Record<BusinessErrorCode | "unexpected", string>;
 
@@ -160,6 +163,19 @@ export const en: Strings = {
   create: "Create business",
   openFile: "Open a business file",
   recent: "Recent files",
+  updates: {
+    title: "Updates",
+    version: (v: string) => `Installed version: ${v}`,
+    check: "Check for updates",
+    none: "You have the latest version.",
+    available: (v: string) => `Version ${v} is available.`,
+    notEligible: (v: string, date: string) => `Version ${v} came out on ${date}, after your support plan ended. Renew support to install it; your version keeps working.`,
+    install: "Download and install",
+    installing: "Downloading and installing… The file is backed up first, and the app closes and opens again by itself.",
+    managerOnly: "Only a manager installs updates.",
+    banner: (v: string) => `A new update is available (${v}).`,
+    open: "Details",
+  },
   licence: {
     trial: (days: number) => `Trial: ${days} ${days === 1 ? "day" : "days"} left.`,
     readOnly: {

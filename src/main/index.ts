@@ -5,7 +5,10 @@ import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
 import { httpEtaClient, httpEtaReceiptClient, listCertificates, windowsTokenSigner } from "./eta";
 import { Licensing, type LicenceStatus } from "../core/licence/licence";
 import { LICENCE_PUBLIC_KEY } from "../core/licence/public-key";
-import { fileLicenceStore, httpLicenceClient, machineFingerprint } from "./licence";
+import { LICENCE_SERVER, fileLicenceStore, httpLicenceClient, machineFingerprint } from "./licence";
+import { type UpdateCheck, checkUpdate } from "../core/updates";
+import { UPDATE_PUBLIC_KEY } from "../core/update-key";
+import { downloadInstaller, fetchManifest, runInstaller } from "./updates";
 import { readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
@@ -347,6 +350,53 @@ ipcMain.handle(CHANNELS.activateLicence, async (_event, key: string): Promise<Re
     const status = await (await loadLicensing()).activate(String(key), new Date());
     applyLicence();
     return { ok: true, value: status };
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+let lastUpdateCheck: UpdateCheck | null = null;
+
+/** Asks our server for the newest release and whether this licence may install it. */
+async function updateCheck(): Promise<UpdateCheck> {
+  const signed = await fetchManifest(LICENCE_SERVER);
+  const licence = await loadLicensing();
+  lastUpdateCheck = signed
+    ? checkUpdate(signed, { publicKeyPem: UPDATE_PUBLIC_KEY, currentVersion: app.getVersion(), allowed: (date) => licence.updateAllowed(date, new Date()) })
+    : { kind: "none" };
+  return lastUpdateCheck;
+}
+
+ipcMain.handle(CHANNELS.appVersion, () => app.getVersion());
+
+ipcMain.handle(CHANNELS.checkUpdate, async (_event, cached: boolean): Promise<Result<UpdateCheck>> => {
+  // The screens' banner asks for the last answer only; the network is asked at start and on the Settings button.
+  if (cached) return { ok: true, value: lastUpdateCheck ?? { kind: "none" } };
+  try {
+    return { ok: true, value: await updateCheck() };
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+/**
+ * Installs the newest eligible update: downloads it, checks it against the signed manifest,
+ * backs up the business file this PC holds, then runs the installer and quits. A manager does it.
+ */
+ipcMain.handle(CHANNELS.installUpdate, async (): Promise<Result<null>> => {
+  const me = await call<{ role: string } | null>("currentUser", []);
+  const role = me.ok ? me.value?.role : null;
+  if (role !== "manager") return { ok: false, code: "not_allowed", message: "A manager installs updates" };
+  if (process.platform !== "win32") return { ok: false, code: "unexpected", message: "Updates install on Windows" };
+  try {
+    const check = await updateCheck();
+    if (check.kind === "none") return { ok: true, value: null };
+    if (check.kind === "not_eligible") throw new BusinessError("update_not_eligible", "Released after the support plan ended");
+    const installer = await downloadInstaller(check.manifest, app.getPath("temp"));
+    if (current && !remote) current.backupBeforeUpdate(check.manifest.version);
+    runInstaller(installer);
+    setTimeout(() => app.quit(), 500);
+    return { ok: true, value: null };
   } catch (error) {
     return failure(error);
   }
@@ -743,7 +793,8 @@ function createWindow(): void {
 void app
   .whenReady()
   .then(() => loadLicensing().catch((error) => console.error("Reading the licence failed", error)))
-  .then(createWindow);
+  .then(createWindow)
+  .then(() => setTimeout(() => void updateCheck().catch(() => null), 15_000));
 app.on("window-all-closed", () => {
   void stopServing();
   remote?.close();

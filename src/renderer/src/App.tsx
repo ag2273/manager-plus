@@ -242,9 +242,11 @@ export function App() {
 function LicenceBanner({ onActivate }: { onActivate: () => void }) {
   const [mode, setMode] = useState<LicenceMode | null>(null);
   const [status, setStatus] = useState<LicenceStatus | null>(null);
+  const [update, setUpdate] = useState<string | null>(null);
   useEffect(() => {
     void business.licenceMode().then((r) => r.ok && setMode(r.value));
     void window.api.licenceStatus().then(setStatus);
+    void window.api.checkUpdate(true).then((r) => r.ok && r.value.kind === "available" && setUpdate(r.value.manifest.version));
   }, []);
   const readOnly = mode?.readOnly ?? (status?.mode === "read_only" ? status.reason : null);
   if (readOnly) {
@@ -259,7 +261,14 @@ function LicenceBanner({ onActivate }: { onActivate: () => void }) {
       </div>
     );
   }
-  if (status?.mode !== "trial") return null;
+  if (status?.mode !== "trial") return update ? (
+    <div role="note" className="notice licence-banner">
+      {ar.updates.banner(update)}{" "}
+      <button type="button" className="link" onClick={onActivate}>
+        {ar.updates.open}
+      </button>
+    </div>
+  ) : null;
   return (
     <div role="note" className="notice licence-banner">
       {ar.licence.trial(status.daysLeft)}{" "}

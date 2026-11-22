@@ -5,10 +5,11 @@ import type { EtaSettings } from "../../../core/eta/store";
 import type { EtaReceiptSettings } from "../../../core/eta/receipts-store";
 import type { LicenceMode } from "../../../core/business";
 import type { LicenceStatus } from "../../../core/licence/licence";
+import type { UpdateCheck } from "../../../core/updates";
 import type { TokenCertificate } from "../../../shared/api";
 import type { BusinessSettings } from "../../../shared/api";
 import { business, errorText } from "../api";
-import { ar, locale } from "../strings";
+import { ar, currentLanguage, locale } from "../strings";
 
 /** Appearance settings: the theme picker from the approved design. */
 export function Settings({
@@ -72,6 +73,7 @@ export function Settings({
         ))}
       </section>
       <LicenceSetup />
+      <UpdateSetup isManager={isManager} />
       <LanguageSetup onLanguage={onLanguage} />
       <PrinterSetup />
       <ServerSetup />
@@ -708,5 +710,71 @@ function LicenceSetup() {
         </div>
       )}
     </form>
+  );
+}
+
+/** The installed version, and the newest update this licence may install. */
+function UpdateSetup({ isManager }: { isManager: boolean }) {
+  const [version, setVersion] = useState("");
+  const [check, setCheck] = useState<UpdateCheck | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const t = ar.updates;
+
+  /** Asks the server; a failure is shown only when the owner pressed the button, not on opening Settings offline. */
+  async function look(pressed: boolean) {
+    setBusy(true);
+    const result = await window.api.checkUpdate(false);
+    setBusy(false);
+    if (result.ok) setCheck(result.value);
+    else if (pressed) setMessage({ ok: false, text: errorText(result)! });
+  }
+  useEffect(() => {
+    void window.api.appVersion().then(setVersion);
+    void look(false);
+  }, []);
+
+  async function install() {
+    setBusy(true);
+    setMessage({ ok: true, text: t.installing });
+    const result = await window.api.installUpdate();
+    if (!result.ok) {
+      setBusy(false);
+      setMessage({ ok: false, text: errorText(result)! });
+    }
+  }
+
+  const notes = (m: { notes: { ar: string; en: string } }) => (currentLanguage() === "en" ? m.notes.en : m.notes.ar);
+  return (
+    <section className="card printer-card" aria-label={t.title}>
+      <div className="stack">
+        <h2>{t.title}</h2>
+        <span className="muted">{t.version(version)}</span>
+      </div>
+      {message && (
+        <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
+          {message.text}
+        </div>
+      )}
+      {check?.kind === "none" && <span>{t.none}</span>}
+      {check?.kind === "not_eligible" && <span>{t.notEligible(check.manifest.version, check.manifest.releaseDate)}</span>}
+      {check?.kind === "available" && (
+        <div className="stack">
+          <strong>{t.available(check.manifest.version)}</strong>
+          {notes(check.manifest) && <span className="small" style={{ whiteSpace: "pre-line" }}>{notes(check.manifest)}</span>}
+          {!isManager && <span className="muted small">{t.managerOnly}</span>}
+        </div>
+      )}
+      <div className="row">
+        <button type="button" className="btn" disabled={busy} onClick={() => void look(true)}>
+          {t.check}
+        </button>
+        {check?.kind === "available" && isManager && (
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void install()}>
+            {t.install}
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
