@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use manager_core::file_lock::{self, LockInfo, Me};
+use manager_core::licence::{Licensing, LICENCE_PUBLIC_KEY};
+use manager_core::updates::{check_update, UpdateCheck, UPDATE_PUBLIC_KEY};
 use manager_core::users::Credentials;
 use manager_core::{Business, BusinessError, BusinessSettings};
 use manager_lan::discovery::{self, Advertiser, FoundServer};
@@ -19,6 +21,8 @@ const THEMES: [&str; 4] = ["calm", "sage", "sand", "night"];
 #[derive(Default)]
 pub struct State {
     open: Mutex<Open>,
+    /** The last answer from the update server, for the screens' banner. */
+    last_update: Mutex<Option<UpdateCheck>>,
 }
 
 #[derive(Default)]
@@ -34,6 +38,8 @@ struct Open {
     remote: Option<Arc<RemoteBusiness>>,
     /** This PC serving its open file to others. */
     serving: Option<Serving>,
+    /** This PC's licence, read once the app's data folder is known. */
+    licensing: Option<Arc<Licensing>>,
 }
 
 struct Serving {
@@ -47,6 +53,13 @@ impl Open {
             self.file.as_ref()
         } else {
             self.current.as_ref()
+        }
+    }
+
+    /** Applies this PC's licence to the file it holds: read-only without one, and the number of users. */
+    fn apply_licence(&self) {
+        if let (Some(file), None, Some(licensing)) = (&self.file, &self.remote, &self.licensing) {
+            file.set_licence_limits(licensing.limits(chrono::Utc::now()));
         }
     }
 }
@@ -77,6 +90,54 @@ fn backup_if_due(open: &Open) {
 }
 
 impl State {
+    /** Once the window is up: reads this PC's licence, and asks for updates a little later. */
+    pub fn start(&self, app: &AppHandle) {
+        if let Ok(dir) = app.path().app_data_dir() {
+            let _ = std::fs::create_dir_all(&dir);
+            adopt_electron_data(&dir);
+            self.open.lock().unwrap().licensing = Some(Arc::new(Licensing {
+                store: Box::new(crate::licence::FileStore(dir.join("licence.json"))),
+                client: Box::new(crate::licence::HttpLicenceClient {
+                    server: crate::licence::server(),
+                    app_version: app.package_info().version.to_string(),
+                }),
+                public_key_pem: LICENCE_PUBLIC_KEY.into(),
+                machine: crate::licence::machine_fingerprint(&me().host),
+            }));
+        }
+        let app = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(15));
+            let _ = app.state::<State>().update_check(&app);
+        });
+    }
+
+    fn licensing(&self) -> Option<Arc<Licensing>> {
+        self.open.lock().unwrap().licensing.clone()
+    }
+
+    /** Asks our server for the newest release and whether this licence may install it. */
+    fn update_check(&self, app: &AppHandle) -> Result<UpdateCheck, BusinessError> {
+        let check = match crate::licence::fetch_manifest(&crate::licence::server())? {
+            None => UpdateCheck::None,
+            Some(signed) => {
+                let licensing = self.licensing();
+                check_update(
+                    &signed,
+                    UPDATE_PUBLIC_KEY,
+                    &app.package_info().version.to_string(),
+                    |date| {
+                        licensing
+                            .as_ref()
+                            .is_some_and(|l| l.update_allowed(date, chrono::Utc::now()))
+                    },
+                )?
+            }
+        };
+        *self.last_update.lock().unwrap() = Some(check.clone());
+        Ok(check)
+    }
+
     /** Every five minutes while the app runs, as the Electron main process does. */
     pub fn tick(&self) {
         let file = {
@@ -84,6 +145,7 @@ impl State {
             if let Some(path) = &open.path {
                 file_lock::refresh_lock(path, &me(), chrono::Utc::now());
             }
+            open.apply_licence();
             backup_if_due(&open);
             open.file.as_ref().map(Business::signed_out)
         };
@@ -146,6 +208,42 @@ fn seal_fields(input: &mut Value, fields: &[&str]) -> Result<(), BusinessError> 
         }
     }
     Ok(())
+}
+
+/** What the Electron app kept, in its own data folder, until the Tauri app has its own. */
+const ELECTRON_DATA: [&str; 5] = [
+    "licence.json",
+    "recent-files.json",
+    "preferences.json",
+    "network.json",
+    "server",
+];
+
+/**
+ * Takes over the Electron app's licence, recent files, preferences, known servers and server
+ * certificate the first time this app starts on a PC that had it, so nothing needs doing again
+ * and the other PCs still recognise this one.
+ */
+fn adopt_electron_data(dir: &std::path::Path) {
+    let Some(old) = std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Manager+")) else {
+        return;
+    };
+    for name in ELECTRON_DATA {
+        let (from, to) = (old.join(name), dir.join(name));
+        if to.exists() || !from.exists() {
+            continue;
+        }
+        if from.is_dir() {
+            let _ = std::fs::create_dir_all(&to);
+            if let Ok(entries) = std::fs::read_dir(&from) {
+                for entry in entries.flatten() {
+                    let _ = std::fs::copy(entry.path(), to.join(entry.file_name()));
+                }
+            }
+        } else {
+            let _ = std::fs::copy(&from, &to);
+        }
+    }
 }
 
 fn ok(value: Value) -> Value {
@@ -285,6 +383,17 @@ fn switch_to(
     open.path = Some(path.to_string());
     // A read-only folder gets no lock, but the file still opens.
     open.elsewhere = file_lock::take_lock(path, &me(), chrono::Utc::now());
+    if let (Some(licensing), Some(file)) = (&open.licensing, &open.file) {
+        let now = chrono::Utc::now();
+        let started = file
+            .started_at()
+            .ok()
+            .flatten()
+            .and_then(|at| chrono::DateTime::parse_from_rfc3339(&at).ok())
+            .map_or(now, |at| at.with_timezone(&chrono::Utc));
+        licensing.note_file(started, now);
+    }
+    open.apply_licence();
     backup_if_due(open);
     remember_recent(app, path);
     if let Some(serve) = read_network(app).serve.filter(|s| s.path == path) {
@@ -674,7 +783,42 @@ pub async fn desktop(
             result(restored)
         }
         "appVersion" => json!(app.package_info().version.to_string()),
-        "licenceStatus" => Value::Null,
+        // A PC using another's file is covered by that server's licence.
+        "licenceStatus" => {
+            let open = state.open.lock().unwrap();
+            match (&open.remote, &open.licensing) {
+                (None, Some(licensing)) => {
+                    serde_json::to_value(licensing.status(chrono::Utc::now())).expect("serializes")
+                }
+                _ => Value::Null,
+            }
+        }
+        "activateLicence" => {
+            let key: String = arg(&args, 0).unwrap_or_default();
+            let licensing = {
+                let open = state.open.lock().unwrap();
+                if open.remote.is_some() {
+                    return Ok(failure(BusinessError::new(
+                        "not_allowed",
+                        "Activate on the PC that holds the file",
+                    )));
+                }
+                open.licensing.clone()
+            };
+            let Some(licensing) = licensing else {
+                return Ok(failure(BusinessError::new(
+                    "unexpected",
+                    "The app's data folder is not available",
+                )));
+            };
+            let activated = tauri::async_runtime::spawn_blocking(move || {
+                licensing.activate(&key, chrono::Utc::now())
+            })
+            .await
+            .unwrap_or_else(|e| Err(BusinessError::new("unexpected", e.to_string())));
+            state.open.lock().unwrap().apply_licence();
+            result(activated.map(|s| serde_json::to_value(s).expect("serializes")))
+        }
         "printers" => json!(crate::printing::installed()),
         "printRaw" => {
             let sent = (|| {
@@ -759,7 +903,91 @@ pub async fn desktop(
             })();
             result(cancelled)
         }
-        "checkUpdate" => ok(json!({ "kind": "none" })),
+        "checkUpdate" => {
+            // The screens' banner asks for the last answer only; the network is asked at start and on the Settings button.
+            if args.first().and_then(Value::as_bool) == Some(true) {
+                let last = state.last_update.lock().unwrap().clone();
+                return Ok(ok(
+                    serde_json::to_value(last.unwrap_or(UpdateCheck::None)).expect("serializes")
+                ));
+            }
+            let checked = {
+                let app = app.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    app.state::<State>().update_check(&app)
+                })
+                .await
+                .unwrap_or_else(|e| Err(BusinessError::new("unexpected", e.to_string())))
+            };
+            result(checked.map(|c| serde_json::to_value(c).expect("serializes")))
+        }
+        "installUpdate" => {
+            let installed = {
+                let app = app.clone();
+                tauri::async_runtime::spawn_blocking(move || install_update(&app))
+                    .await
+                    .unwrap_or_else(|e| Err(BusinessError::new("unexpected", e.to_string())))
+            };
+            result(installed.map(|_| Value::Null))
+        }
         other => not_ported(other),
     })
+}
+
+/**
+ * Installs the newest eligible update: downloads it, checks it against the signed manifest,
+ * backs up the business file this PC holds, then runs the installer and quits. A manager does it.
+ */
+fn install_update(app: &AppHandle) -> Result<(), BusinessError> {
+    let state = app.state::<State>();
+    let (remote, local_manager) = {
+        let open = state.open.lock().unwrap();
+        let manager = open
+            .current()
+            .and_then(Business::current_user)
+            .is_some_and(|u| u.role == "manager");
+        (open.remote.clone(), manager)
+    };
+    let manager = match &remote {
+        Some(remote) => remote
+            .call("currentUser", &[])
+            .is_ok_and(|u| u["role"] == "manager"),
+        None => local_manager,
+    };
+    if !manager {
+        return Err(BusinessError::new(
+            "not_allowed",
+            "A manager installs updates",
+        ));
+    }
+    if !cfg!(windows) {
+        return Err(BusinessError::new(
+            "unexpected",
+            "Updates install on Windows",
+        ));
+    }
+    let manifest = match state.update_check(app)? {
+        UpdateCheck::None => return Ok(()),
+        UpdateCheck::NotEligible { .. } => {
+            return Err(BusinessError::new(
+                "update_not_eligible",
+                "Released after the support plan ended",
+            ))
+        }
+        UpdateCheck::Available { manifest } => manifest,
+    };
+    let installer = crate::licence::download_installer(&manifest, &std::env::temp_dir())?;
+    {
+        let open = state.open.lock().unwrap();
+        if let (Some(current), None) = (open.current(), &open.remote) {
+            current.backup_before_update(&manifest.version)?;
+        }
+    }
+    crate::licence::run_installer(&installer)?;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(500));
+        app.exit(0);
+    });
+    Ok(())
 }

@@ -79,7 +79,10 @@ const click = (text) => {
 
 const file = join(dir, "shop.mplus");
 // The app answers its save dialog with this path; it and a fresh data folder reach it through tauri-driver.
-const env = { ...process.env, MANAGER_PLUS_E2E_SAVE_AS: file, XDG_DATA_HOME: join(dir, "data") };
+const env = { ...process.env, MANAGER_PLUS_E2E_SAVE_AS: file, XDG_DATA_HOME: join(dir, "data"),
+  // Nothing listens here, so the journey never reaches the real licence server.
+  MANAGER_PLUS_LICENCE_URL: "http://127.0.0.1:9",
+};
 const driver = spawn("tauri-driver", [], { stdio: "inherit", env });
 let session;
 try {
@@ -308,6 +311,20 @@ try {
     return settings.ok && settings.value.enabled === false && documents.ok && receipts.ok && receipts.value.length === 0;
   });
   check(eta === true, "the e-invoice settings and queues come from the Rust core");
+
+  // The trial starts with the first business file; the licence server is out of reach here.
+  const licence = await run(session, async () => {
+    const status = await window.api.licenceStatus();
+    const activated = await window.api.activateLicence("abcd-efgh");
+    const update = await window.api.checkUpdate(false);
+    const cached = await window.api.checkUpdate(true);
+    return { status, activated, update, cached };
+  });
+  check(licence.status?.mode === "trial" && licence.status.daysLeft === 14, "the 14-day trial runs from the new business file");
+  check(licence.activated.ok === false && licence.activated.code === "licence_unreachable", "activating without the licence server says it can't be reached");
+  check(licence.update.ok === false && licence.update.code === "update_unreachable", "checking for updates without the server says so");
+  check(licence.cached.ok && licence.cached.value.kind === "none", "the update banner has nothing to offer");
+  check(existsSync(join(dir, "data", "app.managerplus.desktop", "licence.json")), "the licence state is kept in the app's data folder");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);

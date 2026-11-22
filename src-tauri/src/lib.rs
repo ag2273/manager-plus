@@ -3,6 +3,7 @@
 
 mod desktop;
 mod eta;
+mod licence;
 mod printing;
 
 use tauri::Manager;
@@ -13,6 +14,7 @@ pub fn run() {
         .manage(desktop::State::default())
         .invoke_handler(tauri::generate_handler![desktop::desktop])
         .setup(|app| {
+            app.state::<desktop::State>().start(app.handle());
             // The lock stays fresh and the daily backup runs while the app is open.
             let handle = app.handle().clone();
             std::thread::spawn(move || loop {
