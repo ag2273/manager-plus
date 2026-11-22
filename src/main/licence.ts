@@ -47,7 +47,7 @@ export function fileLicenceStore(path: string): LicenceStore {
   };
 }
 
-const REFUSALS: BusinessErrorCode[] = ["licence_key_invalid", "licence_moves_exhausted", "licence_revoked"];
+const REFUSALS: BusinessErrorCode[] = ["licence_key_invalid", "licence_moves_exhausted", "licence_revoked", "licence_rate_limited"];
 
 /** The licence server over HTTPS. Its refusals come back as their codes; anything else means it couldn't be reached. */
 export function httpLicenceClient(server = LICENCE_SERVER, appVersion = ""): LicenceClient {

@@ -12,6 +12,11 @@ export default tseslint.config(
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },
   {
+    // Run with Node, as a one-off on the owner's PC.
+    files: ["licence-server/*.mjs"],
+    languageOptions: { globals: { process: "readonly", URL: "readonly" } },
+  },
+  {
     files: ["src/core/**/*.ts"],
     rules: {
       "no-restricted-imports": [
