@@ -145,6 +145,9 @@ const errors = {
   licence_revoked: "مفتاح الترخيص ده اتلغى. كلّمنا.",
   licence_unreachable: "تعذر الوصول لخادم التراخيص. اتأكد من النت وجرّب تاني.",
   licence_rate_limited: "محاولات تفعيل كتير. استنى ساعة وجرّب تاني.",
+  update_invalid: "التحديث مش موقّع مننا أو الملف اتغيّر أثناء التنزيل. ماتثبّتوش، وجرّب تاني.",
+  update_unreachable: "تعذر الوصول لخادم التحديثات. اتأكد من النت وجرّب تاني.",
+  update_not_eligible: "التحديث ده نزل بعد ما الدعم خلص. جدّد الدعم عشان تثبّته؛ النسخة اللي عندك شغالة عادي.",
   unexpected: "حدث خطأ غير متوقع.",
 } satisfies Record<BusinessErrorCode | "unexpected", string>;
 
@@ -161,6 +164,19 @@ const arabic = {
   create: "إنشاء النشاط",
   openFile: "فتح ملف نشاط",
   recent: "آخر الملفات",
+  updates: {
+    title: "التحديثات",
+    version: (v: string) => `الإصدار المثبّت: ${v}`,
+    check: "دوّر على تحديث",
+    none: "عندك أحدث إصدار.",
+    available: (v: string) => `الإصدار ${v} متاح.`,
+    notEligible: (v: string, date: string) => `الإصدار ${v} نزل ${date} بعد ما الدعم خلص. جدّد الدعم عشان تثبّته؛ النسخة اللي عندك شغالة عادي.`,
+    install: "نزّل وثبّت",
+    installing: "بيتنزّل ويتثبّت… هناخد نسخة احتياطية من الملف الأول، والبرنامج هيقفل ويفتح تاني لوحده.",
+    managerOnly: "المدير بس اللي يثبّت التحديثات.",
+    banner: (v: string) => `فيه تحديث جديد (${v}).`,
+    open: "التفاصيل",
+  },
   licence: {
     trial: (days: number) => `نسخة تجريبية: باقي ${days} ${days === 1 ? "يوم" : "أيام"}.`,
     readOnly: {

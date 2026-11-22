@@ -1,6 +1,7 @@
 import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
 import type { EtaReceiptSettingsInput } from "../core/eta/receipts-store";
 import type { LicenceStatus } from "../core/licence/licence";
+import type { UpdateCheck } from "../core/updates";
 import type { Lang, ReportTable } from "./report-tables";
 import type { ReadSheet } from "./spreadsheet-read";
 import type { Business, BusinessSettings } from "../core/business";
@@ -267,6 +268,12 @@ export interface DesktopApi {
   licenceStatus(): Promise<LicenceStatus | null>;
   /** Activates a licence key on this PC, the one that holds the file. */
   activateLicence(key: string): Promise<Result<LicenceStatus>>;
+  /** The app's version. */
+  appVersion(): Promise<string>;
+  /** Asks for the newest release (or the last answer, when `cached`) and whether this licence may install it. */
+  checkUpdate(cached: boolean): Promise<Result<UpdateCheck>>;
+  /** Backs up, installs the newest eligible update and restarts the app. */
+  installUpdate(): Promise<Result<null>>;
   /** Saves the POS registration for e-receipts, sealing its client secret and pre-shared key on this PC. */
   saveEtaReceiptSettings(settings: EtaReceiptSettingsInput): Promise<Result<null>>;
   /** Asks the ETA for news on submitted documents, then signs and sends the pending ones; returns how many were accepted. */
@@ -305,6 +312,9 @@ export const CHANNELS = {
   saveEtaSettings: "eta:save-settings",
   saveEtaReceiptSettings: "eta:save-receipt-settings",
   licenceStatus: "licence:status",
+  appVersion: "app:version",
+  checkUpdate: "update:check",
+  installUpdate: "update:install",
   activateLicence: "licence:activate",
   sendEtaNow: "eta:send",
   cancelEta: "eta:cancel",

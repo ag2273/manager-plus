@@ -467,6 +467,20 @@ export class Business {
     return this.user;
   }
 
+  /**
+   * A copy of the file before an app update installs: a backup in the backup folder when one is
+   * set, otherwise a copy beside the file. Returns where it went.
+   */
+  backupBeforeUpdate(version: string): string {
+    this.allow("installUpdate");
+    if (backupStatus(this.db, this.path).folder) return backupNow(this.db, this.path, new Date()).path;
+    const base = this.path.replace(/\.mplus$/i, "");
+    let target = `${base} قبل تحديث البرنامج ${version}.mplus`;
+    for (let n = 2; existsSync(target); n++) target = `${base} قبل تحديث البرنامج ${version} (${n}).mplus`;
+    copyDatabase(this.db, target);
+    return target;
+  }
+
   /** When the file's first record was made: the licence trial counts from the oldest file. For the PC that holds it. */
   startedAt(): Date {
     const row = this.db.prepare("SELECT MIN(at) AS at FROM audit_log").get() as { at: string | null };

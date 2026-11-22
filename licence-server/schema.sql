@@ -43,3 +43,13 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   window_start INTEGER NOT NULL,
   count INTEGER NOT NULL
 );
+
+-- App releases: the signed update manifest as the release script printed it. The newest is offered.
+-- The server only stores it; the app checks the signature with the release key, which never comes here.
+CREATE TABLE IF NOT EXISTS releases (
+  id INTEGER PRIMARY KEY,
+  version TEXT NOT NULL,
+  manifest TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  published_at TEXT NOT NULL
+);

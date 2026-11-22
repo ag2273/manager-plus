@@ -23,3 +23,11 @@ Manager+ is sold as a one-time licence per company with a yearly support plan, a
 ## The licence server (#21)
 
 A Cloudflare Worker with a D1 database (`licence-server/`). It keeps only each key's SHA-256 and last four characters; a key is shown once when made. Activation on another PC ends the old activation and counts as a move, at most two in any 12 months; the admin can reset that. Revoking stops a key from activating, but a PC that already has its licence file keeps working offline, as any offline licence does. The signing key is a Worker secret, piped straight from `make-keys.mjs` into `wrangler secret put`, so it never touches the repo or a disk. Activation is rate-limited per IP address in D1. The admin page sits behind HTTP Basic auth, compares the password in constant time and limits wrong guesses.
+
+## Installer and updates (#22)
+
+- **Installer.** An unsigned NSIS installer for Windows x64 is built by electron-builder in CI (`npm run dist`) and kept as a build artifact. It is per-user, Arabic first, and never deletes business files on uninstall. `docs/install/` walks through the one SmartScreen step ("More info → Run anyway").
+- **Signed manifest.** Each release has a manifest: version, release date, installer URL, SHA-256, size, and notes in both languages. It is signed with a release key separate from the licence key. The private key stays on the owner's PC (`scripts/release.mjs keygen` / `sign`); the app carries the public key (`core/update-key.ts`).
+- **Serving and checking.** The licence Worker only stores and serves the newest signed manifest (`/v1/update`), so a compromised server can't push an update. The app rejects an unsigned or tampered manifest, and an installer whose hash or size differ.
+- **Eligibility.** An update is offered only if released on or before the licence's support end date (`Licensing.updateAllowed`). During the trial updates are offered; read-only installs none. The installed version keeps working regardless.
+- **Installing.** A manager starts it. The app downloads and verifies the installer, backs up the business file this PC holds (to the backup folder, or beside the file), then runs the installer silently and restarts.

@@ -13,8 +13,8 @@ export default tseslint.config(
   },
   {
     // Run with Node, as a one-off on the owner's PC.
-    files: ["licence-server/*.mjs"],
-    languageOptions: { globals: { process: "readonly", URL: "readonly" } },
+    files: ["licence-server/*.mjs", "scripts/*.mjs"],
+    languageOptions: { globals: { process: "readonly", URL: "readonly", Buffer: "readonly" } },
   },
   {
     files: ["src/core/**/*.ts"],

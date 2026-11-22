@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تثبيت Manager+</title>
+<style>
+:root { --bg: #f6f7f5; --card: #fff; --text: #1f2a26; --muted: #66736d; --accent: #2f6f5e; --soft: #e8f0ec; --line: #dde3df; --win: #1f5fa8; --win-bg: #2b78c5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #151a18; --card: #1d2421; --text: #e6ece9; --muted: #9aa7a1; --soft: #24312c; --line: #2e3a35; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.7 Tahoma, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; }
+h2 { font-size: 20px; margin: 40px 0 12px; }
+p.lead { color: var(--muted); margin: 0 0 24px; }
+.lang { display: flex; gap: 8px; margin-bottom: 24px; }
+.lang a { color: var(--accent); }
+ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+ol.steps > li { counter-increment: s; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; }
+ol.steps > li::before { content: counter(s); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: bold; margin-inline-end: 10px; }
+.note { background: var(--soft); border-radius: 10px; padding: 12px 16px; margin: 16px 0; }
+figure { margin: 14px 0 4px; }
+figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+/* A drawing of Windows's "Windows protected your PC" box, not a screenshot. */
+.smartscreen { direction: ltr; text-align: left; background: var(--win-bg); color: #fff; font-family: "Segoe UI", Tahoma, sans-serif; padding: 28px 28px 20px; border-radius: 4px; max-width: 520px; }
+.smartscreen h3 { font-weight: 300; font-size: 26px; margin: 0 0 14px; }
+.smartscreen p { margin: 0 0 8px; font-size: 14px; }
+.smartscreen .more { display: inline-block; text-decoration: underline; font-size: 14px; }
+.smartscreen .details { font-size: 13px; margin: 12px 0; }
+.smartscreen .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.smartscreen .buttons span { border: 2px solid #fff; padding: 4px 18px; font-size: 14px; }
+.smartscreen .hl { outline: 3px solid #ffd54a; outline-offset: 3px; border-radius: 2px; }
+.en { direction: ltr; text-align: left; }
+code { background: var(--soft); padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+<div class="lang"><a href="#ar">العربية</a> · <a href="#en">English</a></div>
+
+<section id="ar">
+<h1>تثبيت Manager+ على ويندوز</h1>
+<p class="lead">ويندوز 10 أو 11، 64 بت. التثبيت بياخد دقيقة.</p>
+
+<ol class="steps">
+<li><strong>نزّل الملف</strong> <code>Manager-Plus-Setup-…exe</code> من اللينك اللي وصلك، وافتحه.</li>
+<li><strong>ويندوز هيقول «Windows protected your PC».</strong> ده طبيعي: البرنامج جديد ومش متوقّع بشهادة مدفوعة، فويندوز بيسأل مرة واحدة. اضغط <strong>More info</strong>.
+<figure>
+<div class="smartscreen" role="img" aria-label="رسم توضيحي لرسالة Windows protected your PC، والضغط على More info">
+<h3>Windows protected your PC</h3>
+<p>Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk.</p>
+<p class="more hl">More info</p>
+<div class="buttons"><span>Don't run</span></div>
+</div>
+<figcaption>رسم توضيحي للرسالة. اضغط «More info» (المتعلّم عليها بالأصفر).</figcaption>
+</figure>
+</li>
+<li><strong>اضغط Run anyway.</strong> هيظهر اسم الملف واسم الناشر «Unknown publisher»، وزرار جديد «Run anyway».
+<figure>
+<div class="smartscreen" role="img" aria-label="رسم توضيحي لزرار Run anyway">
+<h3>Windows protected your PC</h3>
+<p>Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk.</p>
+<div class="details">App: Manager-Plus-Setup-1.0.0.exe<br>Publisher: Unknown publisher</div>
+<div class="buttons"><span class="hl">Run anyway</span><span>Don't run</span></div>
+</div>
+<figcaption>رسم توضيحي. اضغط «Run anyway».</figcaption>
+</figure>
+</li>
+<li><strong>كمّل التثبيت:</strong> اختار اللغة والمكان (أو سيبه زي ما هو) واضغط «تثبيت». هيتعمل اختصار على سطح المكتب.</li>
+<li><strong>افتح Manager+</strong> واعمل ملف النشاط. أول 14 يوم نسخة تجريبية كاملة؛ فعّل الترخيص من «الإعدادات ← الترخيص» بالمفتاح اللي وصلك.</li>
+</ol>
+
+<div class="note"><strong>التحديثات:</strong> البرنامج بيدوّر على التحديثات لوحده ويوريك في «الإعدادات ← التحديثات». قبل ما يثبّت أي تحديث بياخد نسخة احتياطية من ملف النشاط، ومش هيثبّت غير تحديث موقّع مننا. التحديثات اللي بتنزل وانت في فترة الدعم بس هي اللي بتتثبّت، والنسخة اللي عندك بتفضل شغالة على طول.</div>
+<div class="note"><strong>إلغاء التثبيت</strong> من «الإعدادات ← التطبيقات» في ويندوز. ملفات النشاط والنسخ الاحتياطية مش بتتمسح.</div>
+</section>
+
+<section id="en" class="en" dir="ltr" lang="en">
+<h2>Installing Manager+ on Windows</h2>
+<p class="lead">Windows 10 or 11, 64-bit. It takes about a minute.</p>
+<ol class="steps">
+<li><strong>Download</strong> <code>Manager-Plus-Setup-…exe</code> from the link you received and open it.</li>
+<li><strong>Windows says “Windows protected your PC”.</strong> That's expected: the app is new and not signed with a paid certificate, so Windows asks once. Click <strong>More info</strong> (see the first drawing above).</li>
+<li><strong>Click Run anyway.</strong> The publisher shows as “Unknown publisher” (see the second drawing above).</li>
+<li><strong>Finish the installer:</strong> pick the language and folder, or keep the defaults, and install. A desktop shortcut is made.</li>
+<li><strong>Open Manager+</strong> and create your business file. The first 14 days are a full trial; activate under Settings → Licence with your key.</li>
+</ol>
+<div class="note"><strong>Updates:</strong> the app looks for updates itself and shows them under Settings → Updates. It backs up your business file before installing, and installs only updates signed by us and released within your support plan; your installed version keeps working.</div>
+<div class="note"><strong>Uninstalling</strong> from Windows Settings → Apps never deletes your business files or backups.</div>
+<p style="color:var(--muted);font-size:13px">The blue boxes are drawings of Windows's message, not screenshots.</p>
+</section>
+</main>
+</body>
+</html>
