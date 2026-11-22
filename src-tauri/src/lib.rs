@@ -2,6 +2,7 @@
 //! `DesktopApi` in `shared/api.ts`; every business rule is in `manager-core`.
 
 mod desktop;
+mod eta;
 mod printing;
 
 use tauri::Manager;

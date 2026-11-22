@@ -302,31 +302,3 @@ fn a_cashier_can_sell_and_a_storekeeper_cannot() {
     assert_eq!(code(mahmoud.post_cash_sale(&sale)), "not_allowed");
     assert_eq!(s.business.receipts().unwrap()[0].sold_by, "سارة");
 }
-
-#[test]
-fn the_till_is_refused_while_e_receipts_are_on_until_the_rust_core_issues_them() {
-    // No facade command turns e-receipts on in the Rust core yet; the screens' file can have them on.
-    let (_dir, path) = temp_file("eta.mplus");
-    let b = Business::create(&path, &shop(), &manager()).unwrap();
-    b.close();
-    {
-        let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.execute_batch("UPDATE eta_settings SET enabled = 1, receipts_enabled = 1")
-            .unwrap();
-    }
-    let b = Business::open(&path)
-        .unwrap()
-        .sign_in(&manager().name, &manager().password)
-        .unwrap();
-    let main = main_warehouse(&b);
-    let soap = b.add_item(&piece(&b, "صابون", 5_700)).unwrap();
-    b.open_shift(0.0).unwrap();
-    let sale = CashSaleInput {
-        date: "2026-11-20".into(),
-        warehouse_id: main,
-        lines: vec![SaleLineInput::base(soap, 1_000)],
-        cash_received: 5_700.0,
-    };
-    assert_eq!(code(b.post_cash_sale(&sale)), "not_ported");
-    assert!(b.receipts().unwrap().is_empty());
-}

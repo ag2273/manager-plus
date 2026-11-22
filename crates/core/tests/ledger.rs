@@ -500,7 +500,6 @@ fn the_screens_call_the_facade_by_name_with_json() {
         .call("trialBalance", &[serde_json::json!("2026-11-30")])
         .unwrap();
     assert_eq!(tb["totalDebit"], 100);
-    assert_eq!(code(business.call("etaSettings", &[])), "not_ported");
     assert_eq!(code(business.call("close", &[])), "not_allowed");
 }
 

@@ -19,7 +19,7 @@ use crate::stock::{
     account_by_role, active_warehouse, assert_quantity, cost_of_issue, held_in, insert_movement,
     to_base_quantity, NewMovement, UnitLine,
 };
-use crate::users::{find_user, now_iso, Credentials};
+use crate::users::{find_user, Credentials};
 
 const ONE_UNIT: i64 = 1000;
 const WHOLE: i64 = 10_000;
@@ -308,22 +308,6 @@ pub fn price_invoice(
         total: net + vat,
         lines: priced,
     })
-}
-
-/** Queues a posted invoice or credit note for the e-invoice system, when the business uses it. */
-pub(crate) fn queue_eta_document(conn: &Connection, kind: &str, document_id: i64) -> Result<()> {
-    let enabled: Option<bool> = conn
-        .query_row("SELECT enabled = 1 FROM eta_settings LIMIT 1", [], |r| {
-            r.get(0)
-        })
-        .optional()?;
-    if enabled == Some(true) {
-        conn.execute(
-            "INSERT INTO eta_documents (kind, document_id, status, updated_at) VALUES (?, ?, 'pending', ?)",
-            params![kind, document_id, now_iso()],
-        )?;
-    }
-    Ok(())
 }
 
 /**

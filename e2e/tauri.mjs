@@ -300,6 +300,15 @@ try {
   });
   check(hello.ok && hello.value.app === "manager-plus" && hello.value.settings.name === "بقالة النور", "another PC reaches the Rust server over TLS");
 
+  // E-invoicing is optional and off: its screens' queries answer from the Rust core.
+  const eta = await run(session, async () => {
+    const settings = await window.api.call("etaSettings", []);
+    const documents = await window.api.call("etaDocuments", []);
+    const receipts = await window.api.call("etaReceipts", []);
+    return settings.ok && settings.value.enabled === false && documents.ok && receipts.ok && receipts.value.length === 0;
+  });
+  check(eta === true, "the e-invoice settings and queues come from the Rust core");
+
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);
 } finally {

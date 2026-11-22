@@ -1,0 +1,113 @@
+{
+ "receipt": {
+  "header": {
+   "dateTimeIssued": "2026-11-20T10:11:12Z",
+   "receiptNumber": "S-7",
+   "uuid": "162a8b2682204d75fd9350494fd61d4cde420ce60daa0e6a0a9eb757bbb67774",
+   "previousUUID": "abc",
+   "referenceOldUUID": "",
+   "currency": "EGP",
+   "exchangeRate": 0,
+   "sOrderNameCode": "",
+   "orderdeliveryMode": "",
+   "grossWeight": 0,
+   "netWeight": 0
+  },
+  "documentType": {
+   "receiptType": "S",
+   "typeVersion": "1.2"
+  },
+  "seller": {
+   "rin": "123456789",
+   "companyTradeName": "شركة",
+   "branchCode": "0",
+   "branchAddress": {
+    "country": "EG",
+    "governate": "g",
+    "regionCity": "r",
+    "street": "s",
+    "buildingNumber": "1"
+   },
+   "deviceSerialNumber": "POS-1",
+   "syndicateLicenseNumber": "",
+   "activityCode": "4741"
+  },
+  "buyer": {
+   "type": "P",
+   "id": "",
+   "name": "",
+   "mobileNumber": "",
+   "paymentNumber": ""
+  },
+  "itemData": [
+   {
+    "internalCode": "A1",
+    "description": "x",
+    "itemType": "GS1",
+    "itemCode": "6221000000011",
+    "unitType": "EA",
+    "quantity": 1.5,
+    "unitPrice": 100,
+    "netSale": 130,
+    "totalSale": 150,
+    "total": 148.2,
+    "commercialDiscountData": [
+     {
+      "amount": 20,
+      "description": "Discount"
+     }
+    ],
+    "itemDiscountData": [],
+    "valueDifference": 0,
+    "taxableItems": [
+     {
+      "taxType": "T1",
+      "amount": 18.2,
+      "subType": "V009",
+      "rate": 14
+     }
+    ]
+   },
+   {
+    "internalCode": "",
+    "description": "y (علبة)",
+    "itemType": "EGS",
+    "itemCode": "EG-1-2",
+    "unitType": "EA",
+    "quantity": 3,
+    "unitPrice": 3.33333,
+    "netSale": 10,
+    "totalSale": 10,
+    "total": 10,
+    "commercialDiscountData": [],
+    "itemDiscountData": [],
+    "valueDifference": 0,
+    "taxableItems": [
+     {
+      "taxType": "T1",
+      "amount": 0,
+      "subType": "V003",
+      "rate": 0
+     }
+    ]
+   }
+  ],
+  "totalSales": 160,
+  "totalCommercialDiscount": 20,
+  "totalItemsDiscount": 0,
+  "extraReceiptDiscountData": [],
+  "netAmount": 140,
+  "feesAmount": 0,
+  "totalAmount": 158.2,
+  "taxTotals": [
+   {
+    "taxType": "T1",
+    "amount": 18.2
+   }
+  ],
+  "paymentMethod": "V",
+  "adjustment": 0
+ },
+ "uuid": "162a8b2682204d75fd9350494fd61d4cde420ce60daa0e6a0a9eb757bbb67774",
+ "json": "{\"header\":{\"dateTimeIssued\":\"2026-11-20T10:11:12Z\",\"receiptNumber\":\"S-7\",\"uuid\":\"162a8b2682204d75fd9350494fd61d4cde420ce60daa0e6a0a9eb757bbb67774\",\"previousUUID\":\"abc\",\"referenceOldUUID\":\"\",\"currency\":\"EGP\",\"exchangeRate\":0,\"sOrderNameCode\":\"\",\"orderdeliveryMode\":\"\",\"grossWeight\":0,\"netWeight\":0},\"documentType\":{\"receiptType\":\"S\",\"typeVersion\":\"1.2\"},\"seller\":{\"rin\":\"123456789\",\"companyTradeName\":\"شركة\",\"branchCode\":\"0\",\"branchAddress\":{\"country\":\"EG\",\"governate\":\"g\",\"regionCity\":\"r\",\"street\":\"s\",\"buildingNumber\":\"1\"},\"deviceSerialNumber\":\"POS-1\",\"syndicateLicenseNumber\":\"\",\"activityCode\":\"4741\"},\"buyer\":{\"type\":\"P\",\"id\":\"\",\"name\":\"\",\"mobileNumber\":\"\",\"paymentNumber\":\"\"},\"itemData\":[{\"internalCode\":\"A1\",\"description\":\"x\",\"itemType\":\"GS1\",\"itemCode\":\"6221000000011\",\"unitType\":\"EA\",\"quantity\":1.5,\"unitPrice\":100,\"netSale\":130,\"totalSale\":150,\"total\":148.2,\"commercialDiscountData\":[{\"amount\":20,\"description\":\"Discount\"}],\"itemDiscountData\":[],\"valueDifference\":0,\"taxableItems\":[{\"taxType\":\"T1\",\"amount\":18.2,\"subType\":\"V009\",\"rate\":14}]},{\"internalCode\":\"\",\"description\":\"y (علبة)\",\"itemType\":\"EGS\",\"itemCode\":\"EG-1-2\",\"unitType\":\"EA\",\"quantity\":3,\"unitPrice\":3.33333,\"netSale\":10,\"totalSale\":10,\"total\":10,\"commercialDiscountData\":[],\"itemDiscountData\":[],\"valueDifference\":0,\"taxableItems\":[{\"taxType\":\"T1\",\"amount\":0,\"subType\":\"V003\",\"rate\":0}]}],\"totalSales\":160,\"totalCommercialDiscount\":20,\"totalItemsDiscount\":0,\"extraReceiptDiscountData\":[],\"netAmount\":140,\"feesAmount\":0,\"totalAmount\":158.2,\"taxTotals\":[{\"taxType\":\"T1\",\"amount\":18.2}],\"paymentMethod\":\"V\",\"adjustment\":0}"
+}

@@ -10,6 +10,13 @@ use serde_json::{json, Value};
 use crate::backup::{self, BackupFile, BackupStatus};
 use crate::customers::{self, Customer, CustomerChanges, CustomerInput};
 use crate::error::{refuse, BusinessError, Result};
+use crate::eta::receipts_store::{
+    self as eta_receipts, EtaReceiptCredentials, EtaReceiptRow, EtaReceiptSettings,
+    EtaReceiptSettingsInput,
+};
+use crate::eta::store::{
+    self as eta_store, EtaCredentials, EtaDocumentRow, EtaSettings, EtaSettingsInput, EtaState,
+};
 use crate::import::{self, ImportInput, ImportReport};
 use crate::inventory::{
     self, ItemMovement, LowStockRow, StockCount, StockCountInput, WriteOff, WriteOffInput,
@@ -468,7 +475,7 @@ impl Business {
             .query_row("SELECT MIN(at) FROM audit_log", [], |r| r.get(0))?)
     }
 
-    fn conn(&self) -> MutexGuard<'_, Connection> {
+    pub(crate) fn conn(&self) -> MutexGuard<'_, Connection> {
         lock(&self.file.conn)
     }
 
@@ -1024,7 +1031,9 @@ impl Business {
     pub fn post_cash_sale(&self, sale: &CashSaleInput) -> Result<SaleResult> {
         let user_id = self.allow("postCashSale")?.id;
         self.write("postCashSale", to_json(sale), None, |c| {
-            sales::post_cash_sale(c, sale, user_id)
+            let posted = sales::post_cash_sale(c, sale, user_id)?;
+            crate::eta::receipts_store::queue_eta_receipt(c, "sale", posted.id)?;
+            Ok(posted)
         })
     }
 
@@ -1032,7 +1041,9 @@ impl Business {
     pub fn post_sale(&self, sale: &SaleInput) -> Result<SaleResult> {
         let user_id = self.allow("postSale")?.id;
         self.write("postSale", without_password(to_json(sale)), None, |c| {
-            sales::post_sale(c, sale, user_id)
+            let posted = sales::post_sale(c, sale, user_id)?;
+            crate::eta::receipts_store::queue_eta_receipt(c, "sale", posted.id)?;
+            Ok(posted)
         })
     }
 
@@ -1050,7 +1061,9 @@ impl Business {
     pub fn return_sale(&self, input: &ReturnInput) -> Result<ReturnResult> {
         let user_id = self.allow("returnSale")?.id;
         self.write("returnSale", to_json(input), None, |c| {
-            returns::return_sale(c, input, user_id)
+            let posted = returns::return_sale(c, input, user_id)?;
+            crate::eta::receipts_store::queue_eta_receipt(c, "return", posted.id)?;
+            Ok(posted)
         })
     }
 
@@ -1076,7 +1089,7 @@ impl Business {
             None,
             |c| {
                 let posted = invoices::post_sales_invoice(c, invoice, user_id)?;
-                invoices::queue_eta_document(c, "invoice", posted.id)?;
+                crate::eta::store::queue_eta_document(c, "invoice", posted.id, chrono::Utc::now())?;
                 Ok(posted)
             },
         )
@@ -1099,7 +1112,7 @@ impl Business {
         let user_id = self.allow("postCreditNote")?.id;
         self.write("postCreditNote", to_json(note), None, |c| {
             let posted = invoices::post_credit_note(c, note, user_id)?;
-            invoices::queue_eta_document(c, "credit_note", posted.id)?;
+            crate::eta::store::queue_eta_document(c, "credit_note", posted.id, chrono::Utc::now())?;
             Ok(posted)
         })
     }
@@ -1527,5 +1540,98 @@ impl File {
             path: path.to_string(),
             gate: Mutex::new(Gate::default()),
         }
+    }
+}
+
+// E-invoicing (ETA)
+impl Business {
+    /** Whether e-invoicing is on, and its settings; the client secret is never returned. */
+    pub fn eta_settings(&self) -> Result<EtaSettings> {
+        self.read("etaSettings", eta_store::eta_settings)
+    }
+
+    /** Saves the e-invoice settings. The PC seals the client secret before it gets here. */
+    pub fn set_eta_settings(&self, input: &EtaSettingsInput) -> Result<()> {
+        // The audit log keeps what changed, never the secret.
+        let mut detail = to_json(input);
+        detail["clientSecret"] = json!(if input.client_secret.is_some() {
+            "(changed)"
+        } else {
+            "(kept)"
+        });
+        self.write("setEtaSettings", detail, None, |c| {
+            eta_store::set_eta_settings(c, input)
+        })
+    }
+
+    /** Sales invoices and credit notes sent, or waiting to be sent, to the ETA, newest first. */
+    pub fn eta_documents(&self) -> Result<Vec<EtaDocumentRow>> {
+        self.read("etaDocuments", |c| eta_store::eta_documents(c, None))
+    }
+
+    /** A document's ETA status and UUID by its printed number; None when it isn't an e-invoice. */
+    pub fn eta_state(&self, kind: &str, number: i64) -> Result<Option<EtaState>> {
+        self.read("etaState", |c| eta_store::eta_state_of(c, kind, number))
+    }
+
+    /** Sends a failed or invalid document again, once it is fixed. */
+    pub fn retry_eta(&self, kind: &str, document_id: i64) -> Result<()> {
+        let detail = json!({ "kind": kind, "documentId": document_id });
+        self.write("retryEta", detail, Some(document_id), |c| {
+            eta_store::retry_eta_document(c, kind, document_id, chrono::Utc::now())
+        })
+    }
+
+    /** The API credentials, for the PC that talks to the ETA; not for screens. */
+    pub fn eta_credentials(&self) -> Result<EtaCredentials> {
+        eta_store::eta_credentials(&self.conn())
+    }
+
+    /** E-receipts for till sales: on when e-invoicing is on and the POS is registered. */
+    pub fn eta_receipt_settings(&self) -> Result<EtaReceiptSettings> {
+        self.read("etaSettings", eta_receipts::eta_receipt_settings)
+    }
+
+    /** Saves the POS registration. The PC seals the client secret and pre-shared key before they get here. */
+    pub fn set_eta_receipt_settings(&self, input: &EtaReceiptSettingsInput) -> Result<()> {
+        let mut detail = to_json(input);
+        detail["posClientSecret"] = json!(if input.pos_client_secret.is_some() {
+            "(changed)"
+        } else {
+            "(kept)"
+        });
+        detail["presharedKey"] = json!(if input.preshared_key.is_some() {
+            "(changed)"
+        } else {
+            "(kept)"
+        });
+        self.write("setEtaSettings", detail, None, |c| {
+            eta_receipts::set_eta_receipt_settings(c, input)
+        })
+    }
+
+    /** E-receipts in the order the till issued them, with their status, UUID and why one failed. */
+    pub fn eta_receipts(&self) -> Result<Vec<EtaReceiptRow>> {
+        self.read("etaDocuments", |c| eta_receipts::eta_receipts(c, None))
+    }
+
+    /** Sends a failed or invalid e-receipt again, once fixed. */
+    pub fn retry_eta_receipt(&self, kind: &str, id: i64) -> Result<()> {
+        let detail = json!({ "kind": kind, "id": id });
+        self.write("retryEta", detail, Some(id), |c| {
+            eta_receipts::retry_eta_receipt(c, kind, id)
+        })
+    }
+
+    /** What the printed receipt's QR code holds, once it is an e-receipt; None otherwise. */
+    pub fn eta_receipt_qr(&self, kind: &str, number: i64) -> Result<Option<String>> {
+        self.read("etaReceiptQr", |c| {
+            eta_receipts::eta_receipt_qr_of(c, kind, number)
+        })
+    }
+
+    /** The POS credentials, for the PC that talks to the ETA; not for screens. */
+    pub fn eta_receipt_credentials(&self) -> Result<EtaReceiptCredentials> {
+        eta_receipts::eta_receipt_credentials(&self.conn())
     }
 }
