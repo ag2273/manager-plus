@@ -307,7 +307,18 @@ pub async fn desktop(
         }
         "appVersion" => json!(app.package_info().version.to_string()),
         "licenceStatus" | "lastServer" => Value::Null,
-        "printers" | "discoverServers" | "etaCertificates" => json!([]),
+        "printers" => json!(crate::printing::installed()),
+        "printRaw" => {
+            let sent = (|| {
+                let printer: crate::printing::Printer = arg(&args, 0)?;
+                let bytes: Vec<u8> = arg(&args, 1)?;
+                crate::printing::send(&printer, &bytes)
+                    .map_err(|e| BusinessError::new("printer_failed", e))?;
+                Ok(Value::Null)
+            })();
+            result(sent)
+        }
+        "discoverServers" | "etaCertificates" => json!([]),
         "checkUpdate" => ok(json!({ "kind": "none" })),
         "serverStatus" => {
             json!({ "serving": false, "port": 0, "fingerprint": "", "addresses": [], "clients": 0 })
