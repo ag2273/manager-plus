@@ -1,5 +1,5 @@
-//! Ported from `src/core/inventory.test.ts`. Stock comes in as opening stock and goes out as
-//! write-offs here; the same checks with purchases and sales move with those slices (#76, #77).
+//! Ported from `src/core/inventory.test.ts`. The top-level tests move stock with opening stock and
+//! write-offs; `with_purchases_and_sales` runs the TypeScript checks with purchases and invoices.
 mod common;
 
 use common::*;
@@ -364,5 +364,148 @@ fn random_receipts_write_offs_transfers_counts_and_back_dated_entries_keep_the_s
             .map(|i| s.business.stock_value(*i).unwrap())
             .sum();
         assert_eq!(balance_of(&s.business, "stock"), value, "run {run}");
+    }
+}
+
+/** The same back-dated checks with purchases and sales invoices, as the TypeScript tests run them. */
+mod with_purchases_and_sales {
+    use super::*;
+    use manager_core::customers::CustomerInput;
+    use manager_core::invoices::{InvoiceLineInput, SalesInvoiceInput};
+
+    struct Trade {
+        s: Setup,
+        supplier: i64,
+        customer: i64,
+    }
+
+    fn trade() -> Trade {
+        let s = setup();
+        let supplier = supplier(&s.business);
+        let customer = s
+            .business
+            .add_customer(&CustomerInput {
+                name: "شركة الأمل".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        Trade {
+            s,
+            supplier,
+            customer,
+        }
+    }
+
+    impl Trade {
+        fn buy(&self, date: &str, item: i64, units: i64, price: i64, warehouse: i64) {
+            buy(
+                &self.s.business,
+                self.supplier,
+                warehouse,
+                date,
+                &[(item, units * 1_000, price)],
+            );
+        }
+        fn sell(&self, date: &str, item: i64, units: i64, warehouse: i64) {
+            self.s
+                .business
+                .post_sales_invoice(&SalesInvoiceInput {
+                    date: date.into(),
+                    customer_id: self.customer,
+                    warehouse_id: warehouse,
+                    lines: vec![InvoiceLineInput::base(item, units * 1_000, 100_000)],
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn a_back_dated_purchase_reprices_the_sales_after_it_and_adjusts_cost_of_sales() {
+        let t = trade();
+        let (b, main, router) = (&t.s.business, t.s.main, t.s.router);
+        t.buy("2026-01-01", router, 10, 60_000, main);
+        t.sell("2026-01-10", router, 10, main);
+        // Bought before the sale but entered after: with 10 more at 900.00 held first, the
+        // average on the 10th is 750.00.
+        t.buy("2026-01-05", router, 10, 90_000, main);
+        assert_eq!(balance_of(b, "cost_of_goods_sold"), 750_000);
+        assert_eq!(balance_of(b, "stock"), 750_000);
+        assert_eq!(b.stock_value(router).unwrap(), 750_000);
+        assert_eq!(b.average_cost(router).unwrap(), 75_000);
+    }
+
+    #[test]
+    fn a_back_dated_sale_takes_the_average_as_it_was_on_its_date() {
+        let t = trade();
+        let (b, main, router) = (&t.s.business, t.s.main, t.s.router);
+        t.buy("2026-01-01", router, 10, 60_000, main);
+        t.buy("2026-01-20", router, 10, 90_000, main);
+        t.sell("2026-01-10", router, 5, main);
+        assert_eq!(balance_of(b, "cost_of_goods_sold"), 300_000);
+        assert_eq!(b.stock_value(router).unwrap(), 1_200_000);
+    }
+
+    #[test]
+    fn random_purchases_sales_transfers_counts_and_back_dated_entries_keep_stock_equal_to_its_value(
+    ) {
+        // The TypeScript test's generator, in JavaScript's floating-point arithmetic, so both
+        // cores run the same sequence. With exact arithmetic the sequence differs and one run
+        // goes wrong in both cores alike: see #87 (selling below zero with back-dated entries).
+        let mut seed: f64 = 20261121.0;
+        let mut random = |n: i64| {
+            seed = (seed * 1_103_515_245.0 + 12_345.0) % 2_147_483_648.0;
+            (seed % n as f64) as i64
+        };
+        for run in 0..15 {
+            let t = trade();
+            let items = [t.s.router, t.s.cable];
+            let warehouses = [t.s.main, t.s.branch];
+            for _ in 0..30 {
+                let date = format!("2026-0{}-{:02}", 1 + random(3), 1 + random(28));
+                let item = items[random(2) as usize];
+                let warehouse = warehouses[random(2) as usize];
+                let held =
+                    t.s.business
+                        .stock_on_hand(item)
+                        .unwrap()
+                        .by_warehouse
+                        .iter()
+                        .find(|w| w.warehouse_id == warehouse)
+                        .map_or(0, |w| w.quantity);
+                match random(5) {
+                    0 | 1 => t.buy(
+                        &date,
+                        item,
+                        1 + random(9),
+                        1_000 + random(90_000),
+                        warehouse,
+                    ),
+                    2 => t.sell(&date, item, 1 + random(5), warehouse),
+                    3 if held >= 1_000 => {
+                        let other = *warehouses.iter().find(|w| **w != warehouse).unwrap();
+                        t.s.business
+                            .transfer_stock(&TransferInput {
+                                date,
+                                from: warehouse,
+                                to: other,
+                                memo: String::new(),
+                                lines: vec![UnitLine::base(item, 1_000)],
+                            })
+                            .unwrap();
+                    }
+                    4 => {
+                        let counted = (held - 1_000 + random(3) * 1_000).max(0);
+                        t.s.count(&date, warehouse, &[(item, counted)]).unwrap();
+                    }
+                    _ => {}
+                }
+            }
+            let value: i64 = items
+                .iter()
+                .map(|i| t.s.business.stock_value(*i).unwrap())
+                .sum();
+            assert_eq!(balance_of(&t.s.business, "stock"), value, "run {run}");
+        }
     }
 }
