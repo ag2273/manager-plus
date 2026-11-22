@@ -2121,9 +2121,11 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 name = "manager-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.7",
  "chrono",
  "getrandom 0.3.4",
  "rand",
+ "ring",
  "rsa",
  "rusqlite",
  "scrypt",
@@ -2162,6 +2164,7 @@ dependencies = [
  "manager-lan",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
