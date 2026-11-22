@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
-import { cancelDocument, refreshStatuses, sendPending } from "../core/eta/sender";
+import { cancelDocument, refreshReceiptStatuses, refreshStatuses, sendPending, sendReceipts } from "../core/eta/sender";
+import type { EtaReceiptSettingsInput } from "../core/eta/receipts-store";
 import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
-import { httpEtaClient, listCertificates, windowsTokenSigner } from "./eta";
+import { httpEtaClient, httpEtaReceiptClient, listCertificates, windowsTokenSigner } from "./eta";
 import { readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
@@ -97,19 +98,52 @@ function etaLink() {
   return { client: httpEtaClient({ ...credentials, clientSecret }), signer: windowsTokenSigner(credentials.certificate) };
 }
 
+/** The e-receipt client for the POS this file is registered as, or null when e-receipts are off or this PC is a client. */
+function etaReceiptLink() {
+  if (!file || remote) return null;
+  let credentials;
+  try {
+    credentials = file.etaReceiptCredentials();
+  } catch {
+    return null;
+  }
+  const unseal = (sealed: string) => safeStorage.decryptString(Buffer.from(sealed, "base64"));
+  return httpEtaReceiptClient({ ...credentials, posClientSecret: unseal(credentials.posClientSecret), presharedKey: unseal(credentials.presharedKey) });
+}
+
 let etaRunning: Promise<number> | null = null;
 
 /**
- * Asks the ETA about submitted documents, then signs and sends the pending ones. Runs in the
- * background after each invoice or credit note and every few minutes; posting never waits on it.
+ * Asks the ETA about submitted documents and e-receipts, then sends the pending ones: invoices
+ * signed with the token, receipts in the till's order. Runs in the background after each posting
+ * and every few minutes; posting never waits on it. Invoices failing don't hold receipts back.
  */
 function etaCycle(): Promise<number> {
   etaRunning ??= (async () => {
     try {
+      if (!file) return 0;
+      let sent = 0;
+      let failed: unknown = null;
       const link = etaLink();
-      if (!link || !file) return 0;
-      await refreshStatuses(file.etaBooks(), link.client);
-      return await sendPending(file.etaBooks(), link.signer, link.client);
+      if (link) {
+        try {
+          await refreshStatuses(file.etaBooks(), link.client);
+          sent += await sendPending(file.etaBooks(), link.signer, link.client);
+        } catch (error) {
+          failed = error;
+        }
+      }
+      const receipts = etaReceiptLink();
+      if (receipts) {
+        try {
+          await refreshReceiptStatuses(file.etaReceiptBooks(), receipts);
+          sent += await sendReceipts(file.etaReceiptBooks(), receipts);
+        } catch (error) {
+          failed ??= error;
+        }
+      }
+      if (failed) throw failed;
+      return sent;
     } finally {
       etaRunning = null;
     }
@@ -241,17 +275,37 @@ async function need<T>(method: BusinessMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 
+/** Postings that may queue an e-invoice or e-receipt, so the ETA cycle runs after them. */
+const ETA_POSTINGS = new Set<BusinessMethod>(["postSalesInvoice", "postCreditNote", "postSale", "postCashSale", "returnSale"]);
+
 ipcMain.handle(CHANNELS.call, (_event, method: BusinessMethod, args: unknown[]) => {
   if (!BUSINESS_METHODS.includes(method) || !Array.isArray(args)) {
     return { ok: false, code: "unexpected", message: `Not a business method: ${String(method)}` };
   }
   const result = call(method, args);
-  if (method === "postSalesInvoice" || method === "postCreditNote") {
+  if (ETA_POSTINGS.has(method)) {
     void result.then((r) => {
       if (r.ok) etaCycle().catch((error) => console.error("E-invoice sending failed", error));
     });
   }
   return result;
+});
+
+ipcMain.handle(CHANNELS.saveEtaReceiptSettings, (_event, input: EtaReceiptSettingsInput) => {
+  const business = etaManager();
+  if (!business) return { ok: false, code: "restore_needs_manager", message: "Only a manager on the PC that holds the file sets up e-receipts" };
+  const settings: EtaReceiptSettingsInput = { ...input };
+  delete settings.posClientSecret;
+  delete settings.presharedKey;
+  const secret = input.posClientSecret?.trim();
+  const key = input.presharedKey?.trim();
+  if ((secret || key) && !safeStorage.isEncryptionAvailable()) return { ok: false, code: "unexpected", message: "This PC can't seal the POS secrets" };
+  if (secret) settings.posClientSecret = safeStorage.encryptString(secret).toString("base64");
+  if (key) settings.presharedKey = safeStorage.encryptString(key).toString("base64");
+  return attempt(() => {
+    business.setEtaReceiptSettings(settings);
+    return null;
+  });
 });
 
 /** E-invoice setup and sending happen on the PC that holds the file, by a manager. */
@@ -367,9 +421,20 @@ ipcMain.handle(CHANNELS.print, async (_event, request: PrintRequest): Promise<Re
   let document;
   try {
     const settings = await need<BusinessSettings>("settings");
-    if (request.kind === "sale") document = saleDocument(await need<Receipt>("findReceipt", request.number), settings, { footer, copy: request.copy }, lang);
+    const qr = async (kind: "sale" | "return", number: number) => {
+      const link = await need<string | null>("etaReceiptQr", kind, number);
+      return link ? { qr: link } : {};
+    };
+    if (request.kind === "sale")
+      document = {
+        ...saleDocument(await need<Receipt>("findReceipt", request.number), settings, { footer, copy: request.copy }, lang),
+        ...(await qr("sale", request.number)),
+      };
     else if (request.kind === "return")
-      document = returnDocument(await need<SaleReturn>("findReturn", request.number), settings, { footer, copy: request.copy }, lang);
+      document = {
+        ...returnDocument(await need<SaleReturn>("findReturn", request.number), settings, { footer, copy: request.copy }, lang),
+        ...(await qr("return", request.number)),
+      };
     else if (request.kind === "z") document = zReportDocument(await need<ZReport>("zReport", request.shiftId), settings, lang);
     else document = testDocument(settings, footer, lang);
   } catch (error) {

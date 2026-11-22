@@ -226,6 +226,7 @@ export const PERMISSIONS: Record<string, readonly Role[]> = {
   etaDocuments: ["manager", "accountant"],
   etaState: ["manager", "accountant"],
   retryEta: ["manager", "accountant"],
+  etaReceiptQr: ROLES,
   transferStock: ["manager", "storekeeper"],
   transfers: ["manager", "accountant", "storekeeper"],
   averageCost: ["manager", "accountant", "storekeeper"],

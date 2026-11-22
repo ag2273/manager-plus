@@ -1,4 +1,5 @@
 import type { EtaKind, EtaSettingsInput } from "../core/eta/store";
+import type { EtaReceiptSettingsInput } from "../core/eta/receipts-store";
 import type { Lang, ReportTable } from "./report-tables";
 import type { ReadSheet } from "./spreadsheet-read";
 import type { Business, BusinessSettings } from "../core/business";
@@ -88,6 +89,10 @@ export const BUSINESS_METHODS = [
   "etaDocuments",
   "etaState",
   "retryEta",
+  "etaReceiptSettings",
+  "etaReceipts",
+  "retryEtaReceipt",
+  "etaReceiptQr",
   "transferStock",
   "transfers",
   "averageCost",
@@ -256,6 +261,8 @@ export interface DesktopApi {
   etaCertificates(): Promise<TokenCertificate[]>;
   /** Saves the e-invoice settings, sealing the client secret for this PC; the secret is left as it was when empty. */
   saveEtaSettings(settings: EtaSettingsInput): Promise<Result<null>>;
+  /** Saves the POS registration for e-receipts, sealing its client secret and pre-shared key on this PC. */
+  saveEtaReceiptSettings(settings: EtaReceiptSettingsInput): Promise<Result<null>>;
   /** Asks the ETA for news on submitted documents, then signs and sends the pending ones; returns how many were accepted. */
   sendEtaNow(): Promise<Result<number>>;
   /** Cancels a submitted or valid document at the ETA. */
@@ -290,6 +297,7 @@ export const CHANNELS = {
   setServing: "network:serve",
   etaCertificates: "eta:certificates",
   saveEtaSettings: "eta:save-settings",
+  saveEtaReceiptSettings: "eta:save-receipt-settings",
   sendEtaNow: "eta:send",
   cancelEta: "eta:cancel",
 } as const;

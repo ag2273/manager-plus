@@ -3,6 +3,7 @@ import type { Customer } from "../../../core/customers";
 import type { InvoiceLineInput, PricedInvoice, SalesInvoice, SalesInvoiceInput } from "../../../core/invoices";
 import type { Quotation } from "../../../core/quotations";
 import type { EtaDocumentRow } from "../../../core/eta/store";
+import type { EtaReceiptRow } from "../../../core/eta/receipts-store";
 import type { Item } from "../../../core/items";
 import type { Warehouse } from "../../../core/stock";
 import { formatMoney, parseMoney } from "../../../shared/money";
@@ -58,6 +59,7 @@ export function SalesInvoices() {
       )}
       {tab === "invoices" && <InvoiceList />}
       {tab === "eta" && <EtaList />}
+      {tab === "eta" && <EtaReceiptList />}
       {tab === "quotation" && <InvoiceForm kind="quotation" customers={customers.filter((c) => c.active)} onPosted={() => setTab("quotations")} />}
       {tab === "quotations" && (
         <QuotationList
@@ -786,6 +788,85 @@ function EtaList() {
                   {(r.status === "valid" || r.status === "submitted") && (
                     <button type="button" className="link" onClick={() => setCancelling({ row: r, reason: "" })}>
                       {ar.eta.cancel}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/** The till's e-receipts in the order they were issued, with retry for the ones that failed. */
+function EtaReceiptList() {
+  const [enabled, setEnabled] = useState(false);
+  const [rows, setRows] = useState<EtaReceiptRow[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const t = ar.eta.receipts;
+  const load = useCallback(async () => {
+    const settings = await business.etaReceiptSettings();
+    if (settings.ok) setEnabled(settings.value.enabled);
+    const r = await business.etaReceipts();
+    if (r.ok) setRows(r.value.slice().reverse());
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  if (!enabled && rows.length === 0) return null;
+
+  async function retry(row: EtaReceiptRow) {
+    const result = await business.retryEtaReceipt(row.kind, row.id);
+    setMessage(result.ok ? null : errorText(result)!);
+    const sent = await window.api.sendEtaNow();
+    if (!sent.ok && sent.code !== "restore_needs_manager") setMessage(errorText(sent)!);
+    await load();
+  }
+
+  return (
+    <section className="table-card" aria-label={t.title2}>
+      <h2>{t.title2}</h2>
+      {message && (
+        <div role="alert" className="error">
+          {message}
+        </div>
+      )}
+      {rows.length === 0 ? (
+        <p className="muted">{t.empty}</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>{ar.eta.document}</th>
+              <th>{t.time}</th>
+              <th>{ar.eta.status}</th>
+              <th>{ar.eta.uuid}</th>
+              <th>{ar.eta.problem}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.kind}-${r.id}`}>
+                <td>
+                  {t.kinds[r.kind]} {r.number}
+                </td>
+                <td dir="ltr">{r.at.slice(0, 16).replace("T", " ")}</td>
+                <td>
+                  <span className={r.status === "valid" ? "badge" : r.status === "failed" || r.status === "invalid" ? "badge warn" : "badge muted"}>
+                    {ar.eta.statuses[r.status]}
+                  </span>
+                </td>
+                <td dir="ltr" className="small">
+                  {r.uuid.slice(0, 16)}
+                </td>
+                <td className="small">{etaProblem(r.error)}</td>
+                <td>
+                  {(r.status === "failed" || r.status === "invalid") && (
+                    <button type="button" className="link" onClick={() => void retry(r)}>
+                      {ar.eta.retry}
                     </button>
                   )}
                 </td>

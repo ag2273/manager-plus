@@ -19,6 +19,23 @@ import {
   retryEtaDocument,
   setEtaSettings,
 } from "./eta/store";
+import type { EtaReceiptBooks } from "./eta/sender";
+import {
+  type EtaReceiptCredentials,
+  type EtaReceiptKind,
+  type EtaReceiptRow,
+  type EtaReceiptSettings,
+  type EtaReceiptSettingsInput,
+  etaReceiptCredentials,
+  etaReceiptQrOf,
+  etaReceiptSettings,
+  etaReceipts,
+  prepareEtaReceipt,
+  queueEtaReceipt,
+  recordEtaReceipt,
+  retryEtaReceipt,
+  setEtaReceiptSettings,
+} from "./eta/receipts-store";
 import { type BackupFile, type BackupStatus, backupNow, backupStatus, copyDatabase, dailyBackupDue, replaceFile, setBackupFolder } from "./backup";
 import {
   type Account,
@@ -715,13 +732,21 @@ export class Business {
   /** Sells for cash at the till; returns the receipt number and the change to give. */
   postCashSale(sale: CashSaleInput): CashSaleResult {
     const user = this.allow("postCashSale");
-    return this.write("postCashSale", sale, () => postCashSale(this.db, sale, user.id));
+    return this.write("postCashSale", sale, () => {
+      const posted = postCashSale(this.db, sale, user.id);
+      queueEtaReceipt(this.db, "sale", posted.id);
+      return posted;
+    });
   }
 
   /** Sells at the till, paid by any mix of cash, card and wallet, with any rest on a customer's account. */
   postSale(sale: SaleInput): SaleResult {
     const user = this.allow("postSale");
-    return this.write("postSale", withoutPassword(sale), () => postSale(this.db, sale, user.id));
+    return this.write("postSale", withoutPassword(sale), () => {
+      const posted = postSale(this.db, sale, user.id);
+      queueEtaReceipt(this.db, "sale", posted.id);
+      return posted;
+    });
   }
 
   // Customers
@@ -760,7 +785,11 @@ export class Business {
   /** Takes items back against their receipt, refunded in cash or to the receipt's customer. */
   returnSale(input: ReturnInput): ReturnResult {
     const user = this.allow("returnSale");
-    return this.write("returnSale", input, () => returnSale(this.db, input, user.id));
+    return this.write("returnSale", input, () => {
+      const posted = returnSale(this.db, input, user.id);
+      queueEtaReceipt(this.db, "return", posted.id);
+      return posted;
+    });
   }
 
   /** A return by its printed number. */
@@ -1213,6 +1242,46 @@ export class Business {
       etaDocuments: (statuses) => etaDocuments(this.db, statuses),
       etaPrepare: (kind, documentId, now) => this.db.transaction(() => prepareEtaDocument(this.db, kind, documentId, now))(),
       etaRecord: (kind, documentId, outcome) => recordEtaOutcome(this.db, kind, documentId, outcome, new Date()),
+    };
+  }
+
+  /** E-receipts for till sales: on when e-invoicing is on and the POS is registered. */
+  etaReceiptSettings(): EtaReceiptSettings {
+    return this.read("etaSettings", () => etaReceiptSettings(this.db));
+  }
+
+  /** Saves the POS registration. The PC seals the client secret and pre-shared key before they get here. */
+  setEtaReceiptSettings(input: EtaReceiptSettingsInput): void {
+    const shown = { ...input, posClientSecret: input.posClientSecret === undefined ? "(kept)" : "(changed)", presharedKey: input.presharedKey === undefined ? "(kept)" : "(changed)" };
+    this.write("setEtaSettings", shown, () => setEtaReceiptSettings(this.db, input));
+  }
+
+  /** E-receipts in the order the till issued them, with their status, UUID and why one failed. */
+  etaReceipts(): EtaReceiptRow[] {
+    return this.read("etaDocuments", () => etaReceipts(this.db));
+  }
+
+  /** Sends a failed or invalid e-receipt again, once fixed. */
+  retryEtaReceipt(kind: EtaReceiptKind, id: number): void {
+    this.write("retryEta", { kind, id }, () => retryEtaReceipt(this.db, kind, id), id);
+  }
+
+  /** What the printed receipt's QR code holds, once the ETA has the receipt; null otherwise. */
+  etaReceiptQr(kind: EtaReceiptKind, number: number): string | null {
+    return this.read("etaReceiptQr", () => etaReceiptQrOf(this.db, kind, number));
+  }
+
+  /** The POS credentials, for the PC that talks to the ETA; not for screens. */
+  etaReceiptCredentials(): EtaReceiptCredentials {
+    return etaReceiptCredentials(this.db);
+  }
+
+  /** The e-receipt chain as the sender works it, on the PC that holds the file, signed in or not. */
+  etaReceiptBooks(): EtaReceiptBooks {
+    return {
+      etaReceipts: (statuses) => etaReceipts(this.db, statuses),
+      etaPrepareReceipt: (kind, id) => this.db.transaction(() => prepareEtaReceipt(this.db, kind, id))(),
+      etaRecordReceipt: (kind, id, outcome) => recordEtaReceipt(this.db, kind, id, outcome),
     };
   }
 
