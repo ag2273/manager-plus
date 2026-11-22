@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::customers::{self, Customer, CustomerChanges, CustomerInput};
 use crate::error::{refuse, BusinessError, Result};
 use crate::inventory::{
     self, ItemMovement, LowStockRow, StockCount, StockCountInput, WriteOff, WriteOffInput,
@@ -25,7 +26,13 @@ use crate::purchases::{
     PurchaseInvoiceInput, PurchaseLineInput, PurchaseMoney, Supplier, SupplierAccount,
     SupplierChanges, SupplierInput,
 };
+use crate::returns::{self, ReturnInput, ReturnResult, SaleReturn};
+use crate::sales::{
+    self, CashSaleInput, Discount, HeldSale, HeldSaleInput, PricedSale, Receipt, SaleInput,
+    SaleLineInput, SaleResult,
+};
 use crate::serials::{self, SerialHistory, SerialSettings};
+use crate::shifts::{self, CashInOut, CloseShiftInput, Shift, ZReport};
 use crate::stock::{self, OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse};
 use crate::users::{self, AuditEntry, Credentials, NewUser, User, UserChanges};
 
@@ -911,6 +918,164 @@ impl Business {
     pub fn debit_notes(&self) -> Result<Vec<DebitNote>> {
         self.read("debitNotes", purchases::list_debit_notes)
     }
+}
+
+// Customers
+impl Business {
+    pub fn customers(&self) -> Result<Vec<Customer>> {
+        self.read("customers", customers::list_customers)
+    }
+
+    pub fn add_customer(&self, customer: &CustomerInput) -> Result<i64> {
+        self.write("addCustomer", to_json(customer), None, |c| {
+            customers::add_customer(c, customer)
+        })
+    }
+
+    pub fn update_customer(&self, id: i64, changes: &CustomerChanges) -> Result<()> {
+        self.write("updateCustomer", to_json(changes), Some(id), |c| {
+            customers::update_customer(c, id, changes)
+        })
+    }
+
+    /** A stopped customer stays in the books but cannot buy on credit. */
+    pub fn deactivate_customer(&self, id: i64) -> Result<()> {
+        self.write("deactivateCustomer", Value::Null, Some(id), |c| {
+            customers::set_customer_active(c, id, false)
+        })
+    }
+
+    pub fn reactivate_customer(&self, id: i64) -> Result<()> {
+        self.write("reactivateCustomer", Value::Null, Some(id), |c| {
+            customers::set_customer_active(c, id, true)
+        })
+    }
+
+    /** What a customer owes the business, in piastres. */
+    pub fn customer_balance(&self, id: i64) -> Result<Piastres> {
+        self.read("customerBalance", |c| customers::customer_balance(c, id))
+    }
+}
+
+// The till: shifts, sales, held carts and returns
+impl Business {
+    pub fn open_shift(&self, opening_float: f64) -> Result<i64> {
+        let user_id = self.allow("openShift")?.id;
+        self.write(
+            "openShift",
+            json!({ "openingFloat": opening_float }),
+            None,
+            |c| shifts::open_shift(c, user_id, opening_float),
+        )
+    }
+
+    /** The signed-in user's open shift, if any. */
+    pub fn current_shift(&self) -> Result<Option<Shift>> {
+        let user_id = self.allow("currentShift")?.id;
+        shifts::open_shift_of(&self.conn(), user_id)
+    }
+
+    pub fn cash_in_out(&self, movement: &CashInOut) -> Result<i64> {
+        let user_id = self.allow("cashInOut")?.id;
+        self.write("cashInOut", to_json(movement), None, |c| {
+            shifts::cash_in_out(c, user_id, movement)
+        })
+    }
+
+    pub fn close_shift(&self, close: &CloseShiftInput) -> Result<ZReport> {
+        let user_id = self.allow("closeShift")?.id;
+        self.write("closeShift", to_json(close), None, |c| {
+            shifts::close_shift(c, user_id, close)
+        })
+    }
+
+    pub fn z_report(&self, shift_id: i64) -> Result<ZReport> {
+        self.read("zReport", |c| shifts::z_report(c, shift_id))
+    }
+
+    /** Shifts, newest first. */
+    pub fn shifts(&self) -> Result<Vec<Shift>> {
+        self.read("shifts", |c| shifts::list_shifts(c, 200))
+    }
+
+    /** Prices till lines at shelf prices (VAT-inclusive), without selling anything. */
+    pub fn price_sale(
+        &self,
+        date: &str,
+        lines: &[SaleLineInput],
+        discount: Option<&Discount>,
+    ) -> Result<PricedSale> {
+        self.read("priceSale", |c| sales::price_sale(c, date, lines, discount))
+    }
+
+    pub fn hold_sale(&self, cart: &HeldSaleInput) -> Result<i64> {
+        let user_id = self.allow("holdSale")?.id;
+        self.write("holdSale", to_json(cart), None, |c| {
+            sales::hold_sale(c, user_id, cart)
+        })
+    }
+
+    pub fn held_sales(&self) -> Result<Vec<HeldSale>> {
+        self.read("heldSales", sales::list_held_sales)
+    }
+
+    /** Brings a held cart back to the till. */
+    pub fn recall_sale(&self, id: i64) -> Result<HeldSale> {
+        self.write("recallSale", Value::Null, Some(id), |c| {
+            sales::recall_sale(c, id)
+        })
+    }
+
+    /** Sells for cash at the till; returns the receipt number and the change to give. */
+    pub fn post_cash_sale(&self, sale: &CashSaleInput) -> Result<SaleResult> {
+        let user_id = self.allow("postCashSale")?.id;
+        self.write("postCashSale", to_json(sale), None, |c| {
+            sales::post_cash_sale(c, sale, user_id)
+        })
+    }
+
+    /** Sells at the till, paid by any mix of cash, card and wallet, with any rest on a customer's account. */
+    pub fn post_sale(&self, sale: &SaleInput) -> Result<SaleResult> {
+        let user_id = self.allow("postSale")?.id;
+        self.write("postSale", without_password(to_json(sale)), None, |c| {
+            sales::post_sale(c, sale, user_id)
+        })
+    }
+
+    /** A receipt by its printed number, with what of each line was already returned. */
+    pub fn find_receipt(&self, number: i64) -> Result<Receipt> {
+        self.read("findReceipt", |c| sales::find_receipt(c, number))
+    }
+
+    /** Till receipts, newest first. */
+    pub fn receipts(&self) -> Result<Vec<Receipt>> {
+        self.read("receipts", |c| sales::list_receipts(c, 200))
+    }
+
+    /** Takes items back against their receipt, refunded in cash or to the receipt's customer. */
+    pub fn return_sale(&self, input: &ReturnInput) -> Result<ReturnResult> {
+        let user_id = self.allow("returnSale")?.id;
+        self.write("returnSale", to_json(input), None, |c| {
+            returns::return_sale(c, input, user_id)
+        })
+    }
+
+    /** A return by its printed number. */
+    pub fn find_return(&self, number: i64) -> Result<SaleReturn> {
+        self.read("findReturn", |c| returns::find_return(c, number))
+    }
+}
+
+/** An audit entry names the manager who approved a credit limit, never their password. */
+fn without_password(mut detail: Value) -> Value {
+    if let Some(o) = detail.as_object_mut() {
+        if let Some(approval) = o.remove("creditApproval") {
+            if let Some(name) = approval.get("name") {
+                o.insert("creditApprovedBy".into(), name.clone());
+            }
+        }
+    }
+    detail
 }
 
 fn to_json<T: Serialize>(value: &T) -> Value {
