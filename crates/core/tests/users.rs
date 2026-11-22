@@ -1,4 +1,4 @@
-//! Ported from `src/core/users.test.ts`. The items test moves with the items slice (#74).
+//! Ported from `src/core/users.test.ts`. Its items test is in `items.rs`.
 mod common;
 
 use common::*;

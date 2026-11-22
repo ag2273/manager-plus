@@ -13,7 +13,7 @@ A small footprint is one of the product's features: the app must be light on mem
 - **The same file format.** The Rust core makes and reads the same `.mplus` files. Each migration's SQL is the TypeScript one byte for byte (`crates/core/migrations/`); the rows a migration adds are written in Rust. Tests check that a new file's schema equals the one the TypeScript core makes, and that a file the TypeScript core made opens, signs in and keeps its books. Passwords use the same scrypt parameters and stored format.
 - **Screens unchanged.** The React screens stay. The renderer talks to the shell through one Tauri command, `desktop(channel, args)`, that mirrors the Electron preload's API, so a screen doesn't know which shell it runs in. Facade calls go through `Business::call(method, args)` with JSON arguments; a method not ported yet answers `not_ported`.
 - **Why not native Rust screens.** Rust UI toolkits are still weak at Arabic shaping, bidirectional text and right-to-left layout; the WebView does these well and costs little because Windows already has it.
-- **Tests.** The Rust core is tested through the facade, as the TypeScript one is. A WebDriver journey (`e2e/tauri-ledger.mjs`, tauri-driver) drives the built app on Linux in CI. The Windows CI job builds the NSIS installer and records its size and the running app's memory.
+- **Tests.** The Rust core is tested through the facade, as the TypeScript one is. A WebDriver journey (`e2e/tauri.mjs`, tauri-driver) drives the built app on Linux in CI. The Windows CI job builds the NSIS installer and records its size and the running app's memory.
 
 ## Consequences
 

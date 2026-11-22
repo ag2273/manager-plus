@@ -7,8 +7,13 @@ pub mod chart;
 pub mod dates;
 mod dispatch;
 pub mod error;
+pub mod inventory;
+pub mod items;
 pub mod ledger;
 pub mod migrations;
+pub mod num;
+pub mod serials;
+pub mod stock;
 pub mod users;
 
 pub use business::{Business, BusinessSettings, LicenceLimits, LicenceMode};

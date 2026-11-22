@@ -33,7 +33,7 @@ jobs:
       - run: cargo test --workspace
       - run: npx tauri build --debug --no-bundle
       - run: cargo install tauri-driver --locked
-      - run: xvfb-run -a node e2e/tauri-ledger.mjs target/debug/manager-plus
+      - run: xvfb-run -a node e2e/tauri.mjs target/debug/manager-plus
 
   # The Windows installer, and how much memory the app takes there.
   windows:
