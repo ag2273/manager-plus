@@ -219,3 +219,105 @@ fn warranty_months_land_on_the_same_day_or_the_months_last_day() {
     assert_eq!(add_months("2026-01-31", 1), "2026-02-28");
     assert_eq!(add_months("2027-11-30", 3), "2028-02-29");
 }
+
+mod with_purchases {
+    use super::*;
+    use manager_core::purchases::{
+        DebitNoteInput, PurchaseInvoiceInput, PurchaseLineInput, ReturnedLine, SupplierInput,
+    };
+
+    fn buy(
+        s: &Setup,
+        supplier: i64,
+        item: i64,
+        quantity: f64,
+        serials: &[&str],
+    ) -> manager_core::Result<i64> {
+        s.business.post_purchase_invoice(&PurchaseInvoiceInput {
+            date: "2026-01-10".into(),
+            supplier_id: supplier,
+            warehouse_id: s.main,
+            reference: "D-1".into(),
+            rate: None,
+            lines: vec![PurchaseLineInput {
+                item_id: item,
+                unit: "base".into(),
+                quantity,
+                unit_price: 1_500_000.0,
+                serials: Some(serials.iter().map(|x| x.to_string()).collect()),
+            }],
+        })
+    }
+
+    fn dell(s: &Setup) -> i64 {
+        s.business
+            .add_supplier(&SupplierInput {
+                name: "Dell Egypt".into(),
+                ..Default::default()
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_purchase_needs_exactly_one_different_serial_per_whole_unit() {
+        let s = setup();
+        let dell = dell(&s);
+        buy(&s, dell, s.laptop, 1_000.0, &["A1"]).unwrap();
+        assert_eq!(
+            code(buy(&s, dell, s.laptop, 2_000.0, &["D1"])),
+            "serials_required"
+        );
+        assert_eq!(
+            code(buy(&s, dell, s.laptop, 2_000.0, &["B1", "B1"])),
+            "serials_required"
+        );
+        assert_eq!(
+            code(buy(&s, dell, s.laptop, 1_500.0, &["C1"])),
+            "serials_required"
+        );
+        assert_eq!(
+            code(buy(&s, dell, s.cable, 1_000.0, &["X"])),
+            "serials_not_expected"
+        );
+        assert_eq!(
+            code(buy(&s, dell, s.laptop, 1_000.0, &["A1"])),
+            "serial_in_stock"
+        );
+        assert_eq!(s.business.stock_on_hand(s.laptop).unwrap().total, 1_000);
+        let found = &s.business.find_serial("A1", "2026-02-01").unwrap()[0];
+        let purchase = found.purchase.as_ref().unwrap();
+        assert_eq!(
+            (
+                purchase.supplier_name.as_str(),
+                purchase.reference.as_str(),
+                purchase.date.as_str()
+            ),
+            ("Dell Egypt", "D-1", "2026-01-10")
+        );
+    }
+
+    #[test]
+    fn a_debit_note_sends_back_the_units_by_serial() {
+        let s = setup();
+        let dell = dell(&s);
+        let purchase = buy(&s, dell, s.laptop, 3_000.0, &["SN-1", "SN-2", "SN-3"]).unwrap();
+        let line_id = s.business.purchase_invoices().unwrap()[0].lines[0].line_id;
+        let send_back = |serial: &str| {
+            s.business.post_debit_note(&DebitNoteInput {
+                date: "2026-02-15".into(),
+                purchase_invoice_id: purchase,
+                reason: String::new(),
+                lines: vec![ReturnedLine {
+                    line_id,
+                    quantity: 1_000.0,
+                    serials: Some(vec![serial.into()]),
+                }],
+            })
+        };
+        send_back("SN-2").unwrap();
+        assert_eq!(code(send_back("SN-2")), "serial_not_in_stock");
+        let found = &s.business.find_serial("SN-2", "2026-03-01").unwrap()[0];
+        assert_eq!((found.in_stock, &found.sale), (false, &None));
+        assert_eq!(s.business.stock_on_hand(s.laptop).unwrap().total, 2_000);
+    }
+}

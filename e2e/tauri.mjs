@@ -1,5 +1,5 @@
-// The Tauri app end to end (#73, #74): create a business, post a journal entry and stock an item
-// through the Rust core, and see them on the Accounts, Items and Warehouses screens. Needs tauri-driver and the platform's WebDriver
+// The Tauri app end to end (#73, #74, #76): create a business, post a journal entry, stock an item
+// and buy from a supplier through the Rust core, and see them on the Accounts, Items, Warehouses and Purchases screens. Needs tauri-driver and the platform's WebDriver
 // (WebKitWebDriver on Linux, msedgedriver on Windows). Run after `npx tauri build --debug --no-bundle`:
 //   node e2e/tauri.mjs target/debug/manager-plus      (Linux: under xvfb-run -a)
 import { spawn } from "node:child_process";
@@ -87,7 +87,7 @@ try {
       capabilities: { alwaysMatch: { "tauri:options": { application: app }, "webkitgtk:browserOptions": { args: [] } } },
     })
   ).sessionId;
-  console.log("the ledger, items and stock on Tauri");
+  console.log("the ledger, items, stock and purchases on Tauri");
 
   await until(session, "the welcome screen", fill, "اسم النشاط", "بقالة النور");
   check(await run(session, () => document.documentElement.dir === "rtl"), "the screens run right to left");
@@ -132,6 +132,22 @@ try {
   await run(session, click, "النواقص");
   await until(session, "the low-stock list", () => document.body.textContent.includes("راوتر واي فاي"));
   check(true, "the low-stock tab lists the item under its minimum");
+
+  // A supplier's invoice, through the Rust core and on the Purchases screen.
+  const bought = await run(session, async () => {
+    const supplier = await window.api.call("addSupplier", [{ name: "شركة الشبكات المتحدة", phone: "", taxRegistrationNumber: "" }]);
+    const item = (await window.api.call("items", [{ search: "راوتر" }])).value[0].id;
+    const main = (await window.api.call("warehouses", [])).value[0].id;
+    const invoice = await window.api.call("postPurchaseInvoice", [
+      { date: "2026-02-01", supplierId: supplier.value, warehouseId: main, reference: "INV-77", lines: [{ itemId: item, unit: "base", quantity: 2000, unitPrice: 100000 }] },
+    ]);
+    const balance = await window.api.call("supplierBalance", [supplier.value]);
+    return invoice.ok && balance.value === 228000;
+  });
+  check(bought === true, "a purchase invoice posts through the Rust core, VAT included");
+  await run(session, click, "المشتريات والموردين");
+  await until(session, "the purchases screen", () => document.body.textContent.includes("شركة الشبكات المتحدة"));
+  check(true, "the Purchases screen lists the supplier");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);
