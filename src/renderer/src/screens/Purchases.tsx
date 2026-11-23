@@ -339,7 +339,8 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
 
 function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
   const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<{ id: number; view: "details" | "return" } | null>(null);
+  const toggle = (id: number, view: "details" | "return") => setOpen(open?.id === id && open.view === view ? null : { id, view });
 
   const reload = useCallback(async () => {
     const r = await business.purchaseInvoices();
@@ -393,16 +394,19 @@ function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
                 </td>
                 <td className="muted">{inv.postedBy}</td>
                 <td>
-                  <button type="button" className="btn btn-small" aria-expanded={open === inv.id} onClick={() => setOpen(open === inv.id ? null : inv.id)}>
-                    {ar.purchases.returnToSupplier}
-                  </button>
+                  <div className="row">
+                    <button type="button" className="btn btn-small" aria-expanded={open?.id === inv.id && open.view === "details"} onClick={() => toggle(inv.id, "details")}>
+                      {ar.purchases.details}
+                    </button>
+                    <button type="button" className="btn btn-small" aria-expanded={open?.id === inv.id && open.view === "return"} onClick={() => toggle(inv.id, "return")}>
+                      {ar.purchases.returnToSupplier}
+                    </button>
+                  </div>
                 </td>
               </tr>,
-              open === inv.id && (
-                <tr key={`${inv.id}-return`}>
-                  <td colSpan={9}>
-                    <DebitNoteForm invoice={inv} onChange={reload} />
-                  </td>
+              open?.id === inv.id && (
+                <tr key={`${inv.id}-${open.view}`}>
+                  <td colSpan={9}>{open.view === "details" ? <InvoiceLines invoice={inv} /> : <DebitNoteForm invoice={inv} onChange={reload} />}</td>
                 </tr>
               ),
             ])}
@@ -410,6 +414,40 @@ function InvoiceList({ suppliers }: { suppliers: Supplier[] }) {
         </table>
       )}
     </section>
+  );
+}
+
+/** A posted invoice's lines as they were received, with the serials on each (#97, note 6). */
+function InvoiceLines({ invoice }: { invoice: PurchaseInvoice }) {
+  return (
+    <table className="lines" aria-label={ar.purchases.details}>
+      <thead>
+        <tr>
+          <th>{ar.purchases.item}</th>
+          <th className="col-money">{ar.purchases.quantity}</th>
+          <th className="col-money">{ar.purchases.unitPrice}</th>
+          <th className="col-money">{ar.purchases.net}</th>
+          <th className="col-money">{ar.purchases.vat}</th>
+          <th className="col-money">{ar.purchases.alreadyReturned}</th>
+          <th>{ar.purchases.serials}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {invoice.lines.map((l) => (
+          <tr key={l.lineId}>
+            <td>{l.nameAr}</td>
+            <td className="num">{formatQuantity(l.quantity)}</td>
+            <td className="num">{formatMoney(l.unitPrice)}</td>
+            <td className="num">{formatMoney(l.net)}</td>
+            <td className="num">{formatMoney(l.vat)}</td>
+            <td className="num muted">{l.returned > 0 && formatQuantity(l.returned)}</td>
+            <td dir="ltr" className="small">
+              {l.serials.join("، ")}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

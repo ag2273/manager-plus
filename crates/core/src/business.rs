@@ -53,7 +53,7 @@ use crate::sales::{
     self, CashSaleInput, Discount, HeldSale, HeldSaleInput, PricedSale, Receipt, SaleInput,
     SaleLineInput, SaleResult,
 };
-use crate::serials::{self, SerialHistory, SerialSettings};
+use crate::serials::{self, SerialHistory, SerialSettings, StockSerial};
 use crate::settlements::{
     self, Aging, OpenDocument, PartyKind, PaymentInput, PaymentResult, Statement,
 };
@@ -796,6 +796,11 @@ impl Business {
     /** Where a serial number came from and went, and whether it is under warranty on `today`. */
     pub fn find_serial(&self, serial: &str, today: &str) -> Result<Vec<SerialHistory>> {
         self.read("findSerial", |c| serials::find_serial(c, serial, today))
+    }
+
+    /** The units of a serialised item in stock now, with the warehouse each is in. */
+    pub fn item_serials(&self, item_id: i64) -> Result<Vec<StockSerial>> {
+        self.read("itemSerials", |c| serials::serials_in_stock(c, item_id))
     }
 
     /** Posts a stock count for one warehouse; differences go to Stock gain or Stock loss at average cost. */

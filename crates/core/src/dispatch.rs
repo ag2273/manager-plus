@@ -79,6 +79,7 @@ impl Business {
             "averageCost" => json(self.average_cost(arg(args, 0)?)?),
             "stockValue" => json(self.stock_value(arg(args, 0)?)?),
             "setItemSerials" => json(self.set_item_serials(arg(args, 0)?, &arg(args, 1)?)?),
+            "itemSerials" => json(self.item_serials(arg(args, 0)?)?),
             "findSerial" => {
                 json(self.find_serial(&arg::<String>(args, 0)?, &arg::<String>(args, 1)?)?)
             }

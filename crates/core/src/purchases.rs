@@ -8,7 +8,7 @@ use crate::error::{refuse, Result};
 use crate::items::{vat_rate, BasisPoints, Quantity, ONE_BASE_UNIT};
 use crate::ledger::{post_journal_entry, JournalEntryInput, JournalLine, Piastres};
 use crate::num::{mul_div_round, nullable, safe_int};
-use crate::serials::{issue_serials, receive_serials, serials_for, Move};
+use crate::serials::{issue_serials, receive_serials, serials_for, serials_on_line, Move};
 use crate::shares::{next_number, share_of, take, Taken};
 use crate::stock::{
     account_by_role, active_warehouse, assert_quantity, insert_movement, to_base_quantity,
@@ -142,6 +142,8 @@ pub struct PostedPurchaseLine {
     pub vat_rate: BasisPoints,
     pub vat: Piastres,
     pub returned: Quantity,
+    /** The serials received on this line, for a serialised item. */
+    pub serials: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -690,9 +692,13 @@ pub fn list_purchase_invoices(conn: &Connection) -> Result<Vec<PurchaseInvoice>>
                         vat_rate: r.get(7)?,
                         vat: r.get(8)?,
                         returned: r.get(9)?,
+                        serials: Vec::new(),
                     })
                 })?
-                .collect::<rusqlite::Result<_>>()?;
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            for l in &mut invoice.lines {
+                l.serials = serials_on_line(conn, "purchase", invoice.id, l.line_id)?;
+            }
             invoice.net = invoice.lines.iter().map(|l| l.net).sum();
             invoice.vat = invoice.lines.iter().map(|l| l.vat).sum();
             invoice.total = invoice.net + invoice.vat;

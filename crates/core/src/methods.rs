@@ -144,6 +144,7 @@ pub const BUSINESS_METHODS: &[&str] = &[
     "aging",
     "setItemSerials",
     "findSerial",
+    "itemSerials",
 ];
 
 /** Whether the screens may call `method`. */

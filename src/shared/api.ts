@@ -156,6 +156,7 @@ export const BUSINESS_METHODS = [
   "aging",
   "setItemSerials",
   "findSerial",
+  "itemSerials",
 ] as const satisfies readonly (keyof Business)[];
 
 export type BusinessMethod = (typeof BUSINESS_METHODS)[number];

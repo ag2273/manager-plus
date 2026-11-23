@@ -6,7 +6,7 @@ import { formatMoney, parseMoney } from "../../../shared/money";
 import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText } from "../api";
 import { ar } from "../strings";
-import { SerialLookup } from "./Serials";
+import { ItemSerials, SerialLookup } from "./Serials";
 import { ImportPanel } from "./Import";
 
 type Filter = "active" | "inactive";
@@ -169,6 +169,7 @@ export function Items({ canImport }: { canImport: boolean }) {
         )}
       </section>
       <SerialLookup warehouses={warehouses} />
+      <ItemSerials warehouses={warehouses} />
     </>
   );
 }

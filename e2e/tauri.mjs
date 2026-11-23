@@ -100,6 +100,39 @@ try {
   await until(session, "the purchases screen", () => document.body.textContent.includes("شركة الشبكات المتحدة"));
   check(true, "the Purchases screen lists the supplier");
 
+  // A serialised item bought with its serials: they show on the old invoice and in the item's list (#97, notes 5-6).
+  const serialised = await run(session, async () => {
+    const tax = (await window.api.call("taxCodes", [])).value[0].id;
+    const item = await window.api.call("addItem", [{ nameAr: "لابتوب ديل", baseUnit: "قطعة", salePrice: 2000000, taxCodeId: tax }]);
+    await window.api.call("setItemSerials", [item.value, { serialised: true, warrantyMonths: 12 }]);
+    const supplier = (await window.api.call("suppliers", [])).value[0].id;
+    const main = (await window.api.call("warehouses", [])).value[0].id;
+    const invoice = await window.api.call("postPurchaseInvoice", [
+      { date: "2026-02-02", supplierId: supplier, warehouseId: main, reference: "INV-78", lines: [{ itemId: item.value, unit: "base", quantity: 2000, unitPrice: 1500000, serials: ["DL-001", "DL-002"] }] },
+    ]);
+    const units = await window.api.call("itemSerials", [item.value]);
+    return invoice.ok && units.ok && units.value.map((u) => u.serial).join() === "DL-001,DL-002";
+  });
+  check(serialised === true, "a serialised purchase lists its units in stock through the Rust core");
+  await run(session, click, "الفواتير السابقة");
+  await until(session, "the old invoices", () => document.body.textContent.includes("INV-78"));
+  await run(session, () => {
+    const row = [...document.querySelectorAll("tr")].find((r) => r.textContent.includes("INV-78"));
+    [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "التفاصيل").click();
+  });
+  await until(session, "the invoice's serials", () => document.querySelector("table[aria-label='التفاصيل']")?.textContent.includes("DL-002"));
+  check(true, "an old purchase invoice shows the serials received on it");
+  await run(session, click, "الأصناف والمخزون");
+  await until(session, "the item serials list", () => [...document.querySelectorAll("option")].some((o) => o.textContent === "لابتوب ديل"));
+  await run(session, () => {
+    const select = [...document.querySelectorAll("label")].find((l) => l.textContent.trim().startsWith("اختر الصنف")).querySelector("select");
+    const value = [...select.options].find((o) => o.textContent === "لابتوب ديل").value;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await until(session, "the units in stock", () => document.querySelector("[aria-label='سيريالات الصنف في المخزن']")?.textContent.includes("DL-001"));
+  check(true, "the Items screen lists a serialised item's units in stock with their warehouse");
+
   // The till: open a shift, scan the item, take cash, and close with a Z report.
   await run(session, click, "شاشة البيع");
   await until(session, "the open-shift form", fill, "النقدية في الدرج عند البداية", "0");
