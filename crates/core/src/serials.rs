@@ -3,7 +3,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::dates::IsoDate;
-use crate::error::{refuse, Result};
+use crate::error::{refuse, BusinessError, Result};
 use crate::items::{Quantity, ONE_BASE_UNIT};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -189,10 +189,11 @@ pub fn receive_serials(
     for serial in serials {
         let state = state_of(conn, item_id, serial)?;
         if state.as_ref().is_some_and(|s| s.held > 0) {
-            return refuse(
+            return Err(BusinessError::new(
                 "serial_in_stock",
                 format!("Serial {serial} is already in stock"),
-            );
+            )
+            .with_detail(serial.as_str()));
         }
         let id = match state {
             Some(s) => s.id,
@@ -221,13 +222,14 @@ pub fn issue_serials(conn: &Connection, item_id: i64, serials: &[String], m: &Mo
                 record(conn, s.id, -1, m)?
             }
             _ => {
-                return refuse(
+                return Err(BusinessError::new(
                     "serial_not_in_stock",
                     format!(
                         "Serial {serial} is not in stock in warehouse {}",
                         m.warehouse_id
                     ),
                 )
+                .with_detail(serial.as_str()))
             }
         }
     }
@@ -254,10 +256,11 @@ pub fn return_serials(
                 record(conn, s.id, 1, m)?
             }
             _ => {
-                return refuse(
+                return Err(BusinessError::new(
                     "serial_not_on_document",
                     format!("Serial {serial} was not sold on this document"),
                 )
+                .with_detail(serial.as_str()))
             }
         }
     }

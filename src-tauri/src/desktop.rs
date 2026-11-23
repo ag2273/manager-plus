@@ -255,6 +255,9 @@ fn failure(error: BusinessError) -> Value {
     if let Some(amount) = error.amount {
         out["amount"] = json!(amount);
     }
+    if let Some(detail) = error.detail {
+        out["detail"] = json!(detail);
+    }
     out
 }
 

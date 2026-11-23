@@ -10,7 +10,7 @@ import type { Credentials, User } from "./books/users";
 export type { BusinessSettings, Credentials, User };
 
 /** What every call across the screen/core channel returns. Errors carry the core's stable code. */
-export type Result<T> = { ok: true; value: T } | { ok: false; code: string; message: string; amount?: number };
+export type Result<T> = { ok: true; value: T } | { ok: false; code: string; message: string; amount?: number; detail?: string };
 
 /** The `Business` commands and queries the screens may call on the open business. */
 export const BUSINESS_METHODS = [

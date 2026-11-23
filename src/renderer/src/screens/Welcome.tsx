@@ -123,8 +123,11 @@ export function Welcome({
           />
           {ar.vatRegistered}
         </label>
+        <p className="muted" id="create-hint">
+          {ar.createHint}
+        </p>
         <div className="row">
-          <button type="submit" className="btn btn-primary">
+          <button type="submit" className="btn btn-primary" aria-describedby="create-hint">
             {ar.create}
           </button>
           <button

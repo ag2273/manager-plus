@@ -28,6 +28,14 @@ impl BusinessError {
     }
 }
 
+impl BusinessError {
+    /** The refusal with a name the screen shows in its message, such as the serial that is taken. */
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+}
+
 impl std::fmt::Display for BusinessError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.code, self.message)

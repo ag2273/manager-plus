@@ -25,7 +25,9 @@ export const business = Object.fromEntries(
 /** The Arabic message for a failed result, or null when it succeeded. */
 export function errorText(result: Result<unknown>): string | null {
   if (result.ok) return null;
-  return ar.errors[result.code] ?? ar.errors["unexpected"]!;
+  const text = ar.errors[result.code] ?? ar.errors["unexpected"]!;
+  // A message that names something (the serial that is taken) carries it in «{detail}» or “{detail}”.
+  return result.detail ? text.replace("{detail}", result.detail) : text.replace(/\s*[«“]\{detail\}[»”]/, "");
 }
 
 /** Today's date on this computer, as YYYY-MM-DD. */
