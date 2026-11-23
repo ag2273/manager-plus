@@ -137,6 +137,7 @@ impl Business {
                 json(self.price_invoice(&arg::<String>(args, 0)?, &arg::<Vec<_>>(args, 1)?)?)
             }
             "postSalesInvoice" => json(self.post_sales_invoice(&arg(args, 0)?)?),
+            "invoiceReceipt" => json(self.invoice_receipt(&arg(args, 0)?)?),
             "salesInvoices" => json(self.sales_invoices()?),
             "findSalesInvoice" => json(self.find_sales_invoice(arg(args, 0)?)?),
             "postCreditNote" => json(self.post_credit_note(&arg(args, 0)?)?),

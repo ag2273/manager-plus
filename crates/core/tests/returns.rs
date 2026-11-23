@@ -242,3 +242,133 @@ fn a_return_line_must_belong_to_the_receipt() {
         "invoice_needs_lines"
     );
 }
+
+mod turned_into_an_invoice {
+    use super::*;
+    use manager_core::invoices::ReceiptInvoiceInput;
+    use manager_core::settlements::PartyKind;
+
+    fn company(s: &Setup) -> i64 {
+        s.business
+            .add_customer(&CustomerInput {
+                name: "شركة الأمل للتجارة".into(),
+                tax_registration_number: "987654321".into(),
+                ..Default::default()
+            })
+            .unwrap()
+    }
+
+    fn invoice(
+        s: &Setup,
+        receipt_id: i64,
+        customer: i64,
+    ) -> manager_core::Result<manager_core::invoices::ReceiptInvoiced> {
+        s.business.invoice_receipt(&ReceiptInvoiceInput {
+            date: "2026-11-22".into(),
+            receipt_id,
+            customer_id: customer,
+            reference: "PO-9".into(),
+        })
+    }
+
+    #[test]
+    fn a_receipt_becomes_an_invoice_to_the_customer_and_the_sale_counts_once() {
+        let s = setup();
+        let customer = company(&s);
+        let before = (
+            balance_of(&s.business, "sales"),
+            balance_of(&s.business, "output_vat"),
+            balance_of(&s.business, "cash_drawer"),
+            s.business.stock_on_hand(s.rice).unwrap().total,
+        );
+
+        let done = invoice(&s, s.receipt.id, customer).unwrap();
+
+        assert_eq!(done.total, s.receipt.total);
+        let after = (
+            balance_of(&s.business, "sales"),
+            balance_of(&s.business, "output_vat"),
+            balance_of(&s.business, "cash_drawer"),
+            s.business.stock_on_hand(s.rice).unwrap().total,
+        );
+        assert_eq!(after, before, "sales, VAT, cash and stock are as they were");
+        assert_eq!(s.business.customer_balance(customer).unwrap(), 0);
+        assert!(s
+            .business
+            .open_documents(PartyKind::Customer, customer)
+            .unwrap()
+            .is_empty());
+        let inv = s.business.find_sales_invoice(done.invoice_number).unwrap();
+        assert_eq!(
+            (inv.customer_id, inv.reference.as_str(), inv.net, inv.vat),
+            (customer, "PO-9", s.receipt.net, s.receipt.vat)
+        );
+        assert!(inv.notes.contains(&s.receipt.number.to_string()));
+        let receipt = s.business.find_receipt(s.receipt.number).unwrap();
+        assert_eq!(receipt.invoice_number, Some(done.invoice_number));
+        assert!(receipt.lines.iter().all(|l| l.returned == l.quantity));
+        s.expect_books_balance();
+    }
+
+    #[test]
+    fn a_receipt_is_invoiced_once_whole_and_only_to_its_own_customer() {
+        let s = setup();
+        let customer = company(&s);
+        invoice(&s, s.receipt.id, customer).unwrap();
+        assert_eq!(
+            code(invoice(&s, s.receipt.id, customer)),
+            "receipt_invoiced"
+        );
+        assert_eq!(code(invoice(&s, 9_999, customer)), "receipt_not_found");
+
+        let sale = s
+            .business
+            .post_sale(&SaleInput {
+                date: "2026-11-20".into(),
+                warehouse_id: s.main,
+                lines: vec![SaleLineInput::base(s.soap, 2_000)],
+                payments: vec![PaymentInput::new("cash", 11_400)],
+                ..Default::default()
+            })
+            .unwrap();
+        let partly = s.business.find_receipt(sale.number).unwrap();
+        s.business
+            .return_sale(&ReturnInput {
+                date: "2026-11-21".into(),
+                receipt_id: partly.id,
+                lines: vec![ReturnLineInput::new(partly.lines[0].line_id, 1_000)],
+                refund: "cash".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            code(invoice(&s, partly.id, customer)),
+            "receipt_has_returns"
+        );
+
+        let other = s
+            .business
+            .add_customer(&CustomerInput {
+                name: "عميل آخر".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        let on_account = s
+            .business
+            .post_sale(&SaleInput {
+                date: "2026-11-20".into(),
+                warehouse_id: s.main,
+                lines: vec![SaleLineInput::base(s.soap, 1_000)],
+                customer_id: Some(other),
+                ..Default::default()
+            })
+            .unwrap();
+        let theirs = s.business.find_receipt(on_account.number).unwrap();
+        assert_eq!(
+            code(invoice(&s, theirs.id, customer)),
+            "receipt_customer_differs"
+        );
+        invoice(&s, theirs.id, other).unwrap();
+        assert_eq!(s.business.customer_balance(other).unwrap(), 5_700);
+        s.expect_books_balance();
+    }
+}

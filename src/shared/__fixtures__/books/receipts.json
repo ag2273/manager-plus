@@ -33,6 +33,7 @@
       "previousUuid": "",
       "status": ""
     },
+    "invoiceNumber": null,
     "lines": [
       {
         "lineId": 1,

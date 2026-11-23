@@ -110,3 +110,18 @@ export type CreditNote = {
         vat: Piastres;
     }[];
 };
+/** A till receipt to be replaced by a tax invoice to a customer. */
+export type ReceiptInvoiceInput = {
+    date: IsoDate;
+    receiptId: number;
+    customerId: number;
+    /** The customer's order number or similar. */
+    reference?: string;
+};
+export type ReceiptInvoiced = {
+    returnId: number;
+    returnNumber: number;
+    invoiceId: number;
+    invoiceNumber: number;
+    total: Piastres;
+};

@@ -23,7 +23,7 @@ use crate::inventory::{
 };
 use crate::invoices::{
     self, CreditNote, CreditNoteInput, InvoiceLineInput, PostedCreditNote, PricedInvoice,
-    SalesInvoice, SalesInvoiceInput, SalesInvoiceResult,
+    ReceiptInvoiceInput, ReceiptInvoiced, SalesInvoice, SalesInvoiceInput, SalesInvoiceResult,
 };
 use crate::items::{
     self, BasisPoints, Item, ItemChanges, ItemInput, ItemsOptions, ScannedUnit, TaxCode,
@@ -1114,6 +1114,22 @@ impl Business {
                 Ok(posted)
             },
         )
+    }
+
+    /** Replaces a till receipt with a tax invoice to a company customer, so the sale is counted once. */
+    pub fn invoice_receipt(&self, input: &ReceiptInvoiceInput) -> Result<ReceiptInvoiced> {
+        let user_id = self.allow("invoiceReceipt")?.id;
+        self.write("invoiceReceipt", to_json(input), None, |c| {
+            let done = invoices::invoice_receipt(c, input, user_id)?;
+            crate::eta::receipts_store::queue_eta_receipt(c, "return", done.return_id)?;
+            crate::eta::store::queue_eta_document(
+                c,
+                "invoice",
+                done.invoice_id,
+                chrono::Utc::now(),
+            )?;
+            Ok(done)
+        })
     }
 
     /** Sales invoices, newest first. */

@@ -433,6 +433,33 @@ mod with_sales {
     }
 
     #[test]
+    fn a_receipt_turned_into_an_invoice_carries_its_serials_to_the_invoice() {
+        let t = till(&["SN-1", "SN-2"]);
+        let sold = t.sell(&["SN-1"], None).unwrap();
+        let receipt = t.s.business.find_receipt(sold.number).unwrap();
+        let done =
+            t.s.business
+                .invoice_receipt(&manager_core::invoices::ReceiptInvoiceInput {
+                    date: "2026-04-01".into(),
+                    receipt_id: receipt.id,
+                    customer_id: t.customer,
+                    reference: String::new(),
+                })
+                .unwrap();
+        let found = &t.s.business.find_serial("SN-1", "2026-04-02").unwrap()[0];
+        let sale = found.sale.as_ref().unwrap();
+        assert_eq!(
+            (found.in_stock, sale.document.as_str(), sale.customer_id),
+            (
+                false,
+                format!("فاتورة {}", done.invoice_number).as_str(),
+                Some(t.customer)
+            )
+        );
+        assert_eq!(t.s.business.stock_on_hand(t.s.laptop).unwrap().total, 1_000);
+    }
+
+    #[test]
     fn a_sold_unit_shows_its_supplier_customer_and_warranty_and_only_units_in_stock_sell() {
         let t = till(&["SN-1", "SN-2"]);
         t.sell(&["SN-1"], Some(t.customer)).unwrap();

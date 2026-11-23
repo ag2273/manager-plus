@@ -251,7 +251,11 @@ fn links(conn: &Connection) -> Result<Vec<Link>> {
              SELECT r.entry_id, s.entry_id, t.amount, t.amount
                FROM sales_returns r JOIN sales_receipts s ON s.id = r.receipt_id
                JOIN (SELECT return_id, SUM(amount) AS amount FROM sales_return_lines GROUP BY return_id) t ON t.return_id = r.id
-              WHERE r.refund = 'account'
+              WHERE r.refund = 'account' AND r.id NOT IN (SELECT return_id FROM receipt_invoices)
+             UNION ALL
+             SELECT r.entry_id, s.entry_id, t.amount, t.amount
+               FROM receipt_invoices x JOIN sales_returns r ON r.id = x.return_id JOIN sales_invoices s ON s.id = x.invoice_id
+               JOIN (SELECT return_id, SUM(amount) AS amount FROM sales_return_lines GROUP BY return_id) t ON t.return_id = r.id
              UNION ALL
              SELECT n.entry_id, p.entry_id, (SELECT SUM(x.net + x.vat) FROM debit_note_lines x WHERE x.note_id = n.id),
                     (SELECT SUM(x.debit) FROM ledger_lines x WHERE x.entry_id = n.entry_id AND x.supplier_id IS NOT NULL)

@@ -22,6 +22,9 @@ const LANGUAGES = {
     reprint: "إعادة طباعة",
     backToTill: "رجوع لشاشة البيع",
     backToList: "رجوع للقائمة",
+    toInvoice: "تحويل إلى فاتورة ضريبية",
+    issue: "إصدار الفاتورة بدل الإيصال",
+    invoiced: "صدرت الفاتورة رقم 1",
     total: "١١٤٫٠٠",
     zTitle: "تقرير Z",
     counted: "النقدية المعدودة في الدرج",
@@ -46,6 +49,9 @@ const LANGUAGES = {
     reprint: "Print again",
     backToTill: "Back to the till",
     backToList: "Back to the list",
+    toInvoice: "Turn into a tax invoice",
+    issue: "Issue the invoice in place of the receipt",
+    invoiced: "Invoice 1 was issued",
     total: "114.00",
     zTitle: "Z report",
     counted: "Cash counted in the drawer",
@@ -159,6 +165,28 @@ async function journey(lang) {
     await run(session, clickIn, "section", t.reprint);
     await until(session, "the reprint's answer", (message) => document.querySelector("[role=alert]")?.textContent.includes(message), t.noPrinter);
     check(true, "a receipt prints again from the sales list");
+
+    // A company customer asks for a tax invoice: the receipt is replaced by one (#97, note 7).
+    await run(session, () => window.api.call("addCustomer", [{ name: "شركة الأمل للتجارة", phone: "", taxRegistrationNumber: "987654321" }]));
+    await run(session, clickIn, "section", t.toInvoice);
+    await until(session, "the customer choice", () => {
+      const select = document.querySelector("[role=group] select");
+      const option = select && [...select.options].find((o) => o.textContent === "شركة الأمل للتجارة");
+      if (!option) return false;
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(select), "value").set.call(select, option.value);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    });
+    await until(session, "the issue button", (text) => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === text && !b.disabled), t.issue);
+    await run(session, clickIn, "section", t.issue);
+    await until(session, "the invoice", (text) => document.querySelector("[role=status]")?.textContent.includes(text), t.invoiced);
+    const replaced = await run(session, async () => {
+      const invoice = (await window.api.call("findSalesInvoice", [1])).value;
+      const customer = (await window.api.call("customers", [])).value.find((c) => c.name === "شركة الأمل للتجارة");
+      const owed = (await window.api.call("customerBalance", [customer.id])).value;
+      return invoice.total === 11400 && invoice.customerId === customer.id && owed === 0;
+    });
+    check(replaced === true, "the receipt becomes a tax invoice to the customer, already paid");
     await run(session, clickIn, "main", t.backToList);
     await until(session, "the sales list again", (title) => document.querySelector("h1")?.textContent === title, t.salesTitle);
     await run(session, clickIn, "header", t.backToTill);

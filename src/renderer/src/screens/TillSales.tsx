@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { Customer } from "../../../shared/books/customers";
 import type { Receipt } from "../../../shared/books/sales";
 import type { Shift } from "../../../shared/books/shifts";
 import { formatMoney } from "../../../shared/money";
@@ -17,10 +18,87 @@ function paidBy(r: Receipt): string {
   return parts.join(" + ");
 }
 
-/** One receipt in full, with a reprint. */
-function ReceiptDetail({ receipt, onBack }: { receipt: Receipt; onBack: () => void }) {
+/**
+ * Turns the receipt into a tax invoice to a company customer (#97, note 7): the core returns
+ * the receipt in full to the customer's account and issues the invoice in its place.
+ */
+function ToInvoice({ receipt, onDone }: { receipt: Receipt; onDone: (text: string) => void }) {
   const t = ar.tillSales;
+  const [open, setOpen] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState<number | "">(receipt.customerId ?? "");
+  const [reference, setReference] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) void business.customers().then((r) => r.ok && setCustomers(r.value.filter((c) => c.active)));
+  }, [open]);
+
+  async function issue() {
+    if (customerId === "") return;
+    const result = await business.invoiceReceipt({ date: today(), receiptId: receipt.id, customerId, reference });
+    setError(errorText(result));
+    if (result.ok) onDone(t.invoiced(result.value.invoiceNumber, result.value.returnNumber));
+  }
+
+  if (!open)
+    return (
+      <button type="button" className="btn" onClick={() => setOpen(true)}>
+        {t.toInvoice}
+      </button>
+    );
+  return (
+    <div className="card stack" role="group" aria-label={t.toInvoice}>
+      <p className="muted">{t.toInvoiceHint}</p>
+      <div className="row">
+        <label className="field">
+          {t.customer}
+          <select value={customerId} disabled={receipt.customerId !== null} onChange={(e) => setCustomerId(e.target.value === "" ? "" : Number(e.target.value))}>
+            <option value="">{t.chooseCustomer}</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          {t.reference}
+          <input value={reference} onChange={(e) => setReference(e.target.value)} />
+        </label>
+      </div>
+      {error && (
+        <div role="alert" className="error">
+          {error}
+        </div>
+      )}
+      <div className="row">
+        <button type="button" className="btn btn-primary" disabled={customerId === ""} onClick={() => void issue()}>
+          {t.confirmInvoice}
+        </button>
+        <button type="button" className="btn" onClick={() => setOpen(false)}>
+          {t.cancel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** One receipt in full, with a reprint, and for a manager the way to turn it into a tax invoice. */
+function ReceiptDetail({ receipt: given, onBack }: { receipt: Receipt; onBack: () => void }) {
+  const t = ar.tillSales;
+  const [receipt, setReceipt] = useState(given);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [isManager, setIsManager] = useState(false);
+  useEffect(() => {
+    void business.currentUser().then((r) => r.ok && setIsManager(r.value?.role === "manager"));
+  }, []);
+  async function invoiced(text: string) {
+    setMessage({ ok: true, text });
+    const again = await business.findReceipt(receipt.number);
+    if (again.ok) setReceipt(again.value);
+  }
+  const returned = receipt.lines.some((l) => l.returned > 0);
   async function reprint() {
     const result = await window.api.print({ kind: "sale", number: receipt.number, copy: true, openDrawer: false });
     setMessage(result.ok ? { ok: true, text: t.reprinted } : { ok: false, text: errorText(result)! });
@@ -44,6 +122,11 @@ function ReceiptDetail({ receipt, onBack }: { receipt: Receipt; onBack: () => vo
         <div role={message.ok ? "status" : "alert"} className={message.ok ? "ok" : "error"}>
           {message.text}
         </div>
+      )}
+      {receipt.invoiceNumber !== null ? (
+        <p role="note">{t.invoicedAlready(receipt.invoiceNumber)}</p>
+      ) : (
+        isManager && !returned && <ToInvoice receipt={receipt} onDone={(text) => void invoiced(text)} />
       )}
       <table>
         <thead>

@@ -7,7 +7,7 @@ import type { BackupFile, BackupStatus } from "./backup";
 import type { Account, AccountChanges, IsoDate, JournalEntryInput, JournalLine, NewAccount, Piastres, TrialBalance } from "./ledger";
 import type { BasisPoints, Quantity, Item, ItemChanges, ItemInput, ScannedUnit, TaxCode } from "./items";
 import type { PricedPurchase, PurchaseInvoice, PurchaseLineInput, PurchaseInvoiceInput, Supplier, SupplierChanges, SupplierInput, SupplierAccount, PurchaseMoney } from "./purchases";
-import type { CreditNote, CreditNoteInput, InvoiceLineInput, PricedInvoice, SalesInvoice, SalesInvoiceInput, SalesInvoiceResult } from "./invoices";
+import type { CreditNote, CreditNoteInput, InvoiceLineInput, PricedInvoice, ReceiptInvoiced, ReceiptInvoiceInput, SalesInvoice, SalesInvoiceInput, SalesInvoiceResult } from "./invoices";
 import type { SerialHistory, StockSerial } from "./serials";
 import type { DebitNote, DebitNoteInput } from "./debit-notes";
 import type { ImportShipment, ImportShipmentInput } from "./shipments";
@@ -230,6 +230,8 @@ export declare class Business {
     priceInvoice(date: IsoDate, lines: InvoiceLineInput[]): PricedInvoice;
     /** Posts a tax invoice to a customer's account. */
     postSalesInvoice(invoice: SalesInvoiceInput): SalesInvoiceResult;
+    /** Replaces a till receipt with a tax invoice to a company customer, so the sale is counted once. */
+    invoiceReceipt(input: ReceiptInvoiceInput): ReceiptInvoiced;
     /** Sales invoices, newest first. */
     salesInvoices(): SalesInvoice[];
     /** A sales invoice by its printed number. */

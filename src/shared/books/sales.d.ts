@@ -86,6 +86,8 @@ export type Receipt = {
     /** The cashier, by user id, and the shift the sale was rung up in. */
     soldById: number;
     shiftId: number | null;
+    /** The tax invoice that replaced this receipt, when it was turned into one. */
+    invoiceNumber: number | null;
     eta: {
         uuid: string;
         previousUuid: string;
