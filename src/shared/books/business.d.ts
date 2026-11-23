@@ -8,7 +8,7 @@ import type { Account, AccountChanges, IsoDate, JournalEntryInput, JournalLine, 
 import type { BasisPoints, Quantity, Item, ItemChanges, ItemInput, ScannedUnit, TaxCode } from "./items";
 import type { PricedPurchase, PurchaseInvoice, PurchaseLineInput, PurchaseInvoiceInput, Supplier, SupplierChanges, SupplierInput, SupplierAccount, PurchaseMoney } from "./purchases";
 import type { CreditNote, CreditNoteInput, InvoiceLineInput, PricedInvoice, SalesInvoice, SalesInvoiceInput, SalesInvoiceResult } from "./invoices";
-import type { SerialHistory } from "./serials";
+import type { SerialHistory, StockSerial } from "./serials";
 import type { DebitNote, DebitNoteInput } from "./debit-notes";
 import type { ImportShipment, ImportShipmentInput } from "./shipments";
 import type { VatReturn } from "./vat-return";
@@ -202,6 +202,8 @@ export declare class Business {
     }): void;
     /** Where a serial number came from and went, and whether it is under warranty on `today`. */
     findSerial(serial: string, today: IsoDate): SerialHistory[];
+    /** The units of a serialised item in stock now, with the warehouse each is in. */
+    itemSerials(itemId: number): StockSerial[];
     /** Sends goods back to a supplier against their invoice. */
     postDebitNote(note: DebitNoteInput): {
         id: number;

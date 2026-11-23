@@ -23,4 +23,12 @@ export type SerialHistory = {
     warrantyEnds: IsoDate | null;
     underWarranty: boolean;
 };
+/** One unit of a serialised item that is in stock: where it is, and since when. */
+export type StockSerial = {
+    serial: string;
+    warehouseId: number;
+    warehouseName: string;
+    /** The date it came into that warehouse. */
+    since: IsoDate;
+};
 export {};

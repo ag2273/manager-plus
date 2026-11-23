@@ -381,7 +381,8 @@ pub fn roles_for(method: &str) -> &'static [&'static str] {
         | "stockOnHand"
         | "etaReceiptQr"
         | "listPrice"
-        | "findSerial" => ALL,
+        | "findSerial"
+        | "itemSerials" => ALL,
         "postStockCount"
         | "writeOffStock"
         | "setItemMinimum"

@@ -46,6 +46,8 @@ export type PostedPurchaseLine = PurchaseLine & {
     lineId: number;
     nameAr: string;
     returned: Quantity;
+    /** The serials received on this line, for a serialised item. */
+    serials: string[];
 };
 export type PurchaseInvoice = {
     id: number;

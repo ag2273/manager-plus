@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
-import type { SerialHistory } from "../../../shared/books/serials";
+import { useEffect, useState, type FormEvent } from "react";
+import type { Item } from "../../../shared/books/items";
+import type { SerialHistory, StockSerial } from "../../../shared/books/serials";
 import type { Warehouse } from "../../../shared/books/stock";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
@@ -87,6 +88,97 @@ export function SerialLookup({ warehouses }: { warehouses: Warehouse[] }) {
           )}
         </dl>
       ))}
+    </section>
+  );
+}
+
+/** Every unit of one serialised item in stock, with the warehouse it is in (#97, note 5). */
+export function ItemSerials({ warehouses }: { warehouses: Warehouse[] }) {
+  const t = ar.serials;
+  const [items, setItems] = useState<Item[]>([]);
+  const [itemId, setItemId] = useState<number | "">("");
+  const [warehouseId, setWarehouseId] = useState<number | "">("");
+  const [units, setUnits] = useState<StockSerial[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void business.items({ includeInactive: true }).then((r) => r.ok && setItems(r.value.filter((i) => i.serialised)));
+  }, []);
+
+  useEffect(() => {
+    if (itemId === "") {
+      setUnits(null);
+      return;
+    }
+    void business.itemSerials(itemId).then((r) => {
+      setError(errorText(r));
+      setUnits(r.ok ? r.value : null);
+    });
+  }, [itemId]);
+
+  if (items.length === 0) return null;
+  const shown = (units ?? []).filter((u) => warehouseId === "" || u.warehouseId === warehouseId);
+  return (
+    <section className="card" aria-label={t.inStockList}>
+      <h2>{t.inStockList}</h2>
+      <p className="muted">{t.inStockHint}</p>
+      <div className="row">
+        <label className="field">
+          {t.chooseItem}
+          <select value={itemId} onChange={(e) => setItemId(e.target.value === "" ? "" : Number(e.target.value))}>
+            <option value="">{t.chooseItem}</option>
+            {items.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.nameAr}
+              </option>
+            ))}
+          </select>
+        </label>
+        {warehouses.length > 1 && (
+          <label className="field narrow">
+            {t.warehouse}
+            <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value === "" ? "" : Number(e.target.value))}>
+              <option value="">{t.allWarehouses}</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      {error && (
+        <div role="alert" className="error">
+          {error}
+        </div>
+      )}
+      {units &&
+        (shown.length === 0 ? (
+          <p className="muted">{t.noneInStock}</p>
+        ) : (
+          <>
+            <p className="muted">{t.count(shown.length)}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t.serial}</th>
+                  <th>{t.warehouse}</th>
+                  <th className="col-type">{t.since}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((u) => (
+                  <tr key={u.serial}>
+                    <td dir="ltr">{u.serial}</td>
+                    <td>{u.warehouseName}</td>
+                    <td className="muted">{u.since}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ))}
     </section>
   );
 }

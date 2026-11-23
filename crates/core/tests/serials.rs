@@ -145,6 +145,30 @@ fn transfers_move_each_serial_between_warehouses() {
 }
 
 #[test]
+fn an_items_serials_in_stock_are_listed_with_their_warehouse() {
+    let s = setup();
+    s.receive(&["SN-2", "SN-1", "SN-3"]).unwrap();
+    s.transfer(s.main, s.branch, "SN-3").unwrap();
+    let listed: Vec<(String, i64, String)> = s
+        .business
+        .item_serials(s.laptop)
+        .unwrap()
+        .into_iter()
+        .map(|u| (u.serial, u.warehouse_id, u.since))
+        .collect();
+    assert_eq!(
+        listed,
+        vec![
+            ("SN-1".into(), s.main, "2026-01-10".into()),
+            ("SN-2".into(), s.main, "2026-01-10".into()),
+            ("SN-3".into(), s.branch, "2026-02-01".into()),
+        ]
+    );
+    assert!(s.business.item_serials(s.cable).unwrap().is_empty());
+    assert_eq!(code(s.business.item_serials(9_999)), "item_not_found");
+}
+
+#[test]
 fn a_written_off_unit_leaves_stock_and_a_serialised_item_is_not_counted_by_quantity() {
     let s = setup();
     s.receive(&["SN-1", "SN-2"]).unwrap();
@@ -319,8 +343,20 @@ mod with_purchases {
                 }],
             })
         };
+        assert_eq!(
+            s.business.purchase_invoices().unwrap()[0].lines[0].serials,
+            vec!["SN-1", "SN-2", "SN-3"]
+        );
         send_back("SN-2").unwrap();
         assert_eq!(code(send_back("SN-2")), "serial_not_in_stock");
+        let in_stock: Vec<String> = s
+            .business
+            .item_serials(s.laptop)
+            .unwrap()
+            .into_iter()
+            .map(|u| u.serial)
+            .collect();
+        assert_eq!(in_stock, vec!["SN-1", "SN-3"]);
         let found = &s.business.find_serial("SN-2", "2026-03-01").unwrap()[0];
         assert_eq!((found.in_stock, &found.sale), (false, &None));
         assert_eq!(s.business.stock_on_hand(s.laptop).unwrap().total, 2_000);

@@ -41,6 +41,17 @@ pub struct SerialHistory {
     pub under_warranty: bool,
 }
 
+/** One unit of a serialised item that is in stock: where it is, and since when. */
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StockSerial {
+    pub serial: String,
+    pub warehouse_id: i64,
+    pub warehouse_name: String,
+    /** The date it came into that warehouse. */
+    pub since: IsoDate,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SerialSettings {
@@ -333,6 +344,35 @@ pub fn set_item_serials(conn: &Connection, item_id: i64, input: &SerialSettings)
         params![input.serialised as i64, months as i64, item_id],
     )?;
     Ok(())
+}
+
+/** The units of an item in stock now, by warehouse then serial. */
+pub fn serials_in_stock(conn: &Connection, item_id: i64) -> Result<Vec<StockSerial>> {
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM items WHERE id = ?", [item_id], |r| r.get(0))
+        .optional()?;
+    if exists.is_none() {
+        return refuse("item_not_found", format!("No item with id {item_id}"));
+    }
+    Ok(conn
+        .prepare(
+            "SELECT s.serial, m.warehouse_id, w.name, m.date
+               FROM serials s
+               JOIN serial_movements m ON m.id = (SELECT MAX(x.id) FROM serial_movements x WHERE x.serial_id = s.id)
+               JOIN warehouses w ON w.id = m.warehouse_id
+              WHERE s.item_id = ?
+                AND (SELECT SUM(x.quantity) FROM serial_movements x WHERE x.serial_id = s.id) > 0
+              ORDER BY w.id, s.serial",
+        )?
+        .query_map([item_id], |r| {
+            Ok(StockSerial {
+                serial: r.get(0)?,
+                warehouse_id: r.get(1)?,
+                warehouse_name: r.get(2)?,
+                since: r.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?)
 }
 
 const SALE_SOURCES: [&str; 2] = ["sale", "sales_invoice"];
