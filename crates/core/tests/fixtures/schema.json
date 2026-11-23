@@ -187,6 +187,18 @@
  },
  {
   "type": "index",
+  "name": "sqlite_autoindex_receipt_invoices_1",
+  "tbl_name": "receipt_invoices",
+  "sql": null
+ },
+ {
+  "type": "index",
+  "name": "sqlite_autoindex_receipt_invoices_2",
+  "tbl_name": "receipt_invoices",
+  "sql": null
+ },
+ {
+  "type": "index",
   "name": "sqlite_autoindex_sales_invoices_1",
   "tbl_name": "sales_invoices",
   "sql": null
@@ -430,6 +442,12 @@
   "name": "quotations",
   "tbl_name": "quotations",
   "sql": "CREATE TABLE quotations (\n          id INTEGER PRIMARY KEY,\n          number INTEGER NOT NULL UNIQUE,\n          date TEXT NOT NULL,\n          valid_until TEXT NOT NULL,\n          customer_id INTEGER NOT NULL REFERENCES customers (id),\n          reference TEXT NOT NULL,\n          notes TEXT NOT NULL,\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          invoice_id INTEGER UNIQUE REFERENCES sales_invoices (id)\n        ) STRICT"
+ },
+ {
+  "type": "table",
+  "name": "receipt_invoices",
+  "tbl_name": "receipt_invoices",
+  "sql": "CREATE TABLE receipt_invoices (\n          receipt_id INTEGER PRIMARY KEY REFERENCES sales_receipts (id),\n          return_id INTEGER NOT NULL UNIQUE REFERENCES sales_returns (id),\n          invoice_id INTEGER NOT NULL UNIQUE REFERENCES sales_invoices (id)\n        ) STRICT"
  },
  {
   "type": "table",

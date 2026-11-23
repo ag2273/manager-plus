@@ -102,6 +102,16 @@ struct Back {
  * of goods sold; stock back into the warehouse it was sold from.
  */
 pub fn return_sale(conn: &Connection, input: &ReturnInput, user_id: i64) -> Result<ReturnResult> {
+    return_to(conn, input, user_id, None)
+}
+
+/** A return whose refund to account goes to `credit_to` instead of the receipt's own customer. */
+pub(crate) fn return_to(
+    conn: &Connection,
+    input: &ReturnInput,
+    user_id: i64,
+    credit_to: Option<i64>,
+) -> Result<ReturnResult> {
     assert_iso_date(&input.date)?;
     let shift = require_open_shift(conn, user_id)?;
     let receipt: Option<(i64, i64, i64, Option<i64>)> = conn
@@ -117,6 +127,7 @@ pub fn return_sale(conn: &Connection, input: &ReturnInput, user_id: i64) -> Resu
             format!("No receipt with id {}", input.receipt_id),
         );
     };
+    let customer_id = credit_to.or(customer_id);
     if input.lines.is_empty() {
         return refuse("invoice_needs_lines", "A return needs at least one line");
     }

@@ -813,3 +813,181 @@ pub fn find_credit_note(conn: &Connection, number: i64) -> Result<CreditNote> {
     note.total = note.net + note.vat;
     Ok(note)
 }
+
+/** A till receipt to be replaced by a tax invoice to a customer. */
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiptInvoiceInput {
+    pub date: String,
+    pub receipt_id: i64,
+    pub customer_id: i64,
+    /** The customer's order number or similar. */
+    #[serde(default)]
+    pub reference: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiptInvoiced {
+    pub return_id: i64,
+    pub return_number: i64,
+    pub invoice_id: i64,
+    pub invoice_number: i64,
+    pub total: Piastres,
+}
+
+/** One receipt line as an invoice line with the same VAT-exclusive amount: the price rounded up, the rest as discount. */
+fn as_invoice_line(
+    item_id: i64,
+    unit: String,
+    quantity: Quantity,
+    net: Piastres,
+) -> InvoiceLineInput {
+    let unit_price = (net * ONE_UNIT + quantity - 1) / quantity;
+    let gross = mul_div_round(quantity, unit_price, ONE_UNIT);
+    InvoiceLineInput {
+        item_id,
+        unit,
+        quantity: quantity as f64,
+        unit_price: unit_price as f64,
+        discount: (gross > net).then_some((gross - net) as f64),
+        serials: None,
+    }
+}
+
+/**
+ * Turns a till receipt into a tax invoice to a company customer (#97, note 7): the whole
+ * receipt comes back to that customer's account, as a return at the till, and an invoice
+ * for the same goods at the same VAT-exclusive amounts is raised in its place, settled by
+ * the return's credit. The sale is counted once, and with the ETA the e-receipt is
+ * cancelled by the return's e-receipt while the invoice goes as an e-invoice.
+ */
+pub fn invoice_receipt(
+    conn: &Connection,
+    input: &ReceiptInvoiceInput,
+    user_id: i64,
+) -> Result<ReceiptInvoiced> {
+    let receipt: Option<(i64, i64, Option<i64>)> = conn
+        .query_row(
+            "SELECT number, warehouse_id, customer_id FROM sales_receipts WHERE id = ?",
+            [input.receipt_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+    let Some((number, warehouse_id, sold_to)) = receipt else {
+        return refuse(
+            "receipt_not_found",
+            format!("No receipt with id {}", input.receipt_id),
+        );
+    };
+    let invoiced: Option<i64> = conn
+        .query_row(
+            "SELECT s.number FROM receipt_invoices x JOIN sales_invoices s ON s.id = x.invoice_id WHERE x.receipt_id = ?",
+            [input.receipt_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(invoice) = invoiced {
+        return Err(crate::error::BusinessError::new(
+            "receipt_invoiced",
+            format!("Receipt {number} is already invoice {invoice}"),
+        )
+        .with_detail(invoice.to_string()));
+    }
+    let returned: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sales_returns WHERE receipt_id = ?",
+        [input.receipt_id],
+        |r| r.get(0),
+    )?;
+    if returned > 0 {
+        return refuse(
+            "receipt_has_returns",
+            format!("Receipt {number} already has goods returned on it"),
+        );
+    }
+    if sold_to.is_some_and(|c| c != input.customer_id) {
+        return refuse(
+            "receipt_customer_differs",
+            format!("Receipt {number} was sold to another customer"),
+        );
+    }
+    find_customer(conn, input.customer_id)?;
+
+    struct Sold {
+        line_id: i64,
+        item_id: i64,
+        unit: String,
+        quantity: Quantity,
+        net: Piastres,
+        serials: Vec<String>,
+    }
+    let mut sold: Vec<Sold> = conn
+        .prepare(
+            "SELECT id, item_id, unit, quantity, net FROM sales_receipt_lines WHERE receipt_id = ? ORDER BY id",
+        )?
+        .query_map([input.receipt_id], |r| {
+            Ok(Sold {
+                line_id: r.get(0)?,
+                item_id: r.get(1)?,
+                unit: r.get(2)?,
+                quantity: r.get(3)?,
+                net: r.get(4)?,
+                serials: Vec::new(),
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    for l in &mut sold {
+        l.serials = serials_on_line(conn, "sale", input.receipt_id, l.line_id)?;
+    }
+    let with_serials = |serials: &[String]| (!serials.is_empty()).then(|| serials.to_vec());
+
+    let back = crate::returns::return_to(
+        conn,
+        &crate::returns::ReturnInput {
+            date: input.date.clone(),
+            receipt_id: input.receipt_id,
+            lines: sold
+                .iter()
+                .map(|l| crate::returns::ReturnLineInput {
+                    line_id: l.line_id,
+                    quantity: l.quantity as f64,
+                    serials: with_serials(&l.serials),
+                })
+                .collect(),
+            refund: "account".into(),
+        },
+        user_id,
+        Some(input.customer_id),
+    )?;
+    let invoice = post_sales_invoice(
+        conn,
+        &SalesInvoiceInput {
+            date: input.date.clone(),
+            customer_id: input.customer_id,
+            warehouse_id,
+            reference: input.reference.trim().to_string(),
+            notes: format!("بدلًا من إيصال البيع رقم {number}"),
+            lines: sold
+                .iter()
+                .map(|l| InvoiceLineInput {
+                    serials: with_serials(&l.serials),
+                    ..as_invoice_line(l.item_id, l.unit.clone(), l.quantity, l.net)
+                })
+                .collect(),
+            quotation_id: None,
+            credit_approval: None,
+        },
+        user_id,
+    )?;
+    conn.execute(
+        "INSERT INTO receipt_invoices (receipt_id, return_id, invoice_id) VALUES (?, ?, ?)",
+        params![input.receipt_id, back.id, invoice.id],
+    )?;
+    Ok(ReceiptInvoiced {
+        return_id: back.id,
+        return_number: back.number,
+        invoice_id: invoice.id,
+        invoice_number: invoice.number,
+        total: invoice.total,
+    })
+}

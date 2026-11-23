@@ -237,6 +237,8 @@ pub struct Receipt {
     pub sold_by_id: i64,
     pub shift_id: Option<i64>,
     pub eta: EtaState,
+    /** The tax invoice that replaced this receipt, when it was turned into one. */
+    pub invoice_number: Option<i64>,
     pub lines: Vec<ReceiptLine>,
 }
 
@@ -722,6 +724,13 @@ fn to_receipt(conn: &Connection, r: ReceiptRow) -> Result<Receipt> {
         .map_or(0, |p| p.amount);
     let net: i64 = lines.iter().map(|l| l.net).sum();
     let vat: i64 = lines.iter().map(|l| l.vat).sum();
+    let invoice_number = conn
+        .query_row(
+            "SELECT s.number FROM receipt_invoices x JOIN sales_invoices s ON s.id = x.invoice_id WHERE x.receipt_id = ?",
+            [r.id],
+            |x| x.get(0),
+        )
+        .optional()?;
     Ok(Receipt {
         id: r.id,
         number: r.number,
@@ -740,6 +749,7 @@ fn to_receipt(conn: &Connection, r: ReceiptRow) -> Result<Receipt> {
         sold_by_id: r.sold_by_id,
         shift_id: r.shift_id,
         eta: r.eta,
+        invoice_number,
         lines,
     })
 }

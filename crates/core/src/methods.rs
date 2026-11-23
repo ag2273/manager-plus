@@ -145,6 +145,7 @@ pub const BUSINESS_METHODS: &[&str] = &[
     "setItemSerials",
     "findSerial",
     "itemSerials",
+    "invoiceReceipt",
 ];
 
 /** Whether the screens may call `method`. */
