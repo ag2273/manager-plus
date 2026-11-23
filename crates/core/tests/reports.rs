@@ -37,7 +37,7 @@ fn computers(vat_registered: bool) -> Business {
         vat_registered,
         ..shop()
     };
-    Business::create(":memory:", &settings, &manager()).unwrap()
+    common::ready(Business::create(":memory:", &settings, &manager()).unwrap())
 }
 
 fn named(business: &Business, name: &str) -> i64 {

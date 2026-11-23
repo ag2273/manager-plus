@@ -55,6 +55,8 @@ fn serve() -> Served {
         },
     )
     .unwrap();
+    // Past the first-use setup, so the clients can sell.
+    owner.call("finishSetup", &[json!("new")]).unwrap();
     owner
         .call(
             "addUser",

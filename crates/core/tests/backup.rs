@@ -24,7 +24,7 @@ fn settings() -> BusinessSettings {
 
 /** A business file with months of trading: purchases, till sales, invoices, credit notes and expenses. */
 fn trading_file(path: &str, days: i64) -> Business {
-    let business = Business::create(path, &settings(), &manager()).unwrap();
+    let business = common::ready(Business::create(path, &settings(), &manager()).unwrap());
     let main = main_warehouse(&business);
     let items: Vec<i64> = (0..20)
         .map(|i| {

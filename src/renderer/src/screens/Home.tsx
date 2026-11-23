@@ -4,6 +4,7 @@ import type { BusinessSettings } from "../../../shared/api";
 import { formatMoney } from "../../../shared/money";
 import { business, today } from "../api";
 import { ar } from "../strings";
+import { SetupChecklist, type SetupScreen } from "./Setup";
 
 /** Today's sales, profit, cash in the drawer and low stock, for the roles that keep the books. */
 function DashboardCards({ onGo }: { onGo: (screen: "reports" | "warehouses") => void }) {
@@ -37,16 +38,21 @@ function DashboardCards({ onGo }: { onGo: (screen: "reports" | "warehouses") => 
   );
 }
 
-/** Landing screen after signing in: today's figures, then shortcuts. */
+/** Landing screen after signing in: the first steps until they are done, today's figures, then shortcuts. */
 export function Home({
   settings,
   canKeepBooks,
+  isManager,
   onGo,
+  onSetupFinished,
 }: {
   settings: BusinessSettings;
   canKeepBooks: boolean;
-  onGo: (screen: "items" | "accounts" | "settings" | "reports" | "warehouses") => void;
+  isManager: boolean;
+  onGo: (screen: SetupScreen | "reports") => void;
+  onSetupFinished: () => void;
 }) {
+  const [finished, setFinished] = useState(false);
   return (
     <>
       <header className="screen-head">
@@ -55,6 +61,19 @@ export function Home({
           <span className="muted">{settings.address}</span>
         </div>
       </header>
+      <SetupChecklist
+        isManager={isManager}
+        onGo={onGo}
+        onFinished={() => {
+          setFinished(true);
+          onSetupFinished();
+        }}
+      />
+      {finished && (
+        <div role="status" className="ok">
+          {ar.setup.finished}
+        </div>
+      )}
       {canKeepBooks && <DashboardCards onGo={onGo} />}
       <section className="tiles">
         <button type="button" className="card tile" onClick={() => onGo("items")}>

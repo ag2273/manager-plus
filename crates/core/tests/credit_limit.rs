@@ -19,7 +19,7 @@ fn setup() -> Setup {
         name: "شركة النور للكمبيوتر".into(),
         ..shop()
     };
-    let business = Business::create(":memory:", &settings, &manager()).unwrap();
+    let business = common::ready(Business::create(":memory:", &settings, &manager()).unwrap());
     let main = main_warehouse(&business);
     // 1,140.00 each with VAT.
     let router = business

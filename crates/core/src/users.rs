@@ -373,6 +373,7 @@ pub fn roles_for(method: &str) -> &'static [&'static str] {
         | "withholdingCategories"
         | "lowStock"
         | "lockDate"
+        | "setupStatus"
         | "items"
         | "findByBarcode"
         | "changeOwnPassword"

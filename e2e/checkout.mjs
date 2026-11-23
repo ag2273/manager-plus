@@ -23,6 +23,8 @@ const LANGUAGES = {
     noPrinter: "لم يتم إعداد طابعة",
     print: "اطبع التقرير",
     trial: "نسخة تجريبية: باقي 14 أيام",
+    fresh: "نشاط جديد ليس له أرصدة سابقة",
+    freshYes: "نعم، النشاط جديد",
   },
   en: {
     prefs: { screenLanguage: "en", documentLanguage: "en", digits: "western" },
@@ -40,6 +42,8 @@ const LANGUAGES = {
     noPrinter: "No receipt printer",
     print: "Print the report",
     trial: "Trial: 14 days left",
+    fresh: "A new business with nothing to bring forward",
+    freshYes: "Yes, the business is new",
   },
 };
 
@@ -78,6 +82,11 @@ async function journey(lang) {
     await until(session, "the main menu", () => document.querySelector("nav"));
     await until(session, "the trial banner", (trial) => document.querySelector("[role=note]")?.textContent.includes(trial), t.trial);
     check(true, "a new install runs the 14-day trial");
+    // A new shop with nothing to bring forward says so on its first steps, which opens the till.
+    await run(session, clickIn, "main", t.fresh);
+    await until(session, "the confirmation", clickIn, "main", t.freshYes);
+    await until(session, "the first steps to close", () => !document.querySelector("#setup-title"));
+    check(true, "a new business with nothing to bring forward starts at once");
 
     const stocked = await run(session, async () => {
       const call = (method, args) => window.api.call(method, args).then((r) => r.value);

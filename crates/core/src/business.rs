@@ -513,6 +513,12 @@ impl Business {
             }
         }
         let mut conn = self.conn();
+        if crate::setup::NEEDS_SETUP.contains(&method) && !crate::setup::is_finished(&conn)? {
+            return refuse(
+                "setup_not_finished",
+                format!("Finish the first-use setup before {method}"),
+            );
+        }
         let tx = conn.transaction()?;
         let since = crate::stock::last_movement_id(&tx)?;
         let result = work(&tx)?;
@@ -1411,6 +1417,18 @@ impl Business {
 
     pub fn lock_date(&self) -> Result<Option<String>> {
         self.read("lockDate", money::lock_date)
+    }
+
+    /** How far the first-use setup has come, and whether sales and purchases are open. */
+    pub fn setup_status(&self) -> Result<crate::setup::SetupStatus> {
+        self.read("setupStatus", crate::setup::status)
+    }
+
+    /** Finishes the first-use setup, opening sales and purchases. */
+    pub fn finish_setup(&self, mode: crate::setup::SetupMode) -> Result<crate::setup::SetupStatus> {
+        self.write("finishSetup", json!({ "mode": mode }), None, |c| {
+            crate::setup::finish(c, mode)
+        })
     }
 
     /** Nothing can be posted on or before this date; None unlocks. */

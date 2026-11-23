@@ -202,3 +202,15 @@ tr.total-row th { text-align: start; }
 .figure { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 caption { caption-side: top; text-align: start; padding: 12px 14px 4px; font-weight: 600; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* The first steps on the home screen (#97, note 10). */
+.setup { margin-bottom: 16px; }
+.setup h2 { margin: 0 0 4px; }
+.setup-steps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.setup-step { display: flex; gap: 12px; align-items: flex-start; }
+.setup-mark { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); font-weight: 600; }
+.setup-step.done .setup-mark { background: var(--accent); color: var(--accent-text); }
+.setup-body { display: grid; gap: 2px; }
+.setup-actions { margin-top: 6px; gap: 8px; flex-wrap: wrap; }
+.setup-banner { margin-bottom: 12px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

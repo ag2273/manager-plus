@@ -48,6 +48,8 @@ impl Business {
                 self.post_opening_balances(&arg::<String>(args, 0)?, &arg::<Vec<_>>(args, 1)?)?,
             ),
             "trialBalance" => json(self.trial_balance(&arg::<String>(args, 0)?)?),
+            "setupStatus" => json(self.setup_status()?),
+            "finishSetup" => json(self.finish_setup(arg(args, 0)?)?),
             "lockDate" => json(self.lock_date()?),
             "setLockDate" => json(self.set_lock_date(arg::<Option<String>>(args, 0)?.as_deref())?),
             "taxCodes" => json(self.tax_codes()?),

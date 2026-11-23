@@ -20,7 +20,7 @@ pub fn shop() -> BusinessSettings {
 }
 
 pub fn new_shop() -> Business {
-    Business::create(":memory:", &shop(), &manager()).expect("a new shop")
+    ready(Business::create(":memory:", &shop(), &manager()).expect("a new shop"))
 }
 
 /** A path in a fresh temporary folder; the folder lives as long as the returned guard. */
@@ -165,4 +165,12 @@ pub fn role_account(business: &Business, role: &str) -> i64 {
         .find(|a| a.role.as_deref() == Some(role))
         .unwrap_or_else(|| panic!("no account for {role}"))
         .id
+}
+
+/** A new business past its first-use setup, so it can trade. */
+pub fn ready(business: Business) -> Business {
+    business
+        .finish_setup(manager_core::setup::SetupMode::New)
+        .expect("the setup finishes");
+    business
 }

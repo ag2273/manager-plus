@@ -23,7 +23,7 @@ fn setup_with(vat_registered: bool) -> Setup {
         vat_registered,
         ..shop()
     };
-    let business = Business::create(":memory:", &settings, &manager()).unwrap();
+    let business = common::ready(Business::create(":memory:", &settings, &manager()).unwrap());
     let main = main_warehouse(&business);
     let router = business
         .add_item(&ItemInput {
