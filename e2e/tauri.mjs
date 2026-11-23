@@ -14,7 +14,16 @@ const dir = mkdtempSync(join(tmpdir(), "mplus-tauri-"));
 
 const file = join(dir, "shop.mplus");
 // The app answers its save dialog with this path, and keeps its data in a fresh folder.
-const launched = await launch(app, { MANAGER_PLUS_E2E_SAVE_AS: file, XDG_DATA_HOME: join(dir, "data") });
+// Files the screens save land in `saved`, and the import's open dialog answers with the template saved there.
+const saved = join(dir, "saved");
+mkdirSync(saved);
+const template = join(saved, "نموذج استيراد الأصناف والأرصدة.xlsx");
+const launched = await launch(app, {
+  MANAGER_PLUS_E2E_SAVE_AS: file,
+  MANAGER_PLUS_E2E_SAVE_DIR: saved,
+  MANAGER_PLUS_E2E_OPEN: template,
+  XDG_DATA_HOME: join(dir, "data"),
+});
 const { session } = launched;
 try {
   console.log("the ledger, items, stock, purchases and the till on Tauri");
@@ -250,6 +259,24 @@ try {
   check(licence.update.ok === false && licence.update.code === "update_unreachable", "checking for updates without the server says so");
   check(licence.cached.ok && licence.cached.value.kind === "none", "the update banner has nothing to offer");
   check(existsSync(join(dir, "data", "app.managerplus.desktop", "licence.json")), "the licence state is kept in the app's data folder");
+
+  // Excel files, the import template and A4 pages (#97, note 4): the screens build them, the Rust side saves and opens them.
+  const files = await run(session, async () => {
+    const table = { lang: "ar", title: "تقرير", meta: [{ label: "في", value: "2026-11-23" }], columns: [{ label: "المبلغ", kind: "money" }], rows: [[150000]], totals: [] };
+    const excel = await window.api.exportExcel(table);
+    const template = await window.api.saveImportTemplate("ar");
+    const opened = await window.api.openSpreadsheet();
+    const pdf = await window.api.printA4({ kind: "report", table, output: "pdf" });
+    return { excel, template, opened, pdf };
+  });
+  check(files.excel.ok && files.excel.value.saved === join(saved, "تقرير 2026-11-23.xlsx"), "a report exports to Excel where the user saves it");
+  check(readFileSync(files.excel.value.saved).subarray(0, 2).toString() === "PK", "the Excel file is a workbook");
+  check(files.template.ok && files.template.value.saved === template && existsSync(template), "the import template saves");
+  check(
+    files.opened.ok && files.opened.value.name === "نموذج استيراد الأصناف والأرصدة.xlsx" && files.opened.value.sheets[0].name === "الأصناف",
+    "the import reads a workbook back, inflating it in the webview",
+  );
+  check(files.pdf.ok === false && files.pdf.code === "pdf_failed", "an A4 PDF, made by WebView2 on Windows, explains itself elsewhere");
 
   const rss = Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${await appPid()}/status`, "utf8"))?.[1] ?? 0);
   if (rss) console.log(`  app RAM (resident): ${Math.round(rss / 1024)} MB`);

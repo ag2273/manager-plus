@@ -1104,6 +1104,10 @@ const arabic = {
     // Printing happens on this computer, outside the core.
     printer_not_set: "لم يتم إعداد طابعة الإيصالات. اضبطها من الإعدادات.",
     printer_failed: "تعذرت الطباعة. تأكد إن الطابعة شغالة ومتوصلة.",
+    // Saving and opening files on this computer, outside the core.
+    file_not_saved: "تعذر حفظ الملف. اختر مكانًا آخر أو أغلق الملف إن كان مفتوحًا في برنامج آخر، ثم حاول مرة أخرى.",
+    file_unreadable: "تعذر فتح الملف. تأكد أنه غير مفتوح في برنامج آخر، ثم حاول مرة أخرى.",
+    pdf_failed: "تعذر إنشاء ملف PDF. حاول مرة أخرى، أو اطبع واختر Microsoft Print to PDF.",
     // The connection to a server PC, outside the core.
     server_unreachable: "مش قادر يوصل للسيرفر. تأكد إن جهاز السيرفر شغال والبرنامج مفتوح عليه، وإن الجهازين على نفس الشبكة، وجرّب تاني.",
     server_identity_changed: "السيرفر ده مش نفس الجهاز اللي اتوصلت بيه قبل كده (الشهادة اتغيرت). اتأكد من الجهاز قبل ما تكمل.",

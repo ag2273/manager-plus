@@ -3,6 +3,7 @@
 
 mod desktop;
 mod eta;
+mod files;
 mod licence;
 mod printing;
 

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
 import { describe, expect, test } from "vitest";
 import { importTemplate } from "./import-template";
-import { decodeCsv, parseCsv, readXlsx } from "./spreadsheet-read";
+import { decodeCsv, parseCsv, readXlsx, readXlsxAsync } from "./spreadsheet-read";
 import { zip } from "./xlsx";
 
 const inflate = (data: Uint8Array) => new Uint8Array(inflateRawSync(data));
@@ -18,6 +18,11 @@ describe("reading spreadsheets for import", () => {
       ["Type", "Name or account code", "Debit", "Credit"],
       ["customer", "شركة الأمل", "1250.5"],
     ]);
+  });
+
+  test("the app's reader, whose inflate answers later, reads the same sheets", async () => {
+    const bytes = new Uint8Array(readFileSync(`${__dirname}/__fixtures__/import-sample.xlsx`));
+    expect(await readXlsxAsync(bytes, async (data) => inflate(data))).toEqual(readXlsx(bytes, inflate));
   });
 
   test("shared strings, rich text and skipped rows", () => {

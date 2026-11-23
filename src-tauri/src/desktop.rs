@@ -819,6 +819,44 @@ pub async fn desktop(
             state.open.lock().unwrap().apply_licence();
             result(activated.map(|s| serde_json::to_value(s).expect("serializes")))
         }
+        "saveFile" => {
+            let saved = (|| {
+                let name: String = arg(&args, 0)?;
+                let filter: String = arg(&args, 1)?;
+                let extensions: Vec<String> = arg(&args, 2)?;
+                let bytes: Vec<u8> = arg(&args, 3)?;
+                Ok(json!(crate::files::save(
+                    &app,
+                    &name,
+                    &filter,
+                    &extensions,
+                    &bytes
+                )?))
+            })();
+            result(saved)
+        }
+        "openFile" => {
+            let opened = (|| {
+                let filter: String = arg(&args, 0)?;
+                let extensions: Vec<String> = arg(&args, 1)?;
+                Ok(match crate::files::open(&app, &filter, &extensions)? {
+                    None => Value::Null,
+                    Some((name, bytes)) => json!({ "name": name, "bytes": bytes }),
+                })
+            })();
+            result(opened)
+        }
+        "savePdf" => {
+            let html: Result<String, _> = arg(&args, 0);
+            let name: Result<String, _> = arg(&args, 1);
+            let saved = match (html, name) {
+                (Ok(html), Ok(name)) => crate::files::save_pdf(&app, &html, &name)
+                    .await
+                    .map(|p| json!(p)),
+                (Err(e), _) | (_, Err(e)) => Err(e),
+            };
+            result(saved)
+        }
         "printers" => json!(crate::printing::installed()),
         "printRaw" => {
             let sent = (|| {

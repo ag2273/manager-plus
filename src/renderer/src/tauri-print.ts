@@ -18,15 +18,15 @@ import { type PrintDocument, RECEIPT_WIDTH, returnDocument, saleDocument, testDo
  * webview may not read back pixels of an HTML page, and the canvas shapes Arabic itself.
  */
 
-const desktop = <T>(channel: string, ...args: unknown[]): Promise<T> => invoke<T>("desktop", { channel, args });
+export const desktop = <T>(channel: string, ...args: unknown[]): Promise<T> => invoke<T>("desktop", { channel, args });
 
-class Failed extends Error {
+export class Failed extends Error {
   constructor(readonly result: Result<never>) {
     super("failed");
   }
 }
 
-async function need<T>(method: BusinessMethod, ...args: unknown[]): Promise<T> {
+export async function need<T>(method: BusinessMethod, ...args: unknown[]): Promise<T> {
   const result = await desktop<Result<T>>("call", method, args);
   if (!result.ok) throw new Failed(result);
   return result.value;

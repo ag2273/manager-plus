@@ -3,20 +3,23 @@
  * values are read: formulas give their saved result, and formatting is ignored.
  */
 export type ReadSheet = { name: string; rows: string[][] };
-/** Inflates raw deflate data (zip method 8); the main process passes Node's zlib. */
+/** Inflates raw deflate data (zip method 8): Node's zlib in the tests, the webview's DecompressionStream in the app. */
 export type Inflate = (data: Uint8Array) => Uint8Array;
+export type InflateAsync = (data: Uint8Array) => Promise<Uint8Array>;
 
 const utf8 = new TextDecoder();
 
-/** The files in a zip, by name, read through its central directory. */
-function unzip(bytes: Uint8Array, inflate: Inflate): Map<string, Uint8Array> {
+type Entry = { name: string; method: number; raw: Uint8Array };
+
+/** The files in a zip, as stored, read through its central directory. */
+function entries(bytes: Uint8Array): Entry[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let end = bytes.length - 22;
   while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--;
   if (end < 0) throw new Error("not a zip file");
   const count = view.getUint16(end + 10, true);
   let at = view.getUint32(end + 16, true);
-  const files = new Map<string, Uint8Array>();
+  const files: Entry[] = [];
   for (let i = 0; i < count; i++) {
     if (view.getUint32(at, true) !== 0x02014b50) throw new Error("broken zip directory");
     const method = view.getUint16(at + 10, true);
@@ -28,8 +31,7 @@ function unzip(bytes: Uint8Array, inflate: Inflate): Map<string, Uint8Array> {
     const name = utf8.decode(bytes.subarray(at + 46, at + 46 + nameLength));
     const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
     const raw = bytes.subarray(start, start + size);
-    if (method === 0) files.set(name, raw);
-    else if (method === 8) files.set(name, inflate(raw));
+    files.push({ name, method, raw });
     at += 46 + nameLength + extra + comment;
   }
   return files;
@@ -60,7 +62,25 @@ function numberText(value: string): string {
 }
 
 export function readXlsx(bytes: Uint8Array, inflate: Inflate): ReadSheet[] {
-  const files = unzip(bytes, inflate);
+  const files = new Map<string, Uint8Array>();
+  for (const e of entries(bytes)) {
+    if (e.method === 0) files.set(e.name, e.raw);
+    else if (e.method === 8) files.set(e.name, inflate(e.raw));
+  }
+  return sheetsOf(files);
+}
+
+/** `readXlsx` with an inflate that answers later, as the webview's does. */
+export async function readXlsxAsync(bytes: Uint8Array, inflate: InflateAsync): Promise<ReadSheet[]> {
+  const files = new Map<string, Uint8Array>();
+  for (const e of entries(bytes)) {
+    if (e.method === 0) files.set(e.name, e.raw);
+    else if (e.method === 8) files.set(e.name, await inflate(e.raw));
+  }
+  return sheetsOf(files);
+}
+
+function sheetsOf(files: Map<string, Uint8Array>): ReadSheet[] {
   const text = (name: string) => {
     const data = files.get(name);
     return data ? utf8.decode(data) : "";
