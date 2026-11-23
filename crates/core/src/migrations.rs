@@ -55,9 +55,10 @@ const MIGRATIONS: &[Migration] = &[
     migration!(20, "0020"),
     migration!(21, "0021"),
     migration!(22, "0022"),
+    migration!(23, "0023"),
 ];
 
-pub const LATEST_SCHEMA_VERSION: i64 = 22;
+pub const LATEST_SCHEMA_VERSION: i64 = 23;
 
 /** Applies every migration newer than the file's schema version, all in one transaction. */
 pub fn migrate(conn: &mut Connection) -> Result<()> {

@@ -35,6 +35,10 @@ try {
   await run(session, click, "إنشاء النشاط");
   await until(session, "the main menu", () => document.querySelector("nav.sidebar"));
   check(readFileSync(file).subarray(0, 15).toString() === "SQLite format 3", "the Rust core wrote the business file");
+  await until(session, "the first steps", () => document.querySelector("#setup-title")?.textContent === "خطوات البداية");
+  check(true, "a new business opens on its first steps");
+  const closed = await run(session, () => window.api.call("openShift", [0]));
+  check(closed.ok === false && closed.code === "setup_not_finished", "the till stays closed until the opening balances are confirmed");
 
   const entry = await run(session, async () => {
     const accounts = await window.api.call("accounts", []);
@@ -63,6 +67,14 @@ try {
     return stock.ok && scanned.ok && scanned.value.itemId === item.value;
   });
   check(stocked === true, "an item, its opening stock and its minimum go through the Rust core");
+  await run(session, click, "الرئيسية");
+  await until(session, "the confirm button", () => {
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "تأكيد أرصدة أول المدة وبدء العمل");
+    return b && !b.disabled;
+  });
+  await run(session, click, "تأكيد أرصدة أول المدة وبدء العمل");
+  await until(session, "the setup's end", () => document.querySelector("[role=status]")?.textContent.includes("اكتملت خطوات البداية"));
+  check(true, "confirming the opening balances opens sales and purchases");
   await run(session, click, "الأصناف والمخزون");
   await until(session, "the item list", () => document.body.textContent.includes("راوتر واي فاي"));
   check(true, "the Items screen lists the item");

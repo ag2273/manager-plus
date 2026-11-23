@@ -25,6 +25,7 @@ import type { Customer, CustomerChanges, CustomerInput } from "./customers";
 import type { CashSaleInput, Discount, HeldSale, HeldSaleInput, SaleInput, SaleResult, CashSaleResult, PricedSale, Receipt, SaleLineInput } from "./sales";
 import type { OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse } from "./stock";
 import type { AuditEntry, NewUser, User, UserChanges } from "./users";
+import type { SetupStatus } from "./setup";
 export type BusinessSettings = {
     name: string;
     address: string;
@@ -281,6 +282,10 @@ export declare class Business {
     setCleared(accountId: number, lineIds: number[], cleared: boolean): void;
     /** The account's balance and its ticked lines' balance against a statement balance. */
     reconciliation(accountId: number, statement: Piastres): Reconciliation;
+    /** How far the first-use setup has come, and whether sales and purchases are open. */
+    setupStatus(): SetupStatus;
+    /** Finishes the first-use setup: "opening" once opening balances are in, "new" with nothing to bring forward. */
+    finishSetup(mode: "opening" | "new"): SetupStatus;
     lockDate(): IsoDate | null;
     /** Nothing can be posted on or before this date; null unlocks. */
     setLockDate(date: IsoDate | null): void;

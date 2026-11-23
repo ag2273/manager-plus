@@ -51,6 +51,8 @@ pub const BUSINESS_METHODS: &[&str] = &[
     "accountLines",
     "setCleared",
     "reconciliation",
+    "setupStatus",
+    "finishSetup",
     "lockDate",
     "setLockDate",
     "voidEntry",

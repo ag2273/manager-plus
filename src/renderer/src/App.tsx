@@ -6,6 +6,7 @@ import type { BusinessSettings, FileStatus, Preferences, ThemeId, User } from ".
 import { Accounts } from "./screens/Accounts";
 import { AuditLog } from "./screens/AuditLog";
 import { Home } from "./screens/Home";
+import { SetupBanner } from "./screens/Setup";
 import { Items } from "./screens/Items";
 import { Money } from "./screens/Money";
 import { Reports } from "./screens/Reports";
@@ -83,6 +84,8 @@ export function App() {
   const [open, setOpen] = useState<BusinessSettings | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
+  // Bumped when the first steps finish, so the banner reads the setup again.
+  const [setupRound, setSetupRound] = useState(0);
   const [theme, setTheme] = useState<ThemeId>("calm");
   const [languageKey, setLanguageKey] = useState("ar-western");
   const [serverLost, setServerLost] = useState(false);
@@ -203,11 +206,14 @@ export function App() {
           </div>
         )}
         <FileWarning />
+        {screen !== "home" && <SetupBanner key={`setup-${screen}-${setupRound}`} screenKey={screen} onOpen={() => setScreen("home")} />}
         {screen === "home" && (
           <Home
             settings={open}
             canKeepBooks={user.role === "manager" || user.role === "accountant"}
+            isManager={user.role === "manager"}
             onGo={setScreen}
+            onSetupFinished={() => setSetupRound((n) => n + 1)}
           />
         )}
         {screen === "items" && <Items canImport={user.role === "manager"} />}

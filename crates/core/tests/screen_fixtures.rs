@@ -27,7 +27,11 @@ fn open(settings: &BusinessSettings) -> Business {
         name: "أيمن".into(),
         password: "كلمة سر قوية".into(),
     };
-    Business::create(":memory:", settings, &manager).unwrap()
+    let business = Business::create(":memory:", settings, &manager).unwrap();
+    business
+        .finish_setup(manager_core::setup::SetupMode::New)
+        .unwrap();
+    business
 }
 
 fn call(business: &Business, method: &str, args: Value) -> Value {

@@ -29,6 +29,7 @@ pub mod returns;
 pub mod sales;
 pub mod serials;
 pub mod settlements;
+pub mod setup;
 pub mod shares;
 pub mod shifts;
 pub mod shipments;

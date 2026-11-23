@@ -72,15 +72,17 @@ impl Sample {
             vat_registered: true,
             fiscal_year_start_month: 1,
         };
-        let business = Business::create(
-            ":memory:",
-            &shop,
-            &Credentials {
-                name: "أيمن".into(),
-                password: "كلمة سر قوية".into(),
-            },
-        )
-        .unwrap();
+        let business = common::ready(
+            Business::create(
+                ":memory:",
+                &shop,
+                &Credentials {
+                    name: "أيمن".into(),
+                    password: "كلمة سر قوية".into(),
+                },
+            )
+            .unwrap(),
+        );
         let main = call(&business, "warehouses", json!([]))[0]["id"]
             .as_i64()
             .unwrap();

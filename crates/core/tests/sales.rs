@@ -14,7 +14,7 @@ struct Setup {
 }
 
 fn setup_with(settings: BusinessSettings) -> Setup {
-    let business = Business::create(":memory:", &settings, &manager()).unwrap();
+    let business = common::ready(Business::create(":memory:", &settings, &manager()).unwrap());
     let main = main_warehouse(&business);
     // Shelf price 57.00 incl. 14% VAT; a pack of 6 at 330.00.
     let soap = business

@@ -487,6 +487,12 @@
  },
  {
   "type": "table",
+  "name": "setup",
+  "tbl_name": "setup",
+  "sql": "CREATE TABLE setup (\n          id INTEGER PRIMARY KEY CHECK (id = 1),\n          finished_at TEXT NOT NULL,\n          mode TEXT NOT NULL CHECK (mode IN ('opening', 'new', 'existing'))\n        ) STRICT"
+ },
+ {
+  "type": "table",
   "name": "shifts",
   "tbl_name": "shifts",
   "sql": "CREATE TABLE shifts (\n          id INTEGER PRIMARY KEY,\n          user_id INTEGER NOT NULL REFERENCES users (id),\n          opened_at TEXT NOT NULL,\n          opening_float INTEGER NOT NULL CHECK (opening_float >= 0),\n          closed_at TEXT,\n          counted_cash INTEGER,\n          close_entry_id INTEGER REFERENCES journal_entries (id),\n          CHECK ((closed_at IS NULL) = (counted_cash IS NULL))\n        ) STRICT"

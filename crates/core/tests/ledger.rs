@@ -403,7 +403,7 @@ fn opening_balances_post_against_the_opening_balances_account_so_the_books_balan
 #[test]
 fn posted_entries_are_still_there_after_the_file_is_reopened() {
     let (_dir, path) = temp_file("shop.mplus");
-    let business = Business::create(&path, &shop(), &manager()).unwrap();
+    let business = common::ready(Business::create(&path, &shop(), &manager()).unwrap());
     business
         .post_journal_entry(&rent_paid(&business, "2026-11-01", 100))
         .unwrap();
