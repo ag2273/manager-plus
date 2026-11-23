@@ -12,6 +12,7 @@ import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
 import { WithholdingView } from "./Withholding";
+import { FieldHelp } from "../help/Help";
 
 type Tab = "chart" | "journal" | "opening" | "trial" | "withholding";
 const TABS: Tab[] = ["chart", "journal", "opening", "trial", "withholding"];
@@ -390,7 +391,12 @@ function EntryForm({
 
   return (
     <form className="card" onSubmit={post}>
-      {mode === "opening" && <p className="muted">{ar.journal.openingHint}</p>}
+      {mode === "opening" && (
+        <p className="muted">
+          {ar.journal.openingHint}
+          <FieldHelp field="openingBalance" />
+        </p>
+      )}
       <Alert text={error} />
       <Alert text={done} kind="ok" />
       <div className="row">

@@ -6,6 +6,7 @@ import type { Result } from "../../../shared/api";
 import { formatMoney, parseMoney } from "../../../shared/money";
 import { business, errorText, today } from "../api";
 import { ar } from "../strings";
+import { FieldHelp } from "../help/Help";
 
 type Tab = "accounts" | "expense" | "transfer" | "reconcile" | "lock";
 const TABS: Tab[] = ["accounts", "expense", "transfer", "reconcile", "lock"];
@@ -533,6 +534,7 @@ function LockDate() {
       <div className="row">
         <label className="field narrow">
           {ar.money.lockDate}
+          <FieldHelp field="lockDate" />
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <button type="submit" className="btn btn-primary">

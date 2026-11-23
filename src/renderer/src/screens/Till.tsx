@@ -12,6 +12,7 @@ import { business, errorText, today } from "../api";
 import { ar, locale } from "../strings";
 import { APPROVAL_ERRORS, CreditApprovalPrompt } from "./CreditApproval";
 import { TillSales } from "./TillSales";
+import { FieldHelp } from "../help/Help";
 
 type Tender = "cash" | "card" | "wallet" | "split" | "credit";
 const TENDERS: Tender[] = ["cash", "card", "wallet", "split", "credit"];
@@ -701,6 +702,7 @@ function Sale({
             {(tender === "cash" || tender === "split" || tender === "credit") && (
               <label className="field">
                 {tender === "cash" ? ar.till.cash : tender === "credit" ? ar.till.paidNow : ar.till.tenders.cash}
+                {tender === "credit" && <FieldHelp field="tillPaidNow" />}
                 <input
                   data-pay={tender === "credit" ? undefined : true}
                   className="till-cash"
@@ -826,6 +828,7 @@ function OpenShift({ onOpened, onSales }: { onOpened: () => Promise<void>; onSal
         )}
         <label className="field">
           {ar.shift.float}
+          <FieldHelp field="shiftFloat" />
           <input autoFocus dir="ltr" inputMode="decimal" value={float} placeholder="0.00" onChange={(e) => setFloat(e.target.value)} />
         </label>
         <button type="submit" className="btn btn-primary">
@@ -946,6 +949,7 @@ function ClosePanel({ onCancel, onClosed }: { onCancel: () => void; onClosed: (r
         )}
         <label className="field">
           {ar.shift.counted}
+          <FieldHelp field="shiftCounted" />
           <input autoFocus dir="ltr" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} />
         </label>
         <div className="row">
@@ -1197,6 +1201,7 @@ function ReturnPanel({ onDone }: { onDone: () => void }) {
               </button>
             ))}
           </div>
+          <FieldHelp field="returnRefund" />
           <div className="row">
             <button type="submit" className="btn btn-primary">
               {ar.returns.submit}

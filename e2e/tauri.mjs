@@ -7,7 +7,7 @@ import { createServer } from "node:net";
 import { connect as tlsConnect } from "node:tls";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { check, click, fill, launch, run, sleep, until } from "./driver.mjs";
+import { KEY, check, click, fill, launch, run, sleep, type, until } from "./driver.mjs";
 
 const app = process.argv[2] ?? "target/debug/manager-plus";
 const dir = mkdtempSync(join(tmpdir(), "mplus-tauri-"));
@@ -78,6 +78,29 @@ try {
   await run(session, click, "الأصناف والمخزون");
   await until(session, "the item list", () => document.body.textContent.includes("راوتر واي فاي"));
   check(true, "the Items screen lists the item");
+
+  // The built-in help (#97, note 11): the screen's help on F1, a field's "?", and the manual's search.
+  await type(session, KEY.F1);
+  await until(session, "the screen's help", () => document.querySelector("#screen-help-title")?.textContent === "الأصناف والمخزون");
+  check(true, "F1 opens the help for the screen in front of the user");
+  await run(session, click, "+ صنف جديد");
+  await until(session, "the barcode's help", () => {
+    const dot = document.querySelector("[aria-label='ما هو «الباركود»؟']");
+    dot?.click();
+    return Boolean(dot);
+  });
+  await until(session, "the barcode explained", () => [...document.querySelectorAll(".help-note")].some((n) => n.textContent.includes("قارئ الباركود")));
+  check(true, "a field's ? explains what to enter there");
+  await run(session, click, "دليل الاستخدام");
+  await until(session, "the manual", () => document.querySelector("h1")?.textContent === "دليل الاستخدام");
+  await run(session, fill, "ابحث في الدليل", "ارصده افتتاحيه");
+  await until(session, "a search hit", () => {
+    const hit = [...document.querySelectorAll(".help-toc button")].find((b) => b.textContent === "إدخال أرصدة أول المدة");
+    hit?.click();
+    return Boolean(hit);
+  });
+  await until(session, "the guide", () => document.querySelector("#help-article")?.textContent === "إدخال أرصدة أول المدة");
+  check(true, "the manual finds a guide without the internet, whatever the spelling");
   await run(session, click, "المخازن والتحويلات");
   await until(session, "the warehouses", () => document.body.textContent.includes("المخزن الرئيسي"));
   await run(session, click, "النواقص");
