@@ -101,7 +101,7 @@ pub async fn save_pdf(
 
 #[cfg(windows)]
 mod pdf {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::time::Duration;
@@ -184,7 +184,7 @@ mod pdf {
 
     unsafe fn start(
         controller: ICoreWebView2Controller,
-        path: &PathBuf,
+        path: &Path,
         done: mpsc::Sender<Result<(), String>>,
     ) -> windows::core::Result<()> {
         let core = controller.CoreWebView2()?;
