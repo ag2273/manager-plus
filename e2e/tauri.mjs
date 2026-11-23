@@ -127,7 +127,7 @@ try {
   await run(session, () => {
     const select = [...document.querySelectorAll("label")].find((l) => l.textContent.trim().startsWith("اختر الصنف")).querySelector("select");
     const value = [...select.options].find((o) => o.textContent === "لابتوب ديل").value;
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(select), "value").set.call(select, value);
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await until(session, "the units in stock", () => document.querySelector("[aria-label='سيريالات الصنف في المخزن']")?.textContent.includes("DL-001"));
