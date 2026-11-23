@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { HelpManual, ScreenHelpPanel } from "./help/Help";
+import { help } from "./help";
 import type { Role } from "../../shared/books/users";
 import type { LicenceMode } from "../../shared/books/business";
 import type { LicenceStatus } from "../../shared/books/licence/licence";
@@ -36,7 +38,8 @@ type Screen =
   | "accounts"
   | "users"
   | "audit"
-  | "settings";
+  | "settings"
+  | "help";
 
 const ALL: Role[] = ["manager", "accountant", "cashier", "storekeeper"];
 
@@ -63,6 +66,7 @@ const nav = (): { label: string; screen?: Screen; roles: Role[] }[] => [
   { label: ar.nav.users, screen: "users", roles: ["manager"] },
   { label: ar.nav.audit, screen: "audit", roles: ["manager", "accountant"] },
   { label: ar.nav.settings, screen: "settings", roles: ALL },
+  { label: help().manualTitle, screen: "help", roles: ALL },
 ];
 
 /** Says so when another PC had this file open, which loses work when the file sits in a sync folder. */
@@ -89,6 +93,19 @@ export function App() {
   const [theme, setTheme] = useState<ThemeId>("calm");
   const [languageKey, setLanguageKey] = useState("ar-western");
   const [serverLost, setServerLost] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // F1 opens or closes the help for the screen in front of the user.
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "F1") return;
+      e.preventDefault();
+      setHelpOpen((o) => !o);
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
+  useEffect(() => setHelpOpen(false), [screen]);
 
   // A client PC whose server went away says so on every screen and keeps trying.
   useEffect(() => {
@@ -206,6 +223,12 @@ export function App() {
           </div>
         )}
         <FileWarning />
+        {screen !== "help" && (
+          <button type="button" className="link help-open" aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)}>
+            {help().screenHelp}
+          </button>
+        )}
+        {helpOpen && screen !== "help" && <ScreenHelpPanel screen={screen} onClose={() => setHelpOpen(false)} onManual={() => setScreen("help")} />}
         {screen !== "home" && <SetupBanner key={`setup-${screen}-${setupRound}`} screenKey={screen} onOpen={() => setScreen("home")} />}
         {screen === "home" && (
           <Home
@@ -227,6 +250,7 @@ export function App() {
         {screen === "reports" && <Reports vatRegistered={open.vatRegistered} />}
         {screen === "users" && <Users me={user} />}
         {screen === "audit" && <AuditLog />}
+        {screen === "help" && <HelpManual onGo={setScreen} />}
         {screen === "settings" && (
           <Settings
             theme={theme}

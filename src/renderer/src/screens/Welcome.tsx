@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { BusinessSettings, FoundServer, Result } from "../../../shared/api";
 import { errorText } from "../api";
 import { ar } from "../strings";
+import { FieldHelp } from "../help/Help";
 
 const blank: BusinessSettings = {
   name: "",
@@ -52,6 +53,7 @@ export function Welcome({
         <div className="row">
           <label className="field">
             {ar.name}
+            <FieldHelp field="businessName" />
             <input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -68,6 +70,7 @@ export function Welcome({
         <div className="row">
           <label className="field">
             {ar.taxRegistrationNumber}
+            <FieldHelp field="taxRegistrationNumber" />
             <input
               inputMode="numeric"
               value={draft.taxRegistrationNumber}
@@ -78,6 +81,7 @@ export function Welcome({
           </label>
           <label className="field">
             {ar.fiscalYearStartMonth}
+            <FieldHelp field="fiscalYearStart" />
             <input
               type="number"
               min={1}

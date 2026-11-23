@@ -8,6 +8,7 @@ import { business, errorText } from "../api";
 import { ar } from "../strings";
 import { ItemSerials, SerialLookup } from "./Serials";
 import { ImportPanel } from "./Import";
+import { FieldHelp } from "../help/Help";
 
 type Filter = "active" | "inactive";
 
@@ -324,6 +325,7 @@ function ItemForm({
       <div className="row">
         <label className="field">
           {ar.items.barcode}
+          <FieldHelp field="itemBarcode" />
           <input
             dir="ltr"
             value={draft.barcode}
@@ -349,6 +351,7 @@ function ItemForm({
       <div className="row">
         <label className="field narrow">
           {ar.items.salePrice}
+          <FieldHelp field="itemSalePrice" />
           <input
             dir="ltr"
             inputMode="decimal"
@@ -368,6 +371,7 @@ function ItemForm({
         </label>
         <label className="field narrow">
           {ar.items.taxCode}
+          <FieldHelp field="itemTaxCode" />
           <select
             value={draft.taxCodeId}
             onChange={(e) => set({ taxCodeId: Number(e.target.value) })}
@@ -381,6 +385,7 @@ function ItemForm({
         </label>
         <label className="field">
           {ar.items.egsCode}
+          <FieldHelp field="itemEgsCode" />
           <input
             dir="ltr"
             value={draft.egsCode}
@@ -395,6 +400,7 @@ function ItemForm({
           onChange={(e) => set({ hasPack: e.target.checked })}
         />
         {ar.items.hasPack}
+        <FieldHelp field="itemPack" />
       </label>
       {draft.hasPack && (
         <div className="row">
@@ -483,6 +489,7 @@ function SerialSettings({ item, onSaved }: { item: Item; onSaved: () => Promise<
       <label className="check">
         <input type="checkbox" checked={serialised} onChange={(e) => setSerialised(e.target.checked)} />
         {ar.serials.tracked}
+        <FieldHelp field="itemSerials" />
       </label>
       <label className="field narrow">
         {ar.serials.warrantyMonths}

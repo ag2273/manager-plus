@@ -6,6 +6,7 @@ import { business, errorText } from "../api";
 import { ar } from "../strings";
 import { WithholdingSelect, useWithholdingCategories } from "./Withholding";
 import { AgingView, PaymentForm, StatementView } from "./Parties";
+import { FieldHelp } from "../help/Help";
 
 type Tab = "customers" | "payment" | "statement" | "aging";
 
@@ -144,6 +145,7 @@ function CustomerList({ customers, onChange, keepsBooks }: { customers: Customer
           </label>
           <label className="field narrow">
             {ar.customers.taxRegistrationNumber}
+            <FieldHelp field="customerTaxNumber" />
             <input dir="ltr" value={draft.taxRegistrationNumber} onChange={(e) => setDraft({ ...draft, taxRegistrationNumber: e.target.value })} />
           </label>
         </div>
@@ -162,6 +164,7 @@ function CustomerList({ customers, onChange, keepsBooks }: { customers: Customer
             </label>
             <label className="field narrow">
               {ar.customers.creditLimit}
+              <FieldHelp field="customerCreditLimit" />
               <input
                 dir="ltr"
                 inputMode="decimal"

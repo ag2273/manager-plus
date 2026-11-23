@@ -13,6 +13,7 @@ import { AgingView, PaymentForm, StatementView } from "./Parties";
 import { SerialsField, splitSerials } from "./Serials";
 import { Shipments } from "./Shipments";
 import { formatRate, parseRate } from "../../../shared/rate";
+import { FieldHelp } from "../help/Help";
 
 type Tab = "invoice" | "invoices" | "shipments" | "suppliers" | "payment" | "statement" | "aging";
 
@@ -220,11 +221,13 @@ function InvoiceForm({ suppliers }: { suppliers: Supplier[] }) {
         </label>
         <label className="field narrow">
           {ar.purchases.reference}
+          <FieldHelp field="purchaseReference" />
           <input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} />
         </label>
         {foreign && (
           <label className="field narrow">
             {ar.purchases.rate(supplier.currency)}
+            <FieldHelp field="purchaseRate" />
             <input dir="ltr" inputMode="decimal" placeholder="48.50" value={rateText} onChange={(e) => setRateText(e.target.value)} />
           </label>
         )}

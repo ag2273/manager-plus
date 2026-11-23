@@ -218,3 +218,19 @@ caption { caption-side: top; text-align: start; padding: 12px 14px 4px; font-wei
 /* A receipt's totals in the till sales list (#97, notes 8 and 9). */
 .totals-list { display: grid; grid-template-columns: max-content auto; gap: 4px 16px; margin-top: 12px; }
 .totals-list dd { margin: 0; }
+
+/* Built-in help (#97, note 11): the "?" beside a field, the screen's help panel, and the manual. */
+.help-dot { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-inline-start: 6px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--soft); color: inherit; font-size: 12px; font-weight: 700; line-height: 1; cursor: pointer; vertical-align: middle; }
+.help-dot[aria-expanded="true"] { border-color: var(--accent); }
+.field:has(> .help-dot) { position: relative; }
+.field > .help-dot { position: absolute; top: -2px; inset-inline-end: 0; }
+.help-note { display: block; margin-top: 4px; padding: 8px 10px; border-radius: 8px; background: var(--soft); font-size: 13px; font-weight: 400; line-height: 1.6; }
+.help-open { align-self: flex-end; margin-bottom: 8px; }
+.help-panel { margin-bottom: 16px; }
+.help-panel .row { justify-content: space-between; }
+.help-points, .help-steps { margin: 0; padding-inline-start: 20px; line-height: 1.8; }
+.help-manual { display: grid; grid-template-columns: minmax(200px, 280px) 1fr; gap: 16px; align-items: start; }
+.help-toc ul { list-style: none; margin: 0 0 12px; padding: 0; line-height: 2; }
+.help-toc button[aria-current] { font-weight: 700; }
+.help-article p { line-height: 1.8; }
+@media (max-width: 720px) { .help-manual { grid-template-columns: 1fr; } }
