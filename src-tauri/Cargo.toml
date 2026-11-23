@@ -24,4 +24,7 @@ tauri-plugin-dialog = "2"
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 
 [target.'cfg(windows)'.dependencies]
+# The same WebView2 bindings Tauri uses, for printing an A4 page to PDF.
+webview2-com = "0.39"
+windows = "0.62"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Graphics_Printing", "Win32_Security_Cryptography"] }
