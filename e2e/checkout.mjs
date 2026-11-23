@@ -76,9 +76,25 @@ async function journey(lang) {
     console.log(`checkout in ${lang}`);
     await until(session, "the welcome screen", fill, t.business, lang === "ar" ? "بقالة النور" : "Al Nour Grocery");
     check((await run(session, () => document.documentElement.dir)) === t.dir, `the screens run ${t.dir}`);
-    await run(session, fill, t.you, "Ayman");
-    await run(session, fill, t.password, "strong-password-1");
-    await run(session, clickIn, "form", t.create);
+    // The welcome screen is drawn again once this PC's preferences arrive, which can wipe what was typed
+    // before; so fill and press again until the business opens.
+    const create = (t, shop) => {
+      if (document.querySelector("nav")) return true;
+      const set = (label, value) => {
+        const l = [...document.querySelectorAll("label")].find((x) => x.textContent.trim().startsWith(label));
+        const input = l && (l.control ?? l.querySelector("input"));
+        if (!input) return;
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value").set.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      set(t.business, shop);
+      set(t.you, "Ayman");
+      set(t.password, "strong-password-1");
+      const button = [...document.querySelectorAll("form button")].find((x) => x.textContent.trim() === t.create);
+      setTimeout(() => button?.click(), 50);
+      return false;
+    };
+    for (let i = 0; i < 10 && !(await run(session, create, t, lang === "ar" ? "بقالة النور" : "Al Nour Grocery")); i++) await sleep(1000);
     await until(session, "the main menu", () => document.querySelector("nav"));
     await until(session, "the trial banner", (trial) => document.querySelector("[role=note]")?.textContent.includes(trial), t.trial);
     check(true, "a new install runs the 14-day trial");

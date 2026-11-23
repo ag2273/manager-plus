@@ -95,6 +95,11 @@ fn stock_received_needs_exactly_one_different_serial_per_whole_unit() {
     }
     assert_eq!(code(s.receive(&["B1", "B1"])), "serials_required");
     assert_eq!(code(s.receive(&["A1"])), "serial_in_stock");
+    // The refusal names the serial, for the screen's message.
+    assert_eq!(
+        s.receive(&["A1"]).unwrap_err().detail.as_deref(),
+        Some("A1")
+    );
     let cable = OpeningStockLine {
         item_id: s.cable,
         ..line(1_000.0, &["C1"])
