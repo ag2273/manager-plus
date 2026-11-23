@@ -214,3 +214,7 @@ caption { caption-side: top; text-align: start; padding: 12px 14px 4px; font-wei
 .setup-actions { margin-top: 6px; gap: 8px; flex-wrap: wrap; }
 .setup-banner { margin-bottom: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* A receipt's totals in the till sales list (#97, notes 8 and 9). */
+.totals-list { display: grid; grid-template-columns: max-content auto; gap: 4px 16px; margin-top: 12px; }
+.totals-list dd { margin: 0; }

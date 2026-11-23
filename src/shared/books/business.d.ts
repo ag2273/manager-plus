@@ -22,7 +22,7 @@ import type { Aging, OpenDocument, PartyKind, PaymentInput, PaymentResult, State
 import type { ReturnInput, ReturnResult, SaleReturn } from "./returns";
 import type { CashInOut, CloseShiftInput, Shift, ZReport } from "./shifts";
 import type { Customer, CustomerChanges, CustomerInput } from "./customers";
-import type { CashSaleInput, Discount, HeldSale, HeldSaleInput, SaleInput, SaleResult, CashSaleResult, PricedSale, Receipt, SaleLineInput } from "./sales";
+import type { CashSaleInput, Discount, HeldSale, HeldSaleInput, SaleInput, SaleResult, CashSaleResult, PricedSale, Receipt, ReceiptFilter, SaleLineInput } from "./sales";
 import type { OpeningStockLine, StockOnHand, Transfer, TransferInput, Warehouse } from "./stock";
 import type { AuditEntry, NewUser, User, UserChanges } from "./users";
 import type { SetupStatus } from "./setup";
@@ -177,6 +177,8 @@ export declare class Business {
     findReturn(number: number): SaleReturn;
     /** Till receipts, newest first. */
     receipts(): Receipt[];
+    /** Till receipts by date, shift or cashier, newest first. A cashier sees only their own. */
+    searchReceipts(filter: ReceiptFilter): Receipt[];
     suppliers(): Supplier[];
     addSupplier(supplier: SupplierInput): number;
     updateSupplier(id: number, changes: SupplierChanges): void;

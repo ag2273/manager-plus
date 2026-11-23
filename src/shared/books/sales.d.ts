@@ -83,6 +83,9 @@ export type Receipt = {
     onCredit: Piastres;
     customerId: number | null;
     soldBy: string;
+    /** The cashier, by user id, and the shift the sale was rung up in. */
+    soldById: number;
+    shiftId: number | null;
     eta: {
         uuid: string;
         previousUuid: string;
@@ -108,4 +111,12 @@ export type HeldSale = HeldSaleInput & {
     id: number;
     at: string;
     heldBy: string;
+};
+
+/** Which till receipts to list: a date range, and optionally one shift or one cashier. */
+export type ReceiptFilter = {
+    from: string;
+    to: string;
+    shiftId?: number;
+    userId?: number;
 };

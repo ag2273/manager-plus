@@ -233,6 +233,9 @@ pub struct Receipt {
     pub on_credit: Piastres,
     pub customer_id: Option<i64>,
     pub sold_by: String,
+    /** The cashier, by user id, and the shift the sale was rung up in. */
+    pub sold_by_id: i64,
+    pub shift_id: Option<i64>,
     pub eta: EtaState,
     pub lines: Vec<ReceiptLine>,
 }
@@ -625,7 +628,7 @@ pub fn post_cash_sale(
 
 const SELECT_RECEIPTS: &str = "
   SELECT r.id, r.number, r.date, r.at, r.warehouse_id, r.cash_received, r.customer_id, u.name,
-         r.eta_uuid, r.eta_previous_uuid, r.eta_status
+         r.eta_uuid, r.eta_previous_uuid, r.eta_status, r.user_id, r.shift_id
     FROM sales_receipts r JOIN users u ON u.id = r.user_id";
 
 struct ReceiptRow {
@@ -637,6 +640,8 @@ struct ReceiptRow {
     cash_received: i64,
     customer_id: Option<i64>,
     sold_by: String,
+    sold_by_id: i64,
+    shift_id: Option<i64>,
     eta: EtaState,
 }
 
@@ -650,6 +655,8 @@ fn receipt_row(r: &rusqlite::Row) -> rusqlite::Result<ReceiptRow> {
         cash_received: r.get(5)?,
         customer_id: r.get(6)?,
         sold_by: r.get(7)?,
+        sold_by_id: r.get(11)?,
+        shift_id: r.get(12)?,
         eta: EtaState {
             uuid: r.get(8)?,
             previous_uuid: r.get(9)?,
@@ -730,6 +737,8 @@ fn to_receipt(conn: &Connection, r: ReceiptRow) -> Result<Receipt> {
         on_credit: net + vat - paid_total,
         customer_id: r.customer_id,
         sold_by: r.sold_by,
+        sold_by_id: r.sold_by_id,
+        shift_id: r.shift_id,
         eta: r.eta,
         lines,
     })
@@ -740,6 +749,53 @@ pub fn list_receipts(conn: &Connection, limit: i64) -> Result<Vec<Receipt>> {
     let rows = conn
         .prepare(&format!("{SELECT_RECEIPTS} ORDER BY r.number DESC LIMIT ?"))?
         .query_map([limit], receipt_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    rows.into_iter().map(|r| to_receipt(conn, r)).collect()
+}
+
+/** Which till receipts to list: a date range, and optionally one shift or one cashier. */
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiptFilter {
+    pub from: String,
+    pub to: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<i64>,
+}
+
+/** The most receipts one search returns; a narrower filter finds the rest. */
+pub const RECEIPT_SEARCH_LIMIT: i64 = 1000;
+
+/** Receipts matching `filter`, newest first. */
+pub fn search_receipts(conn: &Connection, filter: &ReceiptFilter) -> Result<Vec<Receipt>> {
+    assert_iso_date(&filter.from)?;
+    assert_iso_date(&filter.to)?;
+    if filter.from > filter.to {
+        return refuse(
+            "date_range_invalid",
+            format!("{} is after {}", filter.from, filter.to),
+        );
+    }
+    let rows = conn
+        .prepare(&format!(
+            "{SELECT_RECEIPTS}
+              WHERE r.date BETWEEN ?1 AND ?2
+                AND (?3 IS NULL OR r.shift_id = ?3)
+                AND (?4 IS NULL OR r.user_id = ?4)
+              ORDER BY r.number DESC LIMIT ?5"
+        ))?
+        .query_map(
+            rusqlite::params![
+                filter.from,
+                filter.to,
+                filter.shift_id,
+                filter.user_id,
+                RECEIPT_SEARCH_LIMIT
+            ],
+            receipt_row,
+        )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter().map(|r| to_receipt(conn, r)).collect()
 }

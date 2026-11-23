@@ -79,7 +79,7 @@ export async function until(session, what, fn, ...args) {
 }
 
 /** Keys WebDriver knows by code. */
-export const KEY = { Enter: "", F10: "", F12: "" };
+export const KEY = { Enter: "", F6: "\uE036", F10: "", F12: "" };
 
 /** Types `text` into whatever has the focus, as a keyboard (or a barcode scanner) would. */
 export async function type(session, text) {

@@ -17,6 +17,11 @@ const LANGUAGES = {
     till: "شاشة البيع",
     float: "النقدية في الدرج عند البداية (العُهدة)",
     sold: "تم البيع",
+    salesTitle: "مبيعات شاشة البيع",
+    receipt: "إيصال رقم 1",
+    reprint: "إعادة طباعة",
+    backToTill: "رجوع لشاشة البيع",
+    backToList: "رجوع للقائمة",
     total: "١١٤٫٠٠",
     zTitle: "تقرير Z",
     counted: "النقدية المعدودة في الدرج",
@@ -36,6 +41,11 @@ const LANGUAGES = {
     till: "Till",
     float: "Cash in the drawer at the start (float)",
     sold: "Sold",
+    salesTitle: "Till sales",
+    receipt: "Receipt 1",
+    reprint: "Print again",
+    backToTill: "Back to the till",
+    backToList: "Back to the list",
     total: "114.00",
     zTitle: "Z report",
     counted: "Cash counted in the drawer",
@@ -135,6 +145,24 @@ async function journey(lang) {
     await type(session, `${lang === "ar" ? "٢٠٠" : "200"}${KEY.Enter}`);
     await until(session, "the sale", (sold) => document.querySelector("[role=status]")?.textContent.includes(sold), t.sold);
     check(true, "the sale is confirmed");
+
+    // The till's sales list: today's receipt, opened in full and printed again.
+    await type(session, KEY.F6);
+    await until(session, "the sales list", (title) => document.querySelector("h1")?.textContent === title, t.salesTitle);
+    await until(session, "the receipt in the list", () => {
+      const row = document.querySelector("tr.clickable");
+      row?.click();
+      return Boolean(row);
+    });
+    await until(session, "the receipt in full", (title) => document.querySelector("#receipt-title")?.textContent === title, t.receipt);
+    check(await run(session, (total) => document.body.textContent.includes(total), t.total), "the list opens the receipt with its total");
+    await run(session, clickIn, "section", t.reprint);
+    await until(session, "the reprint's answer", (message) => document.querySelector("[role=alert]")?.textContent.includes(message), t.noPrinter);
+    check(true, "a receipt prints again from the sales list");
+    await run(session, clickIn, "main", t.backToList);
+    await until(session, "the sales list again", (title) => document.querySelector("h1")?.textContent === title, t.salesTitle);
+    await run(session, clickIn, "header", t.backToTill);
+    await until(session, "the till's search", () => document.querySelector(".till-search"));
 
     await type(session, KEY.F10);
     await until(session, "the count field", labelled, t.counted);

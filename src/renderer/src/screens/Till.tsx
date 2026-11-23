@@ -11,6 +11,7 @@ import { formatQuantity, parseQuantity } from "../../../shared/quantity";
 import { business, errorText, today } from "../api";
 import { ar, locale } from "../strings";
 import { APPROVAL_ERRORS, CreditApprovalPrompt } from "./CreditApproval";
+import { TillSales } from "./TillSales";
 
 type Tender = "cash" | "card" | "wallet" | "split" | "credit";
 const TENDERS: Tender[] = ["cash", "card", "wallet", "split", "credit"];
@@ -51,7 +52,17 @@ const BARCODE = /^\d{8,}$/;
  * The till. Everything works from the keyboard: type or scan into the search box,
  * Enter adds; F12 goes to payment; Enter there completes the sale; Esc clears.
  */
-function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () => void; onReturn: () => void }) {
+function Sale({
+  onCash,
+  onClose,
+  onReturn,
+  onSales,
+}: {
+  onCash: () => void;
+  onClose: () => void;
+  onReturn: () => void;
+  onSales: () => void;
+}) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -354,6 +365,9 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
     } else if (event.key === "F8") {
       event.preventDefault();
       void hold();
+    } else if (event.key === "F6") {
+      event.preventDefault();
+      onSales();
     } else if (event.key === "F9") {
       event.preventDefault();
       onReturn();
@@ -393,6 +407,9 @@ function Sale({ onCash, onClose, onReturn }: { onCash: () => void; onClose: () =
           </button>
           <button type="button" className="btn" onClick={() => setShowHeld(!showHeld)} disabled={held.length === 0}>
             {ar.till.held(held.length)}
+          </button>
+          <button type="button" className="btn" onClick={onSales}>
+            {ar.tillSales.open}
           </button>
           <button type="button" className="btn" onClick={onReturn}>
             {ar.returns.open}
@@ -729,7 +746,7 @@ function formatDiscount(d: Discount): string {
   return d.kind === "percent" ? `${formatMoney(d.value)}%` : formatMoney(d.value);
 }
 
-type Panel = "sale" | "cash" | "close" | "return";
+type Panel = "sale" | "cash" | "close" | "return" | "sales";
 
 /** The till for the signed-in user: open a shift, sell, move cash, close with a Z report. */
 export function Till() {
@@ -748,7 +765,8 @@ export function Till() {
 
   if (shift === undefined) return null;
   if (z) return <ZReportView report={z} onDone={() => setZ(null)} />;
-  if (shift === null) return <OpenShift onOpened={reload} />;
+  if (panel === "sales") return <TillSales currentShift={shift?.id ?? null} onBack={() => setPanel("sale")} />;
+  if (shift === null) return <OpenShift onOpened={reload} onSales={() => setPanel("sales")} />;
   if (panel === "cash") return <CashPanel onDone={() => setPanel("sale")} />;
   if (panel === "return") return <ReturnPanel onDone={() => setPanel("sale")} />;
   if (panel === "close")
@@ -762,10 +780,17 @@ export function Till() {
         }}
       />
     );
-  return <Sale onCash={() => setPanel("cash")} onClose={() => setPanel("close")} onReturn={() => setPanel("return")} />;
+  return (
+    <Sale
+      onCash={() => setPanel("cash")}
+      onClose={() => setPanel("close")}
+      onReturn={() => setPanel("return")}
+      onSales={() => setPanel("sales")}
+    />
+  );
 }
 
-function OpenShift({ onOpened }: { onOpened: () => Promise<void> }) {
+function OpenShift({ onOpened, onSales }: { onOpened: () => Promise<void>; onSales: () => void }) {
   const [float, setFloat] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -788,6 +813,9 @@ function OpenShift({ onOpened }: { onOpened: () => Promise<void> }) {
           <h1>{ar.till.title}</h1>
           <span className="muted">{ar.shift.noShift}</span>
         </div>
+        <button type="button" className="btn" onClick={onSales}>
+          {ar.tillSales.open}
+        </button>
       </header>
       <form className="card shift-card" onSubmit={submit}>
         <h2>{ar.shift.open}</h2>

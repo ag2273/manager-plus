@@ -1063,6 +1063,16 @@ impl Business {
         self.read("receipts", |c| sales::list_receipts(c, 200))
     }
 
+    /** Till receipts by date, shift or cashier, newest first. A cashier sees only their own. */
+    pub fn search_receipts(&self, filter: &sales::ReceiptFilter) -> Result<Vec<Receipt>> {
+        let user = self.allow("searchReceipts")?.clone();
+        let mut filter = filter.clone();
+        if user.role == "cashier" {
+            filter.user_id = Some(user.id);
+        }
+        self.read("searchReceipts", |c| sales::search_receipts(c, &filter))
+    }
+
     /** Takes items back against their receipt, refunded in cash or to the receipt's customer. */
     pub fn return_sale(&self, input: &ReturnInput) -> Result<ReturnResult> {
         let user_id = self.allow("returnSale")?.id;

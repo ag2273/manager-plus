@@ -302,3 +302,80 @@ fn a_cashier_can_sell_and_a_storekeeper_cannot() {
     assert_eq!(code(mahmoud.post_cash_sale(&sale)), "not_allowed");
     assert_eq!(s.business.receipts().unwrap()[0].sold_by, "سارة");
 }
+
+#[test]
+fn receipts_are_found_by_date_shift_and_cashier_and_a_cashier_sees_only_their_own() {
+    use manager_core::sales::ReceiptFilter;
+    let s = setup();
+    let sara = signed_in(&s.business, "سارة", "cashier");
+    let sale = |date: &str| CashSaleInput {
+        date: date.into(),
+        ..s.cash_sale(vec![SaleLineInput::base(s.soap, 1_000)], 5_700)
+    };
+    // The manager's shift (opened in setup) sells on the 20th and 21st; Sara's on the 21st.
+    s.business.post_cash_sale(&sale("2026-11-20")).unwrap();
+    s.business.post_cash_sale(&sale("2026-11-21")).unwrap();
+    let sara_shift = sara.open_shift(0.0).unwrap();
+    sara.post_cash_sale(&sale("2026-11-21")).unwrap();
+    let all = |filter: ReceiptFilter| -> Vec<i64> {
+        s.business
+            .search_receipts(&filter)
+            .unwrap()
+            .iter()
+            .map(|r| r.number)
+            .collect()
+    };
+    let month = ReceiptFilter {
+        from: "2026-11-01".into(),
+        to: "2026-11-30".into(),
+        ..Default::default()
+    };
+    assert_eq!(all(month.clone()), vec![3, 2, 1], "newest first");
+    assert_eq!(
+        all(ReceiptFilter {
+            from: "2026-11-21".into(),
+            to: "2026-11-21".into(),
+            ..Default::default()
+        }),
+        vec![3, 2]
+    );
+    assert_eq!(
+        all(ReceiptFilter {
+            shift_id: Some(sara_shift),
+            ..month.clone()
+        }),
+        vec![3]
+    );
+    let manager_id = s.business.current_user().unwrap().id;
+    assert_eq!(
+        all(ReceiptFilter {
+            user_id: Some(manager_id),
+            ..month.clone()
+        }),
+        vec![2, 1]
+    );
+    let third = &s.business.search_receipts(&month).unwrap()[0];
+    assert_eq!(
+        (third.sold_by.as_str(), third.shift_id),
+        ("سارة", Some(sara_shift))
+    );
+    // Asking for someone else's receipts, a cashier still gets only their own.
+    let mine: Vec<i64> = sara
+        .search_receipts(&ReceiptFilter {
+            user_id: Some(manager_id),
+            ..month.clone()
+        })
+        .unwrap()
+        .iter()
+        .map(|r| r.number)
+        .collect();
+    assert_eq!(mine, vec![3]);
+    assert_eq!(
+        code(s.business.search_receipts(&ReceiptFilter {
+            from: "2026-11-30".into(),
+            to: "2026-11-01".into(),
+            ..Default::default()
+        })),
+        "date_range_invalid"
+    );
+}
