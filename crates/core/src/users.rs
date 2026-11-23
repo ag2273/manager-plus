@@ -412,7 +412,9 @@ pub fn roles_for(method: &str) -> &'static [&'static str] {
         "openShift" | "currentShift" | "cashInOut" | "closeShift" | "postCashSale" | "postSale"
         | "holdSale" | "returnSale" | "heldSales" | "recallSale" => TILL,
         "zReport" | "licenceMode" | "shifts" | "priceSale" | "findReceipt" | "findReturn"
-        | "customers" | "addCustomer" | "customerBalance" | "receipts" => TILL_BOOKS,
+        | "customers" | "addCustomer" | "customerBalance" | "receipts" | "searchReceipts" => {
+            TILL_BOOKS
+        }
         _ => MANAGER,
     }
 }

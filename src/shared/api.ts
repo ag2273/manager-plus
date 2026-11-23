@@ -65,6 +65,7 @@ export const BUSINESS_METHODS = [
   "reconciliation",
   "setupStatus",
   "finishSetup",
+  "searchReceipts",
   "lockDate",
   "setLockDate",
   "voidEntry",

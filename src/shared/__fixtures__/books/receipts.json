@@ -26,6 +26,8 @@
     "onCredit": 0,
     "customerId": null,
     "soldBy": "أيمن",
+    "soldById": 1,
+    "shiftId": 1,
     "eta": {
       "uuid": "",
       "previousUuid": "",

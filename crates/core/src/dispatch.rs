@@ -129,6 +129,7 @@ impl Business {
             "postSale" => json(self.post_sale(&arg(args, 0)?)?),
             "findReceipt" => json(self.find_receipt(arg(args, 0)?)?),
             "receipts" => json(self.receipts()?),
+            "searchReceipts" => json(self.search_receipts(&arg(args, 0)?)?),
             "returnSale" => json(self.return_sale(&arg(args, 0)?)?),
             "findReturn" => json(self.find_return(arg(args, 0)?)?),
             "priceInvoice" => {

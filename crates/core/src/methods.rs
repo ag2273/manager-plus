@@ -53,6 +53,7 @@ pub const BUSINESS_METHODS: &[&str] = &[
     "reconciliation",
     "setupStatus",
     "finishSetup",
+    "searchReceipts",
     "lockDate",
     "setLockDate",
     "voidEntry",
